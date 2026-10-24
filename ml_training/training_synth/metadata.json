@@ -1,0 +1,25 @@
+{
+ "model": "random_forest_synth_20261024_cand1",
+ "status": "CANDIDATO - não substitui o modelo de produção sem a validação da bandeja (crack_validation/)",
+ "features": 72,
+ "format": "PVF1",
+ "trees": 160,
+ "params": {
+  "max_depth": 12,
+  "min_samples_leaf": 3
+ },
+ "sha256": "518f0d7773e5d14bb4b452726d81796cc4c144309752b5155f8c8f401b796d81",
+ "training": {
+  "synthetic_samples": 3632,
+  "synthetic_positive": 1423,
+  "real_donor_pellets": 131,
+  "donor_photos": [
+   "1000411645.jpg",
+   "1000411646.jpg",
+   "1000411647.jpg"
+  ],
+  "scenes_pellets": 209,
+  "scenes_variants": 6
+ },
+ "evaluation": "ver validation.json: (a) sintéticos fora da foto-fonte, (b) 7 cenas com rótulos provisórios, (c) crack_example.png com rótulos provisórios"
+}

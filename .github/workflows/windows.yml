@@ -73,6 +73,8 @@ jobs:
         run: |
           f=desktop/build/parity/summary.txt
           if [ -f "$f" ]; then while IFS= read -r line; do echo "::notice title=Execucao real do nucleo::$line"; done < "$f"; else echo "::warning::Sem resumo de paridade"; fi
+          c=desktop/build/parity/crack_candidate.txt
+          if [ -f "$c" ]; then echo "::notice title=Paridade trincas candidato::$(cat "$c")"; else echo "::warning::Sem paridade do modelo candidato de trincas"; fi
 
       - name: Empacotar versao portatil (sem instalador, sem admin)
         run: |
