@@ -8,30 +8,37 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.Shape;
 import java.awt.Stroke;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.Area;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.function.Consumer;
 
 /**
- * Mostra a foto/quadro com as marcacoes. Roda do mouse = zoom, arrastar = mover,
- * duplo clique = ajustar a janela. O zoom e so de exibicao: nao altera a escala fisica.
+ * Mostra a foto (ou so a ROI ativa) com as marcacoes. Roda do mouse = zoom, arrastar =
+ * mover, duplo clique = ajustar. O zoom e so de exibicao: nao altera a escala fisica.
+ * Todas as coordenadas de entrada/saida sao da imagem analisada inteira.
  */
 final class ImageView extends JPanel {
     static final Color OK = new Color(46, 204, 113);
     static final Color REVIEW = new Color(241, 196, 15);
     static final Color CRACK = new Color(231, 76, 60);
     static final Color PARTIAL = new Color(149, 165, 166);
+    static final Color REF = new Color(0, 200, 255);
 
     private BufferedImage image;
+    private AnalysisWindow viewport;
     private PelletDetector.Result result;
     private CrackAnalysis cracks;
+    private ObjectCalibration.Reference reference;
     private boolean numbers;
     private double zoom = 1, panX, panY;
     private boolean fitted = true;
@@ -44,13 +51,15 @@ final class ImageView extends JPanel {
         setPreferredSize(new Dimension(960, 640));
         MouseAdapter mouse = new MouseAdapter() {
             private java.awt.Point drag;
-            @Override public void mousePressed(MouseEvent e) { drag = e.getPoint(); }
+            private boolean moved;
+            @Override public void mousePressed(MouseEvent e) { drag = e.getPoint(); moved = false; }
             @Override public void mouseDragged(MouseEvent e) {
                 if (drag == null || image == null) return;
+                if (Math.abs(e.getX() - drag.x) + Math.abs(e.getY() - drag.y) > 2) moved = true;
                 fitted = false; panX += e.getX() - drag.x; panY += e.getY() - drag.y; drag = e.getPoint(); repaint();
             }
-            @Override public void mouseClicked(MouseEvent e) {
-                if (image == null) return;
+            @Override public void mouseReleased(MouseEvent e) {
+                if (image == null || moved) return;
                 if (e.getClickCount() == 2) { fitted = true; repaint(); return; }
                 if (clickListener != null && e.getButton() == MouseEvent.BUTTON1) clickListener.accept(toImage(e.getX(), e.getY()));
             }
@@ -59,7 +68,7 @@ final class ImageView extends JPanel {
                 ensureTransform();
                 double factor = Math.pow(1.15, -e.getPreciseWheelRotation());
                 double nz = Math.max(0.05, Math.min(40, zoom * factor));
-                Point2D p = toImage(e.getX(), e.getY());
+                Point2D p = toContent(e.getX(), e.getY());
                 zoom = nz; panX = e.getX() - p.getX() * zoom; panY = e.getY() - p.getY() * zoom; fitted = false; repaint();
             }
         };
@@ -73,20 +82,41 @@ final class ImageView extends JPanel {
         repaint();
     }
 
+    void setViewport(AnalysisWindow w) {
+        boolean changed = !(viewport == null ? w == null : w != null && viewport.sameScope(w));
+        viewport = w;
+        if (changed) fitted = true;
+        repaint();
+    }
+
     void setOverlay(PelletDetector.Result result, CrackAnalysis cracks) { this.result = result; this.cracks = cracks; repaint(); }
+    void setReference(ObjectCalibration.Reference ref) { reference = ref; repaint(); }
     void setNumbers(boolean on) { numbers = on; repaint(); }
     void setBanner(String text) { banner = text; repaint(); }
-    void setClickListener(Consumer<Point2D> listener) { clickListener = listener; setCursor(java.awt.Cursor.getPredefinedCursor(listener == null ? java.awt.Cursor.DEFAULT_CURSOR : java.awt.Cursor.CROSSHAIR_CURSOR)); }
+    void setClickListener(Consumer<Point2D> listener) { clickListener = listener; }
     void setMeasure(Point2D a, Point2D b) { measureA = a; measureB = b; repaint(); }
     BufferedImage image() { return image; }
 
+    private int vx() { return viewport == null ? 0 : viewport.left; }
+    private int vy() { return viewport == null ? 0 : viewport.top; }
+    private int vw() { return viewport == null ? image.getWidth() : viewport.width; }
+    private int vh() { return viewport == null ? image.getHeight() : viewport.height; }
+
     private void ensureTransform() {
         if (!fitted || image == null) return;
-        zoom = Math.min(getWidth() / (double) image.getWidth(), getHeight() / (double) image.getHeight());
-        panX = (getWidth() - image.getWidth() * zoom) / 2; panY = (getHeight() - image.getHeight() * zoom) / 2;
+        zoom = Math.min(getWidth() / (double) vw(), getHeight() / (double) vh());
+        panX = (getWidth() - vw() * zoom) / 2; panY = (getHeight() - vh() * zoom) / 2;
     }
 
-    private Point2D toImage(int x, int y) { ensureTransform(); return new Point2D.Double((x - panX) / zoom, (y - panY) / zoom); }
+    private Point2D toContent(int x, int y) { ensureTransform(); return new Point2D.Double((x - panX) / zoom, (y - panY) / zoom); }
+    private Point2D toImage(int x, int y) { Point2D c = toContent(x, y); return new Point2D.Double(c.getX() + vx(), c.getY() + vy()); }
+
+    /** Transformacao imagem inteira -> tela. */
+    private AffineTransform imageToScreen() {
+        AffineTransform at = new AffineTransform(zoom, 0, 0, zoom, panX, panY);
+        at.translate(-vx(), -vy());
+        return at;
+    }
 
     @Override protected void paintComponent(Graphics g0) {
         super.paintComponent(g0);
@@ -100,19 +130,25 @@ final class ImageView extends JPanel {
         }
         ensureTransform();
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, zoom < 1 ? RenderingHints.VALUE_INTERPOLATION_BILINEAR : RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
-        AffineTransform at = new AffineTransform(zoom, 0, 0, zoom, panX, panY);
-        g.drawImage(image, at, null);
-        if (result != null) {
-            double sx = image.getWidth() / (double) result.width, sy = image.getHeight() / (double) result.height;
-            Graphics2D o = (Graphics2D) g.create();
-            o.transform(at);
-            o.scale(sx, sy);
-            float w = (float) (2 / (zoom * Math.max(sx, sy)));
-            drawDetections(o, result, cracks, w, numbers);
-            o.dispose();
+        AffineTransform at = imageToScreen();
+        Graphics2D gi = (Graphics2D) g.create();
+        gi.transform(at);
+        Shape clip = new Rectangle2D.Double(vx(), vy(), vw(), vh());
+        gi.clip(clip);
+        gi.drawImage(image, 0, 0, null);
+        if (viewport != null && viewport.region != null && viewport.region.shape == InterestRegion.Shape.CIRCLE) {
+            InterestRegion r = viewport.region;
+            Area outside = new Area(clip);
+            outside.subtract(new Area(new Ellipse2D.Double(r.left, r.top, r.width(), r.height())));
+            gi.setColor(new Color(0, 0, 0, 190));
+            gi.fill(outside);
         }
+        float w = (float) (2 / zoom);
+        if (result != null) drawDetections(gi, result, cracks, w, numbers);
+        if (reference != null) drawReference(gi, reference, w);
+        gi.dispose();
         if (measureA != null) {
-            g.setColor(Color.CYAN);
+            g.setColor(REF);
             g.setStroke(new BasicStroke(2f));
             Point2D a = at.transform(measureA, null);
             g.fill(new Ellipse2D.Double(a.getX() - 4, a.getY() - 4, 8, 8));
@@ -147,16 +183,40 @@ final class ImageView extends JPanel {
             else if (crack != null && crack.status == CrackAnalysis.Status.INCONCLUSIVE) c = REVIEW;
             o.setColor(c);
             o.setStroke(d.ellipseFitted && !d.needsReview ? solid : dashed);
-            if (d.ellipseFitted) {
-                AffineTransform keep = o.getTransform();
-                o.translate(d.x, d.y);
-                o.rotate(Math.toRadians(d.angleDeg));
-                o.draw(new Ellipse2D.Double(-d.semiMajor, -d.semiMinor, 2 * d.semiMajor, 2 * d.semiMinor));
-                o.setTransform(keep);
-            } else {
-                o.draw(new Ellipse2D.Double(d.x - d.radius, d.y - d.radius, 2 * d.radius, 2 * d.radius));
+            o.draw(outline(d));
+            if (crack != null && crack.status == CrackAnalysis.Status.POSSIBLE) {
+                float[] runs = crack.markedRuns();
+                o.setStroke(new BasicStroke(lineWidth * 1.2f));
+                for (int i = 0; i + 3 < runs.length; i += 4) o.draw(new Line2D.Float(runs[i], runs[i + 1], runs[i + 2], runs[i + 3]));
             }
-            if (numbers) o.drawString(Integer.toString(id), (float) d.x - lineWidth * 3, (float) d.y + lineWidth * 3);
+            if (crack != null && crack.manuallyReviewed) {
+                o.setColor(Color.WHITE);
+                o.drawString("R", (float) (d.x + d.radius * 0.6), (float) (d.y - d.radius * 0.6));
+            }
+            if (numbers) { o.setColor(c); o.drawString(Integer.toString(id), (float) d.x - lineWidth * 3, (float) d.y + lineWidth * 3); }
         }
+    }
+
+    static Shape outline(PelletDetector.Detection d) {
+        if (!d.ellipseFitted) return new Ellipse2D.Double(d.x - d.radius, d.y - d.radius, 2 * d.radius, 2 * d.radius);
+        AffineTransform t = new AffineTransform();
+        t.translate(d.x, d.y);
+        t.rotate(Math.toRadians(d.angleDeg));
+        return t.createTransformedShape(new Ellipse2D.Double(-d.semiMajor, -d.semiMinor, 2 * d.semiMajor, 2 * d.semiMinor));
+    }
+
+    /** Referencia escolhida: contorno ciano grosso, eixo medido e "REF" (sempre visivel). */
+    static void drawReference(Graphics2D o, ObjectCalibration.Reference ref, float lineWidth) {
+        PelletDetector.Detection d = ref.geometry;
+        o.setColor(REF);
+        o.setStroke(new BasicStroke(lineWidth * 2));
+        o.draw(outline(d));
+        double t = Math.toRadians(d.angleDeg);
+        double ax, ay;
+        if (ref.measure == ObjectCalibration.Measure.MINOR_AXIS) { ax = -Math.sin(t) * d.semiMinor; ay = Math.cos(t) * d.semiMinor; }
+        else { ax = Math.cos(t) * d.semiMajor; ay = Math.sin(t) * d.semiMajor; }
+        o.draw(new Line2D.Double(d.x - ax, d.y - ay, d.x + ax, d.y + ay));
+        o.setFont(new Font(Font.SANS_SERIF, Font.BOLD, Math.max(10, Math.round(lineWidth * 8))));
+        o.drawString("REF" + (ref.excludeFromStatistics ? " (excl.)" : ""), (float) (d.x - d.semiMajor), (float) (d.y - d.semiMajor - lineWidth * 2));
     }
 }

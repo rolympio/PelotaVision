@@ -66,7 +66,7 @@ jobs:
 
       - name: Compilar e testar (OpenCV nativo 4.12)
         shell: cmd
-        run: gradlew.bat -p desktop test jar --stacktrace
+        run: gradlew.bat -p desktop test jar runtimeLibs --stacktrace
 
       - name: Paridade com registros historicos
         if: always()
@@ -83,7 +83,7 @@ jobs:
           echo "PV_DESKTOP_VERSION=$VN" >> "$GITHUB_ENV"
           IN=pkg/input; rm -rf pkg; mkdir -p "$IN/modelos" pkg/dist
           cp desktop/build/libs/pelotavision-desktop.jar "$IN/"
-          cp desktop/opencv-java/opencv-4120.jar "$IN/"
+          cp desktop/build/runtime-libs/*.jar "$IN/"
           cp desktop/opencv-java/x64/opencv_java4120.dll "$IN/"
           # Runtime do Visual C++ ao lado da DLL do OpenCV (maquinas corporativas podem nao ter).
           for d in vcruntime140.dll vcruntime140_1.dll msvcp140.dll; do [ -f "$JH/bin/$d" ] && cp "$JH/bin/$d" "$IN/" || echo "sem $d no JDK"; done

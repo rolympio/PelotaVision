@@ -1,6 +1,6 @@
 plugins { id 'java' }
 
-version = '0.1.0'
+version = '0.2.0'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -16,12 +16,16 @@ sourceSets { main { java.srcDirs += file('../core/src/main/java') } }
 
 dependencies {
     implementation files("${opencvJava}/opencv-4120.jar")
+    // org.json: nativo no Android; no Windows vem desta dependencia (ReportJson do nucleo).
+    implementation 'org.json:json:20240303'
     testImplementation 'junit:junit:4.13.2'
 }
 
+// Copia as dependencias de execucao para o empacotamento (jpackage).
+tasks.register('runtimeLibs', Copy) { from configurations.runtimeClasspath; into layout.buildDirectory.dir('runtime-libs') }
 jar {
     archiveFileName = 'pelotavision-desktop.jar'
-    manifest { attributes('Main-Class': 'br.com.pelotavision.DesktopApp', 'Class-Path': 'opencv-4120.jar', 'Implementation-Version': project.version) }
+    manifest { attributes('Main-Class': 'br.com.pelotavision.DesktopApp', 'Class-Path': 'opencv-4120.jar json-20240303.jar', 'Implementation-Version': project.version) }
 }
 
 test {

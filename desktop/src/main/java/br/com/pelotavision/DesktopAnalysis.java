@@ -6,14 +6,12 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.function.BooleanSupplier;
 
 /**
- * Fluxo de analise de foto do Windows. Reproduz o caminho de MainActivity.processPhoto
- * do Android 0.11.0 (sem ROI e sem analise detalhada): busca de ajuste opcional,
- * deteccao + elipses, triagem de trincas e granulometria por numero.
+ * Fluxo de analise de foto do Windows. Reproduz MainActivity.processPhoto do Android
+ * 0.11.0: ROI como entrada efetiva (AnalysisWindow), busca de ajuste opcional,
+ * deteccao + elipses, triagem de trincas. A granulometria e calculada por PhotoSession.
  */
 final class DesktopAnalysis {
 
@@ -24,38 +22,29 @@ final class DesktopAnalysis {
         boolean autoSuggest = true; // padrao Android
         int crackSensitivity = 50;  // padrao Android
         double minimumExpectedMm = 5;
-        Granulometry.Settings scale; // null = sem escala fisica (px)
+        Granulometry.Settings scale; // escala vigente (entra no contexto da busca, como no Android)
 
-        Config copy() {
-            Config c = new Config();
-            c.profile = profile; c.sensitivity = sensitivity; c.legacy = legacy; c.autoSuggest = autoSuggest;
-            c.crackSensitivity = crackSensitivity; c.minimumExpectedMm = minimumExpectedMm; c.scale = scale;
-            return c;
-        }
+        DetectionTuner.Option option() { return new DetectionTuner.Option(profile, sensitivity, legacy); }
     }
 
     static final class Output {
-        final PelletDetector.Result result;
-        final CrackAnalysis cracks;
-        final Granulometry.Distribution distribution;
-        final ShapeStatistics shape;
+        final PelletDetector.Result result;   // coordenadas da imagem analisada inteira
+        final CrackAnalysis cracks;           // mesma ordem de result.circles
         final DetectionTuner.Option applied;
-        final DetectionTuner.Report suggestions;
+        final DetectionTuner.Report suggestions; // null quando nao houve busca
+        final AnalysisWindow window;          // escopo (ROI) desta analise
         final int originalWidth, originalHeight, sample;
         final long durationMs;
         final String crackModelNote;
 
-        Output(PelletDetector.Result result, CrackAnalysis cracks, Granulometry.Distribution distribution, DetectionTuner.Option applied,
-               DetectionTuner.Report suggestions, int ow, int oh, int sample, long ms, String note) {
-            this.result = result; this.cracks = cracks; this.distribution = distribution; this.shape = ShapeStatistics.of(result);
-            this.applied = applied; this.suggestions = suggestions; originalWidth = ow; originalHeight = oh; this.sample = sample;
-            durationMs = ms; crackModelNote = note;
+        Output(PelletDetector.Result result, CrackAnalysis cracks, DetectionTuner.Option applied, DetectionTuner.Report suggestions,
+               AnalysisWindow window, int ow, int oh, int sample, long ms, String note) {
+            this.result = result; this.cracks = cracks; this.applied = applied; this.suggestions = suggestions; this.window = window;
+            originalWidth = ow; originalHeight = oh; this.sample = sample; durationMs = ms; crackModelNote = note;
         }
 
-        /** Recalcula so a granulometria (troca de escala/classe), sem refazer contornos. */
-        Output withScale(Granulometry.Settings scale) {
-            return new Output(result, cracks, distribution(result, scale, originalWidth, originalHeight), applied, suggestions,
-                    originalWidth, originalHeight, sample, durationMs, crackModelNote);
+        Output withSuggestions(DetectionTuner.Report report) {
+            return new Output(result, cracks, applied, report, window, originalWidth, originalHeight, sample, durationMs, crackModelNote);
         }
     }
 
@@ -73,21 +62,29 @@ final class DesktopAnalysis {
         return crackModel;
     }
 
+    static String crackModelNote() {
+        return crackModel() == null ? crackNote : "Random Forest experimental (crack_forest.pvrf), sem novo treinamento.";
+    }
+
     /**
      * @param analyzed imagem BGR ja reduzida para analise (lado maior <= 3000 px)
-     * @param ow,oh   dimensoes da imagem original (antes da reducao)
+     * @param region   ROI em coordenadas da imagem analisada, ou null
+     * @param fixed    ajuste a aplicar sem busca (reanalise), ou null para seguir cfg
      */
-    static Output analyze(Mat analyzed, int ow, int oh, int sample, Config cfg, BooleanSupplier cancelled, DetectionTuner.Progress progress) {
+    static Output analyze(Mat analyzed, int ow, int oh, int sample, InterestRegion region, Config cfg, DetectionTuner.Option fixed,
+                          BooleanSupplier cancelled, DetectionTuner.Progress progress) {
         long start = System.currentTimeMillis();
-        Mat gray = Mats.gray(analyzed);
+        Mat full = Mats.gray(analyzed);
+        Mat gray = null;
         try {
-            AnalysisWindow window = new AnalysisWindow(gray.cols(), gray.rows(), null);
+            AnalysisWindow window = new AnalysisWindow(full.cols(), full.rows(), region);
             window.requireDetectable();
-            DetectionTuner.Option current = new DetectionTuner.Option(cfg.profile, cfg.sensitivity, cfg.legacy);
+            gray = window.region == null ? full : window.cropGray(full);
+            DetectionTuner.Option current = fixed != null ? fixed : cfg.option();
             DetectionTuner.Option selected = current;
             DetectionTuner.Report suggestions = null;
             PelletDetector.Result local;
-            if (cfg.autoSuggest) {
+            if (fixed == null && cfg.autoSuggest) {
                 DetectionAssessment.Context context = new DetectionAssessment.Context(cfg.scale, ow, oh, null, cfg.minimumExpectedMm, window);
                 suggestions = DetectionTuner.search(gray, current, context, cancelled, progress);
                 DetectionTuner.Trial chosen = suggestions.cancelled ? suggestions.find(current.id) : suggestions.best();
@@ -99,24 +96,49 @@ final class DesktopAnalysis {
             CrackModel model = crackModel();
             CrackAnalysis cracks = window.toGlobal(new CrackDetector(model).detect(gray, local, cfg.crackSensitivity));
             PelletDetector.Result result = window.toGlobal(local);
-            Granulometry.Distribution distribution = distribution(result, cfg.scale, ow, oh);
-            return new Output(result, cracks, distribution, selected, suggestions, ow, oh, sample, System.currentTimeMillis() - start,
-                    model == null ? crackNote : "Random Forest experimental (crack_forest.pvrf), sem novo treinamento.");
+            return new Output(result, cracks, selected, suggestions, window, ow, oh, sample, System.currentTimeMillis() - start, crackModelNote());
         } finally {
-            gray.release();
+            if (gray != null && gray != full) gray.release();
+            full.release();
         }
     }
 
-    static Granulometry.Distribution distribution(PelletDetector.Result result, Granulometry.Settings scale, int ow, int oh) {
-        if (scale == null) return ReportTables.pixelHistogram(result);
-        List<Granulometry.Item> items = new ArrayList<>();
-        for (PelletDetector.Detection d : result.circles) items.add(new Granulometry.Item(2 * d.radius, d.partial, d.needsReview));
-        return Granulometry.compute(items, scale, ow, oh, result.width, result.height);
+    /** Busca sob demanda ("Buscar melhor ajuste"): nao aplica nada, so devolve o relatorio. */
+    static DetectionTuner.Report search(Mat analyzed, int ow, int oh, InterestRegion region, Config cfg, DetectionTuner.Option current,
+                                        BooleanSupplier cancelled, DetectionTuner.Progress progress) {
+        Mat full = Mats.gray(analyzed);
+        Mat gray = null;
+        try {
+            AnalysisWindow window = new AnalysisWindow(full.cols(), full.rows(), region);
+            window.requireDetectable();
+            gray = window.region == null ? full : window.cropGray(full);
+            DetectionAssessment.Context context = new DetectionAssessment.Context(cfg.scale, ow, oh, null, cfg.minimumExpectedMm, window);
+            return DetectionTuner.search(gray, current, context, cancelled, progress);
+        } finally {
+            if (gray != null && gray != full) gray.release();
+            full.release();
+        }
+    }
+
+    /** Aplica uma opcao ja avaliada na busca (mesmos contornos), refazendo so a triagem de trincas. */
+    static Output applyTrial(Mat analyzed, int ow, int oh, int sample, AnalysisWindow window, DetectionTuner.Report report,
+                             DetectionTuner.Trial trial, int crackSensitivity) {
+        long start = System.currentTimeMillis();
+        Mat full = Mats.gray(analyzed);
+        Mat gray = null;
+        try {
+            gray = window.region == null ? full : window.cropGray(full);
+            CrackAnalysis cracks = window.toGlobal(new CrackDetector(crackModel()).detect(gray, trial.result, crackSensitivity));
+            return new Output(window.toGlobal(trial.result), cracks, trial.option, report, window, ow, oh, sample, System.currentTimeMillis() - start, crackModelNote());
+        } finally {
+            if (gray != null && gray != full) gray.release();
+            full.release();
+        }
     }
 
     /** Analise ao vivo, igual ao Android: lado maior 640 px, 8 escalas, sem busca e sem trincas. */
     static PelletDetector.Result live(Mat gray, Config cfg) {
-        DetectionTuner.Option option = new DetectionTuner.Option(cfg.profile, cfg.sensitivity, cfg.legacy);
+        DetectionTuner.Option option = cfg.option();
         PelletDetector.Result seeds = option.legacy ? new PelletDetector().detect(gray, option.parameters, 640, 8)
                 : new AdaptivePelletDetector().detect(gray, option.parameters, 640, 8);
         return new EllipseFitter().refine(gray, seeds);

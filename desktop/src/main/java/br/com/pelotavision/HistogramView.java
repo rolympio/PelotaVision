@@ -56,6 +56,8 @@ final class HistogramView extends JPanel {
         g.drawString("diametro (" + unit + ")", w / 2 - 30, h - 4);
     }
 
+    static String fmt4(double v) { return Double.isFinite(v) ? String.format(Locale.ROOT, "%.4f", v) : "—"; }
+
     static String fmt(double v) {
         if (!Double.isFinite(v)) return "—";
         return Math.abs(v - Math.rint(v)) < 1e-9 ? String.format(Locale.ROOT, "%.0f", v) : String.format(Locale.ROOT, "%.2f", v);

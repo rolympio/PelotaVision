@@ -25,6 +25,16 @@ final class CameraSource {
         Boolean autofocusSetAccepted, autoExposureSetAccepted;
         double autofocusValue = Double.NaN, focusValue = Double.NaN, autoExposureValue = Double.NaN, exposureValue = Double.NaN;
 
+        /** Copia imutavel para a foto capturada (o objeto vivo e atualizado pela camera). */
+        Info copy() {
+            Info c = new Info();
+            c.index = index; c.backend = backend; c.requestedWidth = requestedWidth; c.requestedHeight = requestedHeight; c.width = width; c.height = height;
+            c.fourcc = fourcc; c.fps = fps; c.lockFocusRequested = lockFocusRequested; c.lockExposureRequested = lockExposureRequested;
+            c.autofocusSetAccepted = autofocusSetAccepted; c.autoExposureSetAccepted = autoExposureSetAccepted; c.autofocusValue = autofocusValue;
+            c.focusValue = focusValue; c.autoExposureValue = autoExposureValue; c.exposureValue = exposureValue;
+            return c;
+        }
+
         Map<String, Object> asMap() {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("camera_index", index); m.put("backend", backend);

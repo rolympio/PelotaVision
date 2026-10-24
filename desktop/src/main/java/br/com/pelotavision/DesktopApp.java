@@ -10,7 +10,7 @@ import java.io.File;
 /** PelotaVision para Windows: ponto de entrada. Usa o mesmo nucleo de analise do Android. */
 public final class DesktopApp {
     public static final String NAME = "PelotaVision Windows";
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = "0.2.0";
     /** Versao do nucleo de analise compartilhado com o Android. */
     public static final String CORE_VERSION = "0.11.0";
 
@@ -44,18 +44,31 @@ public final class DesktopApp {
             log.append("appDir=").append(appDir()).append('\n');
             log.append("crackModel=").append(model("crack_forest.pvrf")).append(' ').append(model("crack_forest.pvrf").isFile()).append('\n');
             org.opencv.core.Mat bgr = Mats.readUpright(image);
-            int ow = bgr.cols(), oh = bgr.rows(), sample = Mats.sampleFor(ow, oh);
-            org.opencv.core.Mat analyzed = Mats.downsample(bgr, sample);
+            PhotoSession session = new PhotoSession(image, null, null, bgr);
             bgr.release();
             DesktopAnalysis.Config cfg = new DesktopAnalysis.Config();
-            DesktopAnalysis.Output out = DesktopAnalysis.analyze(analyzed, ow, oh, sample, cfg, () -> false, (d, t, l) -> {});
-            java.util.List<File> files = DesktopExport.save(outDir, new DesktopExport.Source(image, null, null), Mats.toImage(analyzed), out, cfg);
-            analyzed.release();
-            log.append("count=").append(out.result.circles.size()).append('\n');
+            DesktopAnalysis.Output out = DesktopAnalysis.analyze(session.analyzed, session.originalWidth, session.originalHeight, session.sample, null, cfg, null, () -> false, (d, t, l) -> {});
+            session.accept(out);
+            log.append("count_full=").append(session.active().circles.size()).append('\n');
             log.append("applied=").append(out.applied.id).append('\n');
+            // ROI retangular central + reanalise com o mesmo ajuste + escala digitada.
+            session.setRegion(InterestRegion.initial(InterestRegion.Shape.RECTANGLE, session.width, session.height));
+            boolean pending = session.needsAnalysis() && !session.canSave();
+            cfg.autoSuggest = false;
+            DesktopAnalysis.Output roi = DesktopAnalysis.analyze(session.analyzed, session.originalWidth, session.originalHeight, session.sample, session.region(), cfg, out.applied, () -> false, (d, t, l) -> {});
+            session.accept(roi);
+            session.setScale(new Granulometry.Settings(10, 1, true, false));
+            log.append("roi_pending_before_analysis=").append(pending).append('\n');
+            log.append("count_roi=").append(session.active().circles.size()).append('\n');
+            java.util.List<File> files = DesktopExport.save(outDir, session, cfg);
+            String json = new String(java.nio.file.Files.readAllBytes(files.get(4).toPath()), java.nio.charset.StandardCharsets.UTF_8);
+            boolean jsonOk = json.contains("\"region_of_interest\"") && json.contains("\"RECTANGLE\"") && json.contains("\"physical_scale\"") && json.contains("\"processing_scope\"");
+            session.release();
             log.append("crackModelLoaded=").append(DesktopAnalysis.crackModel() != null).append('\n');
             log.append("files=").append(files.size()).append('\n');
-            if (out.result.circles.isEmpty() || DesktopAnalysis.crackModel() == null || files.size() != 5) code = 2;
+            log.append("json_android_keys=").append(jsonOk).append('\n');
+            if (session.active().circles.isEmpty() || out.result.circles.isEmpty() || !pending || !jsonOk) code = 3;
+            if (DesktopAnalysis.crackModel() == null || files.size() != 5) code = 2;
         } catch (Throwable e) {
             log.append("error=").append(e).append('\n');
             code = 1;
