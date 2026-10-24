@@ -1,0 +1,32 @@
+{
+  "app_version": "0.3.0",
+  "date_utc": "2026-10-11",
+  "build": "assembleDebug lintDebug testDebugUnitTest successful",
+  "tests": 14,
+  "failures": 0,
+  "errors": 0,
+  "lint_errors": 0,
+  "lint_warnings": 38,
+  "calculation_check": "passed",
+  "crack_detector_synthetic_check": "passed",
+  "png_export": "native Android compositor; original then markers and crack indications then histogram; encoded/decoded pixels tested",
+  "example": {
+    "detections": 122,
+    "possible_cracks": 44,
+    "no_indication": 56,
+    "inconclusive": 22,
+    "manual_reviews": 0,
+    "validated_ground_truth": false,
+    "histogram_unit": "px",
+    "physical_scale_known": false,
+    "analysis_runtime": "JVM / OpenCV desktop 4.9; Android rendering in Robolectric; APK uses OpenCV 4.12"
+  },
+  "actual_saver_fake_mediastore_test": "passed; five files; source bytes preserved; CSV/JSON units and crack statuses verified",
+  "signing_certificate_same_as": "0.2.2",
+  "certificate_sha256": "0d77d2917bd808a17f92e52568dbb6bc2b1767be0e25ca93fadc8e41c8d66b38",
+  "zipalign_16kb": "passed",
+  "camera_device_tested": false,
+  "mediastore_device_tested": false,
+  "pellet_detector_changed": false,
+  "crack_analysis_photo_only": true
+}

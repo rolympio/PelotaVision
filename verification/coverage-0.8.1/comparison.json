@@ -1,0 +1,10 @@
+{
+  "width": 1536,
+  "height": 865,
+  "old_auto": 68,
+  "manual_reference": 122,
+  "new_auto": 125,
+  "manual_matches_in_new": 122,
+  "matching_rule": "one-to-one center distance <=.35*(r1+r2), radius ratio .7..1.43",
+  "is_ground_truth": false
+}

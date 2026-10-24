@@ -1,0 +1,6 @@
+{
+  "app_version": "0.2.0",
+  "status": "not_run",
+  "checks": [],
+  "note": "Camera, calibration dialog, on-screen chart and MediaStore export not executed on a physical phone or emulator in this update. Baseline 0.1.0 emulator installation timed out; separate baseline log retained. Mathematical conversion and histogram logic tested on JVM."
+}

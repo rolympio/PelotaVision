@@ -1,0 +1,389 @@
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/AndroidManifest.xml:5: Warning: Expecting android:screenOrientation="unspecified" or "fullSensor" for this activity so the user can use the application in any orientation and provide a great experience on Chrome OS devices [LockedOrientationActivity]
+        <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="portrait">
+                                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "LockedOrientationActivity":
+   The <activity> element should not be locked to any orientation so that
+   users can take advantage of the multi-window environments and larger
+   screens available on Android. To fix the issue, consider declaring the
+   corresponding activity element with `screenOrientation="unspecified"`or
+   fullSensor attribute.
+
+   https://developer.android.com/topic/arc/window-management
+
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/AndroidManifest.xml:5: Warning: Should not restrict activity to fixed orientation. This may not be suitable for different form factors, causing the app to be letterboxed. [DiscouragedApi]
+        <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="portrait">
+                                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "DiscouragedApi":
+   Discouraged APIs are allowed and are not deprecated, but they may be unfit
+   for common use (e.g. due to slow performance or subtle behavior).
+
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/AndroidManifest.xml:4: Warning: The attribute android:allowBackup is deprecated from Android 12 and higher and may be removed in future versions. Consider adding the attribute android:dataExtractionRules specifying an @xml resource which configures cloud backups and device transfers on Android 12 and higher. [DataExtractionRules]
+    <application android:theme="@style/AppTheme" android:label="PelotaVision" android:icon="@drawable/ic_app" android:allowBackup="false" android:supportsRtl="true">
+                                                                                                                                   ~~~~~
+
+   Explanation for issues of type "DataExtractionRules":
+   Before Android 12, the attributes android:allowBackup and
+   android:fullBackupContent were used to configure all forms of backup,
+   including cloud backups, device-to-device transfers and adb backup.
+
+   In Android 12 and higher, these attributes have been deprecated and will
+   only apply to cloud backups. You should instead use the attribute
+   android:dataExtractionRules, specifying an @xml resource that configures
+   which files to back up, for cloud backups and for device-to-device
+   transfers, separately. If your minSdkVersion supports older versions,
+   you'll still want to specify an android:fullBackupContent resource if the
+   default behavior is not right for your app.
+
+   https://developer.android.com/about/versions/12/backup-restore#xml-changes
+   https://goo.gle/DataExtractionRules
+
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/BeltEditorView.java:26: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+    @Override protected void onDraw(Canvas c){super.onDraw(c);float s=scale();if(s<=0)return;c.drawBitmap(photo,null,new RectF(left(),top(),left()+photo.getWidth()*s,top()+photo.getHeight()*s),null);drawEdges(c,edges,left(),top(),s,true,getResources().getDisplayMetrics().density);}
+                                                                                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/CircleOverlay.java:38: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+        if(viewport!=null&&viewport.region!=null&&viewport.region.shape==InterestRegion.Shape.CIRCLE){InterestRegion r=viewport.region;android.graphics.Path p=new android.graphics.Path();p.addCircle(left+(float)r.cx()*scale,top+(float)r.cy()*scale,(float)r.width()*scale/2,android.graphics.Path.Direction.CW);canvas.clipPath(p);}
+                                                                                                                                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/HistogramView.java:16: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+    @Override protected void onDraw(Canvas canvas){super.onDraw(canvas);if(data!=null)draw(canvas,new RectF(0,0,getWidth(),getHeight()),data);}
+                                                                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/ReferencePreviewView.java:12: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+  float scale=Math.min(getWidth()/(float)(x1-x0),getHeight()/(float)(y1-y0)),left=(getWidth()-(x1-x0)*scale)/2,top=(getHeight()-(y1-y0)*scale)/2;Paint p=new Paint(Paint.FILTER_BITMAP_FLAG);
+                                                                                                                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/ReferencePreviewView.java:13: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+  canvas.drawBitmap(photo,new Rect(x0,y0,x1,y1),new RectF(left,top,left+(x1-x0)*scale,top+(y1-y0)*scale),p);
+                          ~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/ReferencePreviewView.java:13: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+  canvas.drawBitmap(photo,new Rect(x0,y0,x1,y1),new RectF(left,top,left+(x1-x0)*scale,top+(y1-y0)*scale),p);
+                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/RegionEditorView.java:18: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+ @Override protected void onDraw(Canvas canvas){super.onDraw(canvas);float s=scale();if(s<=0)return;canvas.drawBitmap(photo,null,new RectF(left(),top(),left()+photo.getWidth()*s,top()+photo.getHeight()*s),null);RegionOverlay.draw(canvas,region,left(),top(),s,photo.getWidth(),photo.getHeight(),false);
+                                                                                                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/RegionEditorView.java:19: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+  Paint handlePaint=new Paint(Paint.ANTI_ALIAS_FLAG);handlePaint.setColor(Color.WHITE);float radius=7*getResources().getDisplayMetrics().density;
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/RoiZoomView.java:22: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+    @Override protected void onDraw(Canvas c){super.onDraw(c);float s=scale();if(s<=0)return;c.save();c.translate(left(),top());c.scale(s,s);new ReportViewport(photo.getWidth(),photo.getHeight(),roi,true).clip(c,roi);c.drawBitmap(photo,0,0,null);Paint a=new Paint(3),b=new Paint(3),o=new Paint(3);a.setStrokeWidth(Math.max(1.2f,2/s));CircleOverlay.draw(c,result,0,0,1,true,a,b,o);CrackOverlay.draw(c,result,cracks,0,0,1);ReferenceOverlay.draw(c,reference,0,0,1);c.restore();}
+                                                                                                                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/RoiZoomView.java:22: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+    @Override protected void onDraw(Canvas c){super.onDraw(c);float s=scale();if(s<=0)return;c.save();c.translate(left(),top());c.scale(s,s);new ReportViewport(photo.getWidth(),photo.getHeight(),roi,true).clip(c,roi);c.drawBitmap(photo,0,0,null);Paint a=new Paint(3),b=new Paint(3),o=new Paint(3);a.setStrokeWidth(Math.max(1.2f,2/s));CircleOverlay.draw(c,result,0,0,1,true,a,b,o);CrackOverlay.draw(c,result,cracks,0,0,1);ReferenceOverlay.draw(c,reference,0,0,1);c.restore();}
+                                                                                                                                                                                                                                                              ~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/RoiZoomView.java:22: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+    @Override protected void onDraw(Canvas c){super.onDraw(c);float s=scale();if(s<=0)return;c.save();c.translate(left(),top());c.scale(s,s);new ReportViewport(photo.getWidth(),photo.getHeight(),roi,true).clip(c,roi);c.drawBitmap(photo,0,0,null);Paint a=new Paint(3),b=new Paint(3),o=new Paint(3);a.setStrokeWidth(Math.max(1.2f,2/s));CircleOverlay.draw(c,result,0,0,1,true,a,b,o);CrackOverlay.draw(c,result,cracks,0,0,1);ReferenceOverlay.draw(c,reference,0,0,1);c.restore();}
+                                                                                                                                                                                                                                                                             ~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/RoiZoomView.java:22: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+    @Override protected void onDraw(Canvas c){super.onDraw(c);float s=scale();if(s<=0)return;c.save();c.translate(left(),top());c.scale(s,s);new ReportViewport(photo.getWidth(),photo.getHeight(),roi,true).clip(c,roi);c.drawBitmap(photo,0,0,null);Paint a=new Paint(3),b=new Paint(3),o=new Paint(3);a.setStrokeWidth(Math.max(1.2f,2/s));CircleOverlay.draw(c,result,0,0,1,true,a,b,o);CrackOverlay.draw(c,result,cracks,0,0,1);ReferenceOverlay.draw(c,reference,0,0,1);c.restore();}
+                                                                                                                                                                                                                                                                                            ~~~~~~~~~~~~
+
+   Explanation for issues of type "DrawAllocation":
+   You should avoid allocating objects during a drawing or layout operation.
+   These are called frequently, so a smooth UI can be interrupted by garbage
+   collection pauses caused by the object allocations.
+
+   The way this is generally handled is to allocate the needed objects up
+   front and to reuse them for each drawing operation.
+
+   Some methods allocate memory on your behalf (such as Bitmap.create), and
+   these should be handled in the same way.
+
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/BeltEditorView.java:7: Warning: Custom view BeltEditorView is missing constructor used by tools: (Context) or (Context,AttributeSet) or (Context,AttributeSet,int) [ViewConstructor]
+final class BeltEditorView extends View {
+            ~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/ReferencePreviewView.java:4: Warning: Custom view ReferencePreviewView is missing constructor used by tools: (Context) or (Context,AttributeSet) or (Context,AttributeSet,int) [ViewConstructor]
+final class ReferencePreviewView extends View {
+            ~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/RegionEditorView.java:6: Warning: Custom view RegionEditorView is missing constructor used by tools: (Context) or (Context,AttributeSet) or (Context,AttributeSet,int) [ViewConstructor]
+final class RegionEditorView extends View {
+            ~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/RoiZoomView.java:7: Warning: Custom view RoiZoomView is missing constructor used by tools: (Context) or (Context,AttributeSet) or (Context,AttributeSet,int) [ViewConstructor]
+final class RoiZoomView extends View {
+            ~~~~~~~~~~~
+
+   Explanation for issues of type "ViewConstructor":
+   Some layout tools (such as the Android layout editor) need to find a
+   constructor with one of the following signatures:
+   * View(Context context)
+   * View(Context context, AttributeSet attrs)
+   * View(Context context, AttributeSet attrs, int defStyle)
+
+   If your custom view needs to perform initialization which does not apply
+   when used in a layout editor, you can surround the given code with a check
+   to see if View#isInEditMode() is false, since that method will return false
+   at runtime but true within a user interface editor.
+
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:184: Warning: Custom view `CircleOverlay` has setOnTouchListener called on it but does not override performClick [ClickableViewAccessibility]
+        overlay.setOnTouchListener((v,event)->{if(mode!=Mode.PHOTO||photoResult==null)return false;if(event.getAction()==MotionEvent.ACTION_UP){v.performClick();reviewCrackAt(event.getX(),event.getY());}return true;});
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "ClickableViewAccessibility":
+   If a View that overrides onTouchEvent or uses an OnTouchListener does not
+   also implement performClick and call it when clicks are detected, the View
+   may not handle accessibility actions properly. Logic handling the click
+   actions should ideally be placed in View#performClick as some accessibility
+   services invoke performClick when a click action should occur.
+
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:120: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+                detail.setText("Aguardando nova análise");if(shapeLabel!=null)shapeLabel.setText("Esfericidade aparente 2D (b/a): —");
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:120: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+                detail.setText("Aguardando nova análise");if(shapeLabel!=null)shapeLabel.setText("Esfericidade aparente 2D (b/a): —");
+                                                                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:131: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(!nativeReady){hint.setText("O processamento não iniciou neste aparelho.");capture.setEnabled(false);open.setEnabled(false);return;}
+                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:196: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        CheckBox numberBox=new CheckBox(this);numberBox.setText("Números");numberBox.setTextSize(11);numberBox.setTextColor(Color.WHITE);numberBox.setChecked(true);
+                                                                ~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:230: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+                    } catch(Exception e) {runOnUiThread(()-> {if(!isDestroyed()&&mode==Mode.LIVE)hint.setText("Falha na análise. Tente fotografar ou abrir uma imagem.");});}
+                                                                                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:239: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            } catch(Exception e) {capture.setEnabled(false);hint.setText("Câmera indisponível. Você pode abrir uma foto.");}
+                                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:243: Warning: Number formatting does not take into account locale settings. Consider using String.format instead. [SetTextI18n]
+        count.setText(Integer.toString(result.circles.size()));
+                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:244: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+        ShapeStatistics shape=ShapeStatistics.of(result);shapeLabel.setText(shape.label()+" · excl.="+shape.excluded);
+                                                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:244: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        ShapeStatistics shape=ShapeStatistics.of(result);shapeLabel.setText(shape.label()+" · excl.="+shape.excluded);
+                                                                                          ~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:320: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+                if(searchReport!=null)hint.setText((window.region==null?"Foto":"ROI")+": "+(searchReport.cancelled?"busca cancelada; aplicado o ajuste atual.":searchReport.weak()?"sugestão com pouca evidência; confira os contornos.":"ajuste sugerido aplicado. Toque em Sugestão para comparar.")+(minimumExpectedMm>0&&scaleSettings==null?" Calibre pela medida real para verificar "+HistogramView.number(minimumExpectedMm)+" mm.":""));
+                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:321: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+                if(referenceInvalidated){hint.setText("O contorno da referência mudou. Toque novamente no objeto para calibrar.");toast("Referência alterada pela reanálise; escala removida.");}
+                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:322: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+                if(camera!=null&&torchOn){camera.getCameraControl().enableTorch(false);torchOn=false;torch.setText("Luz");}
+                                                                                                                   ~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:326: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            runOnUiThread(()-> {if(!isDestroyed()){closeTuneProgress();if(replacingCurrent){mode=Mode.PHOTO;applyRegion(interestRegion);hint.setText("Não foi possível analisar. Sua foto e a ROI foram mantidas; tente novamente.");}else returnToCamera();toast("Não foi possível analisar a foto.");}});
+                                                                                                                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:333: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        CheckBox compare=new CheckBox(this);compare.setTag("detail_compare");compare.setText("Comparar original, contraste local e redução leve de ruído");compare.setTextColor(Color.WHITE);compare.setChecked(detailCompare);content.addView(compare);
+                                                                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:334: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        CheckBox search=new CheckBox(this);search.setTag("detail_search");search.setText("Buscar configuração de detecção antes dos blocos");search.setTextColor(Color.WHITE);search.setChecked(true);content.addView(search);
+                                                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:335: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        CheckBox sr=new CheckBox(this);sr.setTag("detail_sr");sr.setText("Testar super-resolução FSRCNN 2× (experimental)");sr.setTextColor(Color.WHITE);sr.setChecked(detailSr);content.addView(sr);
+                                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:355: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            runOnUiThread(()->{showTuneProgress(cancel);if(tuneProgress!=null){tuneProgress.setTitle("Segmentação detalhada");tuneProgress.getButton(AlertDialog.BUTTON_NEGATIVE).setText("Cancelar processamento");((TextView)tuneProgress.getWindow().getDecorView().findViewWithTag("tuning_budget_note")).setText("Original + blocos sobrepostos. Até 3 minutos nos blocos, verificados entre etapas. Cancelar mantém o resultado anterior.");}});
+                                                                                                                                                                                          ~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:355: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            runOnUiThread(()->{showTuneProgress(cancel);if(tuneProgress!=null){tuneProgress.setTitle("Segmentação detalhada");tuneProgress.getButton(AlertDialog.BUTTON_NEGATIVE).setText("Cancelar processamento");((TextView)tuneProgress.getWindow().getDecorView().findViewWithTag("tuning_budget_note")).setText("Original + blocos sobrepostos. Até 3 minutos nos blocos, verificados entre etapas. Cancelar mantém o resultado anterior.");}});
+                                                                                                                                                                                                                                                                                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:362: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            runOnUiThread(()->{closeTuneProgress();if(isDestroyed()||isFinishing()){displayed.recycle();return;}if(cancel.get()){displayed.recycle();mode=Mode.PHOTO;applyRegion(interestRegion);hint.setText("Processamento cancelado; resultado anterior preservado.");return;}Granulometry.Settings previous=scaleSettings;boolean changed=previous!=null&&previous.selectedObject!=null&&!scope.keepsReference(previous.selectedObject,analyzed.result,source[0],source[1]);if(changed)previous=null;
+                                                                                                                                                                                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:364: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+                hint.setText(analyzed.report.summary()+". Toque em Detalhada para comparar. "+(changed?"O contorno da referência mudou; calibre novamente.":"Confira os contornos antes de salvar."));if(changed)toast("Referência alterada; escala removida.");
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:364: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+                hint.setText(analyzed.report.summary()+". Toque em Detalhada para comparar. "+(changed?"O contorno da referência mudou; calibre novamente.":"Confira os contornos antes de salvar."));if(changed)toast("Referência alterada; escala removida.");
+                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:386: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+                    mode=Mode.PHOTO;updateControls();hint.setText("Histograma salvo no arquivo _resultado.png. Dados em Downloads / PelotaVision.");
+                                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:401: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        frozen.setVisibility(View.GONE);overlay.clear();badge.setText("AO VIVO");count.setText("—");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");detail.setText("Aguardando análise");
+                                                                      ~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:401: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        frozen.setVisibility(View.GONE);overlay.clear();badge.setText("AO VIVO");count.setText("—");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");detail.setText("Aguardando análise");
+                                                                                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:401: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        frozen.setVisibility(View.GONE);overlay.clear();badge.setText("AO VIVO");count.setText("—");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");detail.setText("Aguardando análise");
+                                                                                                                                                                           ~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:402: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        hint.setText("Mantenha a câmera parada. Toque na imagem para focar.");updateControls();
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:413: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(overlay!=null)overlay.cracks(null);if(crackLabel!=null)crackLabel.setText("Trincas: analisadas ao fotografar");
+                                                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:416: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(scaleLabel!=null)scaleLabel.setText("Fotografe para calibrar em px/mm");
+                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:420: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(newMode!=Mode.SAVING){overlay.clear();count.setText("—");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");detail.setText(message);}
+                                                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:456: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(photoResult==null){scaleLabel.setText("Sem escala · toque em Escala / mm");updateControls();return;}
+                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:457: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(scaleSettings==null){distribution=PhotoComposer.pixelHistogram(photoResult);histogram.display(distribution);histogram.setVisibility(View.VISIBLE);scaleLabel.setText("Sem escala física · histograma em px");hint.setText("Toque numa pelota para revisar ou calibrar pela medida real. Escala / mm mantém as opções manuais.");updateControls();return;}
+                                                                                                                                                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:457: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(scaleSettings==null){distribution=PhotoComposer.pixelHistogram(photoResult);histogram.display(distribution);histogram.setVisibility(View.VISIBLE);scaleLabel.setText("Sem escala física · histograma em px");hint.setText("Toque numa pelota para revisar ou calibrar pela medida real. Escala / mm mantém as opções manuais.");updateControls();return;}
+                                                                                                                                                                                                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:461: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+            scaleLabel.setText((scaleSettings.beltReference!=null?"Correia · ":scaleSettings.selectedObject!=null?"REF · ":scaleSettings.estimated()?"Estimativa · ":"")+HistogramView.number(scaleSettings.originalPixelsPerMm)+" px/mm · classe "+HistogramView.number(distribution.settings.binWidthMm)+" mm");
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:461: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            scaleLabel.setText((scaleSettings.beltReference!=null?"Correia · ":scaleSettings.selectedObject!=null?"REF · ":scaleSettings.estimated()?"Estimativa · ":"")+HistogramView.number(scaleSettings.originalPixelsPerMm)+" px/mm · classe "+HistogramView.number(distribution.settings.binWidthMm)+" mm");
+                                                                                                                                                                                                                                 ~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:461: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            scaleLabel.setText((scaleSettings.beltReference!=null?"Correia · ":scaleSettings.selectedObject!=null?"REF · ":scaleSettings.estimated()?"Estimativa · ":"")+HistogramView.number(scaleSettings.originalPixelsPerMm)+" px/mm · classe "+HistogramView.number(distribution.settings.binWidthMm)+" mm");
+                                                                                                                                                                                                                                                                                                           ~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:465: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        } catch(IllegalArgumentException e){scaleLabel.setText("Ajuste a escala ou a classe");hint.setText(e.getMessage());}
+                                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:477: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+        if(photoDetailReport!=null&&!roiNeedsAnalysis)detail.setText("Detalhada · "+photoDetailReport.tiles+" blocos · "+photoDetailReport.durationMs+" ms");
+                                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:477: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(photoDetailReport!=null&&!roiNeedsAnalysis)detail.setText("Detalhada · "+photoDetailReport.tiles+" blocos · "+photoDetailReport.durationMs+" ms");
+                                                                     ~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:477: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(photoDetailReport!=null&&!roiNeedsAnalysis)detail.setText("Detalhada · "+photoDetailReport.tiles+" blocos · "+photoDetailReport.durationMs+" ms");
+                                                                                                            ~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:477: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(photoDetailReport!=null&&!roiNeedsAnalysis)detail.setText("Detalhada · "+photoDetailReport.tiles+" blocos · "+photoDetailReport.durationMs+" ms");
+                                                                                                                                                      ~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:478: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+        if(roiNeedsAnalysis){count.setText("—");detail.setText("Área alterada · aguardando análise");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");crackLabel.setText("Trincas: aguardando segmentação");hint.setText("Recorte aplicado. Toque em Segmentar "+(region==null?"foto":"ROI")+" ou Buscar ajuste para analisar esta imagem.");}
+                                                                                                                                                                                                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:478: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(roiNeedsAnalysis){count.setText("—");detail.setText("Área alterada · aguardando análise");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");crackLabel.setText("Trincas: aguardando segmentação");hint.setText("Recorte aplicado. Toque em Segmentar "+(region==null?"foto":"ROI")+" ou Buscar ajuste para analisar esta imagem.");}
+                                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:478: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(roiNeedsAnalysis){count.setText("—");detail.setText("Área alterada · aguardando análise");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");crackLabel.setText("Trincas: aguardando segmentação");hint.setText("Recorte aplicado. Toque em Segmentar "+(region==null?"foto":"ROI")+" ou Buscar ajuste para analisar esta imagem.");}
+                                                                                                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:478: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(roiNeedsAnalysis){count.setText("—");detail.setText("Área alterada · aguardando análise");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");crackLabel.setText("Trincas: aguardando segmentação");hint.setText("Recorte aplicado. Toque em Segmentar "+(region==null?"foto":"ROI")+" ou Buscar ajuste para analisar esta imagem.");}
+                                                                                                                                                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:478: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(roiNeedsAnalysis){count.setText("—");detail.setText("Área alterada · aguardando análise");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");crackLabel.setText("Trincas: aguardando segmentação");hint.setText("Recorte aplicado. Toque em Segmentar "+(region==null?"foto":"ROI")+" ou Buscar ajuste para analisar esta imagem.");}
+                                                                                                                                                                                                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:478: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(roiNeedsAnalysis){count.setText("—");detail.setText("Área alterada · aguardando análise");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");crackLabel.setText("Trincas: aguardando segmentação");hint.setText("Recorte aplicado. Toque em Segmentar "+(region==null?"foto":"ROI")+" ou Buscar ajuste para analisar esta imagem.");}
+                                                                                                                                                                                                                                                                                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:479: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        else if(region!=null)hint.setText("ROI ativa na tela e no relatório. Use Segmentar ROI ou Buscar ajuste na ROI para reanalisar a iluminação deste recorte.");
+                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:519: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+        crackLabel.setText((crackModel==null?"Heurística · ":"RF experimental · ")+"Possíveis: "+photoCracks.count(CrackAnalysis.Status.POSSIBLE)+" · sem indicação: "+photoCracks.count(CrackAnalysis.Status.NO_INDICATION)+" · inconclusivas: "+photoCracks.count(CrackAnalysis.Status.INCONCLUSIVE));
+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:519: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        crackLabel.setText((crackModel==null?"Heurística · ":"RF experimental · ")+"Possíveis: "+photoCracks.count(CrackAnalysis.Status.POSSIBLE)+" · sem indicação: "+photoCracks.count(CrackAnalysis.Status.NO_INDICATION)+" · inconclusivas: "+photoCracks.count(CrackAnalysis.Status.INCONCLUSIVE));
+                                                                                   ~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:519: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        crackLabel.setText((crackModel==null?"Heurística · ":"RF experimental · ")+"Possíveis: "+photoCracks.count(CrackAnalysis.Status.POSSIBLE)+" · sem indicação: "+photoCracks.count(CrackAnalysis.Status.NO_INDICATION)+" · inconclusivas: "+photoCracks.count(CrackAnalysis.Status.INCONCLUSIVE));
+                                                                                                                                                  ~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:519: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        crackLabel.setText((crackModel==null?"Heurística · ":"RF experimental · ")+"Possíveis: "+photoCracks.count(CrackAnalysis.Status.POSSIBLE)+" · sem indicação: "+photoCracks.count(CrackAnalysis.Status.NO_INDICATION)+" · inconclusivas: "+photoCracks.count(CrackAnalysis.Status.INCONCLUSIVE));
+                                                                                                                                                                                                                             ~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:574: Warning: Number formatting does not take into account locale settings. Consider using String.format instead. [SetTextI18n]
+        EditText real=new EditText(this);real.setTag("reference_mm");real.setSingleLine();real.setTextColor(Color.WHITE);real.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);real.setHint("Ex.: 12 ou 12,5");if(editing)real.setText(Double.toString(previous.realMm));content.addView(real);
+                                                                                                                                                                                                                                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:575: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        CheckBox exclude=new CheckBox(this);exclude.setTag("exclude_reference");exclude.setText("Excluir referência das estatísticas");exclude.setTextColor(Color.WHITE);content.addView(exclude);
+                                                                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:578: Warning: Number formatting does not take into account locale settings. Consider using String.format instead. [SetTextI18n]
+        content.addView(text("Largura de cada classe (mm)",14,Color.WHITE));EditText bin=new EditText(this);bin.setTag("reference_bin_mm");bin.setSingleLine();bin.setTextColor(Color.WHITE);bin.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);bin.setText(Double.toString(scaleSettings==null?1:scaleSettings.binWidthMm));content.addView(bin);
+                                                                                                                                                                                                                                                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:589: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+            preview.setText("Escala calculada: "+HistogramView.number(cfg.originalPixelsPerMm)+" px/mm na foto original.\nReferência: maior "+HistogramView.number(ref.majorMm())+" mm · menor "+HistogramView.number(ref.minorMm())+" mm · equivalente "+HistogramView.number(ref.equivalentMm())+" mm.\n"+(measured.included==0?"Nenhuma pelota incluída na distribuição.":"Histograma: média "+HistogramView.number(measured.meanMm)+" mm · n="+measured.included+" · "+measured.binCount()+" classes."));
+                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:589: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            preview.setText("Escala calculada: "+HistogramView.number(cfg.originalPixelsPerMm)+" px/mm na foto original.\nReferência: maior "+HistogramView.number(ref.majorMm())+" mm · menor "+HistogramView.number(ref.minorMm())+" mm · equivalente "+HistogramView.number(ref.equivalentMm())+" mm.\n"+(measured.included==0?"Nenhuma pelota incluída na distribuição.":"Histograma: média "+HistogramView.number(measured.meanMm)+" mm · n="+measured.included+" · "+measured.binCount()+" classes."));
+                            ~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:589: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            preview.setText("Escala calculada: "+HistogramView.number(cfg.originalPixelsPerMm)+" px/mm na foto original.\nReferência: maior "+HistogramView.number(ref.majorMm())+" mm · menor "+HistogramView.number(ref.minorMm())+" mm · equivalente "+HistogramView.number(ref.equivalentMm())+" mm.\n"+(measured.included==0?"Nenhuma pelota incluída na distribuição.":"Histograma: média "+HistogramView.number(measured.meanMm)+" mm · n="+measured.included+" · "+measured.binCount()+" classes."));
+                                                                                                                                                                                  ~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:589: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            preview.setText("Escala calculada: "+HistogramView.number(cfg.originalPixelsPerMm)+" px/mm na foto original.\nReferência: maior "+HistogramView.number(ref.majorMm())+" mm · menor "+HistogramView.number(ref.minorMm())+" mm · equivalente "+HistogramView.number(ref.equivalentMm())+" mm.\n"+(measured.included==0?"Nenhuma pelota incluída na distribuição.":"Histograma: média "+HistogramView.number(measured.meanMm)+" mm · n="+measured.included+" · "+measured.binCount()+" classes."));
+                                                                                                                                                                                                                                     ~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:590: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        }catch(IllegalArgumentException e){preview.setText("Informe a medida real e a classe para conferir a escala.");}};
+                                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:635: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        CheckBox edges=new CheckBox(this);edges.setText("Excluir regiões cortadas na borda");edges.setTextColor(Color.WHITE);edges.setChecked(scaleSettings==null||scaleSettings.excludePartial);content.addView(edges);
+                                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:636: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        CheckBox review=new CheckBox(this);review.setText("Excluir também regiões com alerta");review.setTextColor(Color.WHITE);review.setChecked(scaleSettings!=null&&scaleSettings.excludeReview);content.addView(review);
+                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:652: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            } catch(IllegalArgumentException e){preview.setText("Preencha os valores para conferir a faixa em mm.");}
+                                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:707: Warning: Number formatting does not take into account locale settings. Consider using String.format instead. [SetTextI18n]
+        real.setHint("Largura medida");if(previous!=null)real.setText(Double.toString(previous.realWidthMm));bin.setText(scaleSettings==null?"1":Double.toString(scaleSettings.binWidthMm));
+                                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:711: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        CheckBox confirmed=new CheckBox(this);confirmed.setTag("belt_confirm");confirmed.setText("Conferi as bordas e a largura real da correia");confirmed.setTextColor(Color.WHITE);confirmed.setTextSize(12);root.addView(confirmed);
+                                                                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:714: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+        Runnable update=()->{try{BeltCalibration.Reference ref=BeltCalibration.select(editor.edges(),parsePositive(real.getText().toString()),ow,oh,w,h);parsePositive(bin.getText().toString());status.setText(HistogramView.number(ref.originalWidthPixels)+" px na original / "+HistogramView.number(ref.realWidthMm)+" mm = "+HistogramView.number(ref.originalPixelsPerMm)+" px/mm · variação "+HistogramView.number(100*ref.widthVariation)+"%");apply.setEnabled(confirmed.isChecked());}catch(IllegalArgumentException e){status.setText(e.getMessage());apply.setEnabled(false);}};
+                                                                                                                                                                                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:714: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        Runnable update=()->{try{BeltCalibration.Reference ref=BeltCalibration.select(editor.edges(),parsePositive(real.getText().toString()),ow,oh,w,h);parsePositive(bin.getText().toString());status.setText(HistogramView.number(ref.originalWidthPixels)+" px na original / "+HistogramView.number(ref.realWidthMm)+" mm = "+HistogramView.number(ref.originalPixelsPerMm)+" px/mm · variação "+HistogramView.number(100*ref.widthVariation)+"%");apply.setEnabled(confirmed.isChecked());}catch(IllegalArgumentException e){status.setText(e.getMessage());apply.setEnabled(false);}};
+                                                                                                                                                                                                                                                              ~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:714: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        Runnable update=()->{try{BeltCalibration.Reference ref=BeltCalibration.select(editor.edges(),parsePositive(real.getText().toString()),ow,oh,w,h);parsePositive(bin.getText().toString());status.setText(HistogramView.number(ref.originalWidthPixels)+" px na original / "+HistogramView.number(ref.realWidthMm)+" mm = "+HistogramView.number(ref.originalPixelsPerMm)+" px/mm · variação "+HistogramView.number(100*ref.widthVariation)+"%");apply.setEnabled(confirmed.isChecked());}catch(IllegalArgumentException e){status.setText(e.getMessage());apply.setEnabled(false);}};
+                                                                                                                                                                                                                                                                                                                         ~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:714: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        Runnable update=()->{try{BeltCalibration.Reference ref=BeltCalibration.select(editor.edges(),parsePositive(real.getText().toString()),ow,oh,w,h);parsePositive(bin.getText().toString());status.setText(HistogramView.number(ref.originalWidthPixels)+" px na original / "+HistogramView.number(ref.realWidthMm)+" mm = "+HistogramView.number(ref.originalPixelsPerMm)+" px/mm · variação "+HistogramView.number(100*ref.widthVariation)+"%");apply.setEnabled(confirmed.isChecked());}catch(IllegalArgumentException e){status.setText(e.getMessage());apply.setEnabled(false);}};
+                                                                                                                                                                                                                                                                                                                                                                                ~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:719: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            automatic.setEnabled(false);confirmed.setChecked(false);status.setText("Buscando linhas persistentes; confira a sugestão antes de aplicar.");
+                                                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:721: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+            worker.execute(()->{BeltCalibration.Edges found=null;try{int[] pixels=new int[tw*th];scan.getPixels(pixels,0,tw,0,0,tw,th);byte[] gray=new byte[pixels.length];for(int i=0;i<pixels.length;i++){int c=pixels[i];gray[i]=(byte)((77*Color.red(c)+150*Color.green(c)+29*Color.blue(c))>>8);}BeltCalibration.Edges edge=BeltEdgeDetector.suggest(gray,tw,th);if(edge!=null){double[] p=new double[8];for(int i=0;i<4;i++){p[2*i]=edge.x(i)*(w-1)/(tw-1.);p[2*i+1]=edge.y(i)*(h-1)/(th-1.);}found=new BeltCalibration.Edges(p,true);}}catch(RuntimeException ignored){}finally{scan.recycle();}final BeltCalibration.Edges suggestion=found;runOnUiThread(()->{if(!dialog.isShowing()||isDestroyed()||photoBitmap!=snapshot)return;automatic.setEnabled(true);if(suggestion!=null){editor.edges(suggestion);update.run();status.setText("Bordas sugeridas: confira as faixas sem material e ajuste.\n"+status.getText());}else status.setText("Sem sugestão confiável. Ajuste as duas linhas manualmente.");});});
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:721: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            worker.execute(()->{BeltCalibration.Edges found=null;try{int[] pixels=new int[tw*th];scan.getPixels(pixels,0,tw,0,0,tw,th);byte[] gray=new byte[pixels.length];for(int i=0;i<pixels.length;i++){int c=pixels[i];gray[i]=(byte)((77*Color.red(c)+150*Color.green(c)+29*Color.blue(c))>>8);}BeltCalibration.Edges edge=BeltEdgeDetector.suggest(gray,tw,th);if(edge!=null){double[] p=new double[8];for(int i=0;i<4;i++){p[2*i]=edge.x(i)*(w-1)/(tw-1.);p[2*i+1]=edge.y(i)*(h-1)/(th-1.);}found=new BeltCalibration.Edges(p,true);}}catch(RuntimeException ignored){}finally{scan.recycle();}final BeltCalibration.Edges suggestion=found;runOnUiThread(()->{if(!dialog.isShowing()||isDestroyed()||photoBitmap!=snapshot)return;automatic.setEnabled(true);if(suggestion!=null){editor.edges(suggestion);update.run();status.setText("Bordas sugeridas: confira as faixas sem material e ajuste.\n"+status.getText());}else status.setText("Sem sugestão confiável. Ajuste as duas linhas manualmente.");});});
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:735: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(photoDetailReport!=null&&!roiNeedsAnalysis){profileLabel.setText("Detalhada · ver comparação");return;}
+                                                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:737: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        if(report==null){profileLabel.setText("Testar ajustes · toque");return;}
+                                              ~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:749: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+    private void updateTuneProgress(int done,int total,String label){if(tuneProgress==null||!tuneProgress.isShowing())return;View root=tuneProgress.getWindow().getDecorView();android.widget.ProgressBar bar=root.findViewWithTag("tuning_progress");bar.setMax(total);bar.setProgress(done);((TextView)root.findViewWithTag("tuning_label")).setText(done+" / "+total+" · "+label);}
+                                                                                                                                                                                                                                                                                                                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:766: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+            option.setText(trial.option.label()+" · "+String.format(Locale.getDefault(),"%.1f",trial.score)+" pts"+(photoOption!=null&&photoOption.id.equals(trial.option.id)?" · ATUAL":"")+"\n"+(m==null?"Falha nesta opção: "+trial.error:"Válidas "+m.valid+" / "+m.total+(trial.coverage!=null&&trial.coverage.available?" · cobertura "+Math.round(trial.coverage.covered*100)+"%":"")+" · sobrepostas "+m.overlapping+(report.context.minimumActive()?" · < "+HistogramView.number(minimumExpectedMm)+" mm: "+m.belowMinimum:"")+" · "+rr));
+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:766: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            option.setText(trial.option.label()+" · "+String.format(Locale.getDefault(),"%.1f",trial.score)+" pts"+(photoOption!=null&&photoOption.id.equals(trial.option.id)?" · ATUAL":"")+"\n"+(m==null?"Falha nesta opção: "+trial.error:"Válidas "+m.valid+" / "+m.total+(trial.coverage!=null&&trial.coverage.available?" · cobertura "+Math.round(trial.coverage.covered*100)+"%":"")+" · sobrepostas "+m.overlapping+(report.context.minimumActive()?" · < "+HistogramView.number(minimumExpectedMm)+" mm: "+m.belowMinimum:"")+" · "+rr));
+                                                                                                            ~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:784: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        CheckBox auto=new CheckBox(this);auto.setText("Sugerir ajuste ao abrir ou fotografar");auto.setTextColor(Color.WHITE);auto.setChecked(autoSuggest);auto.setTag("auto_suggest");content.addView(auto);
+                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:785: Warning: Number formatting does not take into account locale settings. Consider using String.format instead. [SetTextI18n]
+        content.addView(text("Diâmetro mínimo esperado (mm; 0 desativa)",13,Color.WHITE));EditText minimum=new EditText(this);minimum.setTextColor(Color.WHITE);minimum.setSingleLine();minimum.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);minimum.setText(Double.toString(minimumExpectedMm));minimum.setTag("minimum_expected_mm");content.addView(minimum);
+                                                                                                                                                                                                                                                                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:791: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        CheckBox legacy=new CheckBox(this);legacy.setText("Localização alternativa · LoG");legacy.setTextColor(Color.WHITE);legacy.setChecked(legacyDetection);content.addView(legacy);
+                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:793: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int p,boolean user){sensitivityLabel.setText("Sensibilidade: "+p+"%");}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});
+                                                                                                                                                                     ~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:793: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int p,boolean user){sensitivityLabel.setText("Sensibilidade: "+p+"%");}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});
+                                                                                                                                                                     ~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:817: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+        if(profileLabel!=null)profileLabel.setText((legacyDetection?"LoG · ":"")+new String[]{"Elipses pequenas","Elipses médias","Elipses grandes","Auto · elipses e iluminação"}[profile]);
+                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/6400e8b36208/belt_calibration_090/source/PelotaVision/app/src/main/java/br/com/pelotavision/MainActivity.java:824: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            capture.setEnabled(false);hint.setText("Permita a câmera nas configurações ou abra uma foto.");
+                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "SetTextI18n":
+   When calling TextView#setText
+   * Never call Number#toString() to format numbers; it will not handle
+   fraction separators and locale-specific digits properly. Consider using
+   String#format with proper format specifications (%d or %f) instead.
+   * Do not pass a string literal (e.g. "Hello") to display text. Hardcoded
+   text can not be properly translated to other languages. Consider using
+   Android resource strings instead.
+   * Do not build messages by concatenating text chunks. Such messages can not
+   be properly translated.
+
+   https://developer.android.com/guide/topics/resources/localization.html
+
+0 errors, 103 warnings

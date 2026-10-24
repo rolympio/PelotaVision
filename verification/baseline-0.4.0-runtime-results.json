@@ -1,0 +1,20 @@
+{
+  "app_version": "0.4.0",
+  "date": "2026-10-18",
+  "build": "assembleDebug lintDebug testDebugUnitTest successful",
+  "tests": 24,
+  "failures": 0,
+  "errors": 0,
+  "lint_errors": 0,
+  "lint_warnings": 44,
+  "physical_device_tested": false,
+  "signing_certificate_same_as": "0.3.0",
+  "certificate_sha256": "0d77d2917bd808a17f92e52568dbb6bc2b1767be0e25ca93fadc8e41c8d66b38",
+  "zipalign_16kb": "passed",
+  "roi_editor": "photo only; rectangle sides/corners and circle cardinal handles; move and pinch",
+  "roi_rule": "whole detected circumference inside ROI",
+  "roi_scale_preserved": true,
+  "roi_example_png_integrity": "IEND, complete decode, exact atomic-save bytes and interior pixels for both shapes",
+  "crack_detection": "experimental possible visible cracks; unchanged algorithm",
+  "ios_build_performed": false
+}

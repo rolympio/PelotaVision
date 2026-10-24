@@ -1,0 +1,4 @@
+PASS: blank and four touching disks; positions and radii.
+entrega_pelotas/imagens/1000411645.jpg: 129 circles in 357ms (desktop, not phone)
+entrega_pelotas/imagens/1000411646.jpg: 46 circles in 658ms (desktop, not phone)
+entrega_pelotas/imagens/1000411647.jpg: 240 circles in 235ms (desktop, not phone)

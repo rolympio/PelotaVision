@@ -1,0 +1,92 @@
+gray20 1/12 Auto · sens. 75%
+gray20 2/12 Pequenas · sens. 55%
+gray20 3/12 Pequenas · sens. 75%
+gray20 4/12 Pequenas · sens. 90%
+gray20 5/12 Médias · sens. 55%
+gray20 6/12 Médias · sens. 75%
+gray20 7/12 Médias · sens. 90%
+gray20 8/12 Grandes · sens. 55%
+gray20 9/12 Grandes · sens. 75%
+gray20 10/12 Grandes · sens. 90%
+gray20 11/12 Auto · sens. 55%
+gray20 12/12 Auto · sens. 90%
+RESULT gray20: clahe_p3_s55 score=84.832 count=20 valid=20 baseline_count=20 baseline_valid=20 duration=8622ms
+brown40 1/12 Auto · sens. 75%
+brown40 2/12 Pequenas · sens. 55%
+brown40 3/12 Pequenas · sens. 75%
+brown40 4/12 Pequenas · sens. 90%
+brown40 5/12 Médias · sens. 55%
+brown40 6/12 Médias · sens. 75%
+brown40 7/12 Médias · sens. 90%
+brown40 8/12 Grandes · sens. 55%
+brown40 9/12 Grandes · sens. 75%
+brown40 10/12 Grandes · sens. 90%
+brown40 11/12 Auto · sens. 55%
+brown40 12/12 Auto · sens. 90%
+RESULT brown40: clahe_p1_s55 score=83.728 count=39 valid=38 baseline_count=40 baseline_valid=38 duration=4302ms
+dense 1/12 Auto · sens. 75%
+dense 2/12 Pequenas · sens. 55%
+dense 3/12 Pequenas · sens. 75%
+dense 4/12 Pequenas · sens. 90%
+dense 5/12 Médias · sens. 55%
+dense 6/12 Médias · sens. 75%
+dense 7/12 Médias · sens. 90%
+dense 8/12 Grandes · sens. 55%
+dense 9/12 Grandes · sens. 75%
+dense 10/12 Grandes · sens. 90%
+dense 11/12 Auto · sens. 55%
+dense 12/12 Auto · sens. 90%
+RESULT dense: clahe_p2_s55 score=76.413 count=26 valid=20 baseline_count=25 baseline_valid=19 duration=7807ms
+gray42 1/12 Auto · sens. 75%
+gray42 2/12 Pequenas · sens. 55%
+gray42 3/12 Pequenas · sens. 75%
+gray42 4/12 Pequenas · sens. 90%
+gray42 5/12 Médias · sens. 55%
+gray42 6/12 Médias · sens. 75%
+gray42 7/12 Médias · sens. 90%
+gray42 8/12 Grandes · sens. 55%
+gray42 9/12 Grandes · sens. 75%
+gray42 10/12 Grandes · sens. 90%
+gray42 11/12 Auto · sens. 55%
+gray42 12/12 Auto · sens. 90%
+RESULT gray42: clahe_p2_s90 score=87.006 count=42 valid=42 baseline_count=42 baseline_valid=42 duration=5854ms
+spaced 1/12 Auto · sens. 75%
+spaced 2/12 Pequenas · sens. 55%
+spaced 3/12 Pequenas · sens. 75%
+spaced 4/12 Pequenas · sens. 90%
+spaced 5/12 Médias · sens. 55%
+spaced 6/12 Médias · sens. 75%
+spaced 7/12 Médias · sens. 90%
+spaced 8/12 Grandes · sens. 55%
+spaced 9/12 Grandes · sens. 75%
+spaced 10/12 Grandes · sens. 90%
+spaced 11/12 Auto · sens. 55%
+spaced 12/12 Auto · sens. 90%
+RESULT spaced: clahe_p3_s55 score=80.185 count=19 valid=18 baseline_count=19 baseline_valid=17 duration=5219ms
+cluster 1/12 Auto · sens. 75%
+cluster 2/12 Pequenas · sens. 55%
+cluster 3/12 Pequenas · sens. 75%
+cluster 4/12 Pequenas · sens. 90%
+cluster 5/12 Médias · sens. 55%
+cluster 6/12 Médias · sens. 75%
+cluster 7/12 Médias · sens. 90%
+cluster 8/12 Grandes · sens. 55%
+cluster 9/12 Grandes · sens. 75%
+cluster 10/12 Grandes · sens. 90%
+cluster 11/12 Auto · sens. 55%
+cluster 12/12 Auto · sens. 90%
+RESULT cluster: clahe_p3_s55 score=74.078 count=32 valid=20 baseline_count=32 baseline_valid=18 duration=3240ms
+paired40 1/12 Auto · sens. 75%
+paired40 2/12 Pequenas · sens. 55%
+paired40 3/12 Pequenas · sens. 75%
+paired40 4/12 Pequenas · sens. 90%
+paired40 5/12 Médias · sens. 55%
+paired40 6/12 Médias · sens. 75%
+paired40 7/12 Médias · sens. 90%
+paired40 8/12 Grandes · sens. 55%
+paired40 9/12 Grandes · sens. 75%
+paired40 10/12 Grandes · sens. 90%
+paired40 11/12 Auto · sens. 55%
+paired40 12/12 Auto · sens. 90%
+RESULT paired40: clahe_p3_s75 score=87.967 count=40 valid=40 baseline_count=40 baseline_valid=40 duration=3556ms
+PASS native search on seven scenes and uniform input

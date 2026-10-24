@@ -1,0 +1,108 @@
+{
+  "app_version": "0.9.0",
+  "version_code": 12,
+  "date": "2026-10-20",
+  "build": "assembleDebug testDebugUnitTest lintDebug successful",
+  "tests": 67,
+  "failures": 0,
+  "errors": 0,
+  "lint_errors": 0,
+  "lint_warnings": 87,
+  "physical_device_tested": false,
+  "production_accuracy_validated": false,
+  "ios_build_performed": false,
+  "classifier_retrained": false,
+  "suites": [
+    {
+      "name": "br.com.pelotavision.BeltDemoTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.BeltWorkflowTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.CoverageSuggestionTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.CrackExportTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.DetectionSuggestionTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.EllipseWorkflowTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.LearnedModelTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.ObjectCalibrationTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.PhotoExportTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.RegionTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "apk_sha256": "966108392ecb8be0dfb1e2a4dbca477e3555c50ade985ac90a43c8e78f00f426",
+  "crack_model_sha256": "736bf0bbaf881cfc0465ea2de362285430820fbc3381cd9753f309cd5e09f8ce",
+  "belt_calibration": {
+    "physical_width_inferred": false,
+    "requires_explicit_user_confirmation": true,
+    "manual_endpoint_and_edge_drag": true,
+    "pinch_inspection_zoom_max": 6,
+    "measurement": "perpendicular to average belt direction, in original upright photo pixels",
+    "maximum_marked_relative_width_variation": 0.08,
+    "perspective_rectified": false,
+    "compensates_troughing_or_material_height": false
+  },
+  "roi_report": {
+    "optional": true,
+    "crop_changes_physical_scale": false,
+    "inspection_pan_pinch_changes_selection": false,
+    "csv_coordinates": "full upright analyzed photo",
+    "png_transform_recorded_in_json": true,
+    "original_input_preserved_byte_for_byte": true
+  },
+  "historical_validation": "See baseline-0.8.1-runtime-results.json and coverage-0.8.1. Earlier regression renders restored from original archive."
+}

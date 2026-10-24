@@ -1,0 +1,3 @@
+Native JVM/OpenCV 4.9 test: PASS one crack, multiple cracks counted once, round pores rejected, smooth surface, partial pellet, finite marks and resized photo.
+Supplied photo (default pellet profile, sensitivity 50): 122 detected pellets; 44 possible crack indications, 56 no indication, 22 inconclusive. These are automatic screening outputs, NOT expert ground truth.
+Android uses OpenCV 4.12; desktop image analysis is an executable check, not a phone benchmark.

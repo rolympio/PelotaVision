@@ -1,0 +1,44 @@
+{
+  "app_version": "0.7.0",
+  "date": "2026-10-18",
+  "build": "assembleDebug testDebugUnitTest lintDebug successful",
+  "tests": 41,
+  "failures": 0,
+  "errors": 0,
+  "lint_errors": 0,
+  "lint_warnings": 64,
+  "physical_device_tested": false,
+  "metrology_validated": false,
+  "ios_build_performed": false,
+  "calibration_source": "user_selected_object",
+  "reference_selected_automatically": false,
+  "reference_dimensions": [
+    "major axis",
+    "minor axis",
+    "standard sphere equivalent-area diameter"
+  ],
+  "scale_basis": "original upright image pixels / user-supplied real dimension in mm",
+  "resizing": "inverse affine ellipse covariance; correct unequal x/y factors before matching caliper axis",
+  "reference_exclusion_default": {
+    "measured_pellet": false,
+    "standard_sphere": true
+  },
+  "roi_changes_scale": false,
+  "new_photo_inherits_reference": false,
+  "same_photo_reanalysis_preserves_reference_only_if": "same dimensions, same full-image candidate index and identical fitted geometry within 1e-6",
+  "export_csv_columns": 32,
+  "synthetic_demo": {
+    "real_reference_mm": 12,
+    "original_pixels_per_mm": 10,
+    "sample_count": 7,
+    "class_width_mm": 1,
+    "histogram_bounds_mm": [
+      8,
+      16
+    ],
+    "physical_measurement_performed": false
+  },
+  "crack_forest_unchanged": true,
+  "zipalign_16kb": "passed",
+  "signature_preserved": true
+}

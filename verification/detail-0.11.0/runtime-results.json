@@ -1,0 +1,171 @@
+{
+  "app_version": "0.11.0",
+  "version_code": 14,
+  "date": "2026-10-20",
+  "build": "assembleDebug testDebugUnitTest lintDebug successful",
+  "tests": 93,
+  "failures": 0,
+  "errors": 0,
+  "lint_errors": 0,
+  "lint_warnings": 103,
+  "physical_device_tested": false,
+  "industrial_accuracy_validated": false,
+  "ios_build_performed": false,
+  "crack_classifier_retrained": false,
+  "suites": [
+    {
+      "name": "br.com.pelotavision.ActiveRoiDemoTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.ActiveRoiWorkflowTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.BeltDemoTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.BeltWorkflowTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.CoverageSuggestionTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.CrackExportTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.DetailedDemoTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.DetailedWorkflowTest",
+      "tests": "14",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.DetectionSuggestionTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.EllipseWorkflowTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.LearnedModelTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.ObjectCalibrationTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.PhotoExportTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.RegionTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "apk_sha256": "b5e7c568b3209977f0b914a91bdca6ee809e90f0bfbde4b91ac5ebf5e8e48199",
+  "crack_model_sha256": "736bf0bbaf881cfc0465ea2de362285430820fbc3381cd9753f309cd5e09f8ce",
+  "super_resolution_model_sha256": "8672ea3a739eb0c2e23c4d21f7d48f3826eb517320bb98879294c602b9c3806d",
+  "detailed_analysis": {
+    "original_file_region_decode": true,
+    "exif_orientations": 8,
+    "max_decoded_megapixels": 8,
+    "tile_side": 640,
+    "sr_tile_side": 320,
+    "nominal_overlap": 0.35,
+    "tile_ownership": "midpoint between centers",
+    "duplicate_suppression": true,
+    "preprocessing": [
+      "original",
+      "CLAHE 1.5 / 8x8",
+      "bilateral d5 sigmaColor15 sigmaSpace3"
+    ],
+    "source_fit_and_cracks": "original grayscale, including when SR proposes contours",
+    "sr_model": "FSRCNN x2, upstream pretrained T91/General100, no pellet-specific training",
+    "sr_enabled_by_default": false,
+    "sr_extra_proposals_require_review": true,
+    "processing_budget_ms": 180000,
+    "partial_output_committed": false,
+    "original_source_preserved": true,
+    "original_scale_and_preview_coordinate_mapping_verified": true,
+    "scale_from_changed_internal_object_reference": "invalidated with explicit message, same rule as 0.10.0"
+  },
+  "native_desktop": {
+    "library": "OpenPnP OpenCV 4.9, APK uses OpenCV Android 4.12",
+    "known_synthetic_pellets": 24,
+    "unique_detections": 24,
+    "native_tiles": 12,
+    "source_pixels_unchanged": true,
+    "native_representative_tile_setting_search_options": 24,
+    "actual_fsrcnn_x2_executed": true,
+    "flat_field_mean_for_120": 119.75,
+    "cancellation_without_partial_output": true,
+    "real_roi": {
+      "width": 420,
+      "height": 600,
+      "tile_count": 6,
+      "baseline_count": 648,
+      "selected_count": 648,
+      "chosen_treatments_original_clahe_bilateral_sr": [
+        6,
+        0,
+        0,
+        0
+      ],
+      "duration_ms_desktop": 12687,
+      "known_physical_scale": false,
+      "accuracy_ground_truth": false
+    }
+  },
+  "robolectric_region_decode_note": "Robolectric 4.13 built-in BitmapRegionDecoder emits blank unsampled images. A test-only shadow supplies its pixel/sample contract via native BitmapFactory/crop, while production EXIF transforms, bounds, affine mapping and bookkeeping run unchanged. These tests do not validate Android native region decoding on a phone.",
+  "historical_validation": "Restored all prior verification artifacts from the 0.10.0 ZIP after regression rendering. Current evidence in detail-0.11.0."
+}

@@ -1,0 +1,31 @@
+PASS actual FSRCNN network x2 dimensions and flat-field normalization: 119.75
+PASS all 24 configurations on original-resolution representative tile.
+Synthetic tiles=12 count=24
+PASS 24 known pellets across 12 native tiles, unique centers and original pixels unchanged.
+PASS cancellation throws; no partial result returned.
+1/6 Bloco 1 · original
+1/6 Bloco 1 · contraste local
+1/6 Bloco 1 · ruído leve
+1/6 Bloco 1 · FSRCNN 2× experimental
+2/6 Bloco 2 · original
+2/6 Bloco 2 · contraste local
+2/6 Bloco 2 · ruído leve
+2/6 Bloco 2 · FSRCNN 2× experimental
+3/6 Bloco 3 · original
+3/6 Bloco 3 · contraste local
+3/6 Bloco 3 · ruído leve
+3/6 Bloco 3 · FSRCNN 2× experimental
+4/6 Bloco 4 · original
+4/6 Bloco 4 · contraste local
+4/6 Bloco 4 · ruído leve
+4/6 Bloco 4 · FSRCNN 2× experimental
+5/6 Bloco 5 · original
+5/6 Bloco 5 · contraste local
+5/6 Bloco 5 · ruído leve
+5/6 Bloco 5 · FSRCNN 2× experimental
+6/6 Bloco 6 · original
+6/6 Bloco 6 · contraste local
+6/6 Bloco 6 · ruído leve
+6/6 Bloco 6 · FSRCNN 2× experimental
+6/6 Trincas nos pixels originais…
+PASS real ROI: 648 markers, baseline=648, 6 blocks, SR compared. No ground-truth accuracy claim.

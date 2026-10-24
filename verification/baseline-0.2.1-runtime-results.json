@@ -1,0 +1,13 @@
+{
+  "app_version": "0.2.1",
+  "status": "simulated_tests_passed",
+  "environment": "Robolectric 4.13, Android API 33, native graphics, JVM 17",
+  "tests": 5,
+  "failures": 0,
+  "errors": 0,
+  "physical_phone_tested": false,
+  "real_camera_tested": false,
+  "real_mediastore_write_tested": false,
+  "png_roundtrip_with_visible_bars": true,
+  "calibration_dialog_tested": true
+}

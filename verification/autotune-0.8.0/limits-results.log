@@ -1,0 +1,4 @@
+PASS analytic illumination 0: baseline hits=19 selected hits=19 count=19
+PASS analytic illumination 1: baseline hits=19 selected hits=19 count=19
+PASS analytic illumination 2: baseline hits=20 selected hits=20 count=20
+PASS cancellation, budget and explicit option failures

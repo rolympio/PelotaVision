@@ -1,0 +1,8 @@
+scene;selected;count;valid;foreground_evidence;covered;valid_covered;evaluated;planned;duration_ms
+gray20;clahe_p3_s55;20;20;true;0.813225659;0.813225659;24;24;30910
+brown40;clahe_p3_s90;40;38;true;0.796982525;0.781373513;24;24;23933
+dense;log_p2_s90;33;20;true;0.917792724;0.609599511;24;24;24748
+gray42;clahe_p2_s75;42;42;true;0.878965546;0.878965546;24;24;30917
+spaced;clahe_p3_s55;19;18;true;0.755750377;0.719306184;24;24;22185
+cluster;log_p2_s90;35;19;true;0.618976332;0.313903470;24;24;18530
+paired40;clahe_p2_s90;40;40;true;0.726598703;0.726598703;24;24;13666

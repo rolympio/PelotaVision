@@ -1,0 +1,132 @@
+{
+  "app_version": "0.10.0",
+  "version_code": 13,
+  "date": "2026-10-20",
+  "build": "assembleDebug testDebugUnitTest lintDebug successful",
+  "tests": 78,
+  "failures": 0,
+  "errors": 0,
+  "lint_errors": 0,
+  "lint_warnings": 90,
+  "physical_device_tested": false,
+  "production_accuracy_validated": false,
+  "ios_build_performed": false,
+  "classifier_retrained": false,
+  "suites": [
+    {
+      "name": "br.com.pelotavision.ActiveRoiDemoTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.ActiveRoiWorkflowTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.BeltDemoTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.BeltWorkflowTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.CoverageSuggestionTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.CrackExportTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.DetectionSuggestionTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.EllipseWorkflowTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.LearnedModelTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.ObjectCalibrationTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.PhotoExportTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "br.com.pelotavision.RegionTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "apk_sha256": "e16d0b48b61b18e308da4bc9493889bd365b56276089fbc4d86f9a5b84df3026",
+  "crack_model_sha256": "736bf0bbaf881cfc0465ea2de362285430820fbc3381cd9753f309cd5e09f8ce",
+  "active_roi": {
+    "main_screen_cropped": true,
+    "resegmentation_input_cropped": true,
+    "illumination_search_scope": "same active ROI for every trial",
+    "rectangular_and_circular": true,
+    "outside_circle_original_pixels_used": false,
+    "circular_fill": "selected-pixel median",
+    "pixel_resampling_on_crop": false,
+    "reference_and_belt_calibration_coordinates": "full original upright photo",
+    "stale_results_hidden_until_reanalysis": true,
+    "save_blocked_until_reanalysis": true,
+    "full_original_preserved": true,
+    "touch_mapping_verified": true,
+    "calibration_references_not_rebound_by_detection_id": true,
+    "rf_square_crop_crossing_roi": "inconclusive"
+  },
+  "native_desktop_check": {
+    "library": "OpenPnP OpenCV 4.9; APK uses OpenCV Android 4.12",
+    "outside_lighting_invariance": "all 24 options, detections and scores identical for the same ROI pixels with black vs white outside",
+    "circular_median_invariance": true,
+    "real_photo_crop_width": 420,
+    "real_photo_crop_height": 600,
+    "real_photo_detections": 413,
+    "real_photo_selected_option": "log_p1_s90",
+    "real_photo_options_tested": 24,
+    "real_photo_known_physical_scale": false,
+    "accuracy_ground_truth_available": false
+  },
+  "historical_validation": "Restored verification files byte-for-byte from 0.9.0 ZIP. Current outputs in roi-active-0.10.0."
+}

@@ -1,0 +1,1 @@
+PASS: 8–16 mm axis, mean 12 mm, eight fixed 1 mm classes, gaps, boundaries, percentiles independent of class width, resizing, reference calibration, explicitly estimated mean, exclusions, empty sample, large offset, wrong scale, decimal roundoff, bounded class count and invalid input.

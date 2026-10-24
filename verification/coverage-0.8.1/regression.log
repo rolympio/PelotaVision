@@ -1,0 +1,12 @@
+gray20 selected=clahe_p3_s55 count=20 valid=20 evidence=true
+brown40 selected=clahe_p3_s90 count=40 valid=38 evidence=true
+dense selected=log_p2_s90 count=33 valid=20 evidence=true
+gray42 selected=clahe_p2_s75 count=42 valid=42 evidence=true
+spaced selected=clahe_p3_s55 count=19 valid=18 evidence=true
+cluster selected=log_p2_s90 count=35 valid=19 evidence=true
+paired40 selected=clahe_p2_s90 count=40 valid=40 evidence=true
+PASS search execution on seven regression scenes
+PASS analytic illumination 0: baseline hits=19 selected hits=20 count=20
+PASS analytic illumination 1: baseline hits=19 selected hits=19 count=19
+PASS analytic illumination 2: baseline hits=20 selected hits=20 count=20
+PASS cancellation, budget and explicit option failures

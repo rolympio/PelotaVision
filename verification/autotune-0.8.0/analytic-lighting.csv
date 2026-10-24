@@ -1,0 +1,4 @@
+scene;truth;baseline_count;baseline_hits;selected_count;selected_hits;selected_option;duration_ms
+0;20;19;19;19;19;clahe_p3_s75;564
+1;20;19;19;19;19;clahe_p1_s55;558
+2;20;20;20;20;20;clahe_p3_s75;542

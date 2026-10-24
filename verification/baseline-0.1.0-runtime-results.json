@@ -1,0 +1,8 @@
+{
+  "status": "limited",
+  "checks": [
+    "Emulator Android 10 booted.",
+    "Execution test incomplete: Command '['/workspace/scratch/6400e8b36208/android_tools/sdk/platform-tools/adb', 'install', '-r', '-g', '/workspace/scratch/6400e8b36208/PelotaVision/app/build/outputs/apk/debug/app-x86_64-debug.apk']' timed out after 60 seconds"
+  ],
+  "environment": "Android 10 x86_64 emulator, software CPU; not a physical phone"
+}

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="br.com.pelotavision.CoverageSuggestionTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-20T14:46:11" hostname="7317dd8b11cf" time="0.065">
+  <properties/>
+  <testcase name="reRankingKeepsMapsAndMeasuredReferenceAndUsesBothMethodsEarly" classname="br.com.pelotavision.CoverageSuggestionTest" time="0.002"/>
+  <testcase name="duplicateMarkersNeverMultiplyCoverage" classname="br.com.pelotavision.CoverageSuggestionTest" time="0.033"/>
+  <testcase name="completeLocalizationOutranksSmallPerfectSubsetWithoutInventingFits" classname="br.com.pelotavision.CoverageSuggestionTest" time="0.01"/>
+  <testcase name="coverageRespectsRoiAndUserReferenceFootprint" classname="br.com.pelotavision.CoverageSuggestionTest" time="0.015"/>
+  <testcase name="illuminationTrendEstimateIsIndependentOfCandidateCounts" classname="br.com.pelotavision.CoverageSuggestionTest" time="0.003"/>
+  <testcase name="unsupportedImageEvidenceIsExplicitlyUnavailable" classname="br.com.pelotavision.CoverageSuggestionTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

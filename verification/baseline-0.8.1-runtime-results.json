@@ -1,0 +1,174 @@
+{
+  "app_version": "0.8.1",
+  "date": "2026-10-19",
+  "build": "assembleDebug testDebugUnitTest lintDebug successful",
+  "tests": 56,
+  "failures": 0,
+  "errors": 0,
+  "lint_errors": 0,
+  "lint_warnings": 70,
+  "physical_device_tested": false,
+  "production_accuracy_validated": false,
+  "ios_build_performed": false,
+  "search": {
+    "method": "photo_setting_search_coverage_v2",
+    "standard_options": 24,
+    "profiles": 4,
+    "sensitivities": [
+      55,
+      75,
+      90
+    ],
+    "backends": [
+      "borders",
+      "LoG"
+    ],
+    "includes_current": true,
+    "soft_budget_ms": 30000,
+    "coverage_is_recall": false,
+    "minimum_expected_mm": 5,
+    "minimum_requires_independent_physical_scale": true,
+    "minimum_filters_detections": false,
+    "rosin_rammler_is_normal": false,
+    "weibull_weighting": "number",
+    "minimum_weibull_n": 12,
+    "weibull_maximum_bonus_with_image_evidence": 1,
+    "weibull_maximum_bonus_in_geometry_fallback": 5,
+    "distribution_fitting_changes_diameters": false,
+    "reranking_automatically_switches_contours": false
+  },
+  "reference_photo": {
+    "width": 1536,
+    "height": 865,
+    "old_auto": 68,
+    "manual_reference": 122,
+    "new_auto": 125,
+    "manual_matches_in_new": 122,
+    "matching_rule": "one-to-one center distance <=.35*(r1+r2), radius ratio .7..1.43",
+    "is_ground_truth": false
+  },
+  "scenes": [
+    {
+      "scene": "gray20",
+      "selected": "clahe_p3_s55",
+      "count": "20",
+      "valid": "20",
+      "foreground_evidence": "true",
+      "covered": "0.813225659",
+      "valid_covered": "0.813225659",
+      "evaluated": "24",
+      "planned": "24",
+      "duration_ms": "30910"
+    },
+    {
+      "scene": "brown40",
+      "selected": "clahe_p3_s90",
+      "count": "40",
+      "valid": "38",
+      "foreground_evidence": "true",
+      "covered": "0.796982525",
+      "valid_covered": "0.781373513",
+      "evaluated": "24",
+      "planned": "24",
+      "duration_ms": "23933"
+    },
+    {
+      "scene": "dense",
+      "selected": "log_p2_s90",
+      "count": "33",
+      "valid": "20",
+      "foreground_evidence": "true",
+      "covered": "0.917792724",
+      "valid_covered": "0.609599511",
+      "evaluated": "24",
+      "planned": "24",
+      "duration_ms": "24748"
+    },
+    {
+      "scene": "gray42",
+      "selected": "clahe_p2_s75",
+      "count": "42",
+      "valid": "42",
+      "foreground_evidence": "true",
+      "covered": "0.878965546",
+      "valid_covered": "0.878965546",
+      "evaluated": "24",
+      "planned": "24",
+      "duration_ms": "30917"
+    },
+    {
+      "scene": "spaced",
+      "selected": "clahe_p3_s55",
+      "count": "19",
+      "valid": "18",
+      "foreground_evidence": "true",
+      "covered": "0.755750377",
+      "valid_covered": "0.719306184",
+      "evaluated": "24",
+      "planned": "24",
+      "duration_ms": "22185"
+    },
+    {
+      "scene": "cluster",
+      "selected": "log_p2_s90",
+      "count": "35",
+      "valid": "19",
+      "foreground_evidence": "true",
+      "covered": "0.618976332",
+      "valid_covered": "0.313903470",
+      "evaluated": "24",
+      "planned": "24",
+      "duration_ms": "18530"
+    },
+    {
+      "scene": "paired40",
+      "selected": "clahe_p2_s90",
+      "count": "40",
+      "valid": "40",
+      "foreground_evidence": "true",
+      "covered": "0.726598703",
+      "valid_covered": "0.726598703",
+      "evaluated": "24",
+      "planned": "24",
+      "duration_ms": "13666"
+    }
+  ],
+  "analytic_lighting": [
+    {
+      "scene": "0",
+      "truth": "20",
+      "baseline_count": "19",
+      "baseline_hits": "19",
+      "selected_count": "20",
+      "selected_hits": "20",
+      "selected_option": "log_p1_s75",
+      "duration_ms": "10087"
+    },
+    {
+      "scene": "1",
+      "truth": "20",
+      "baseline_count": "19",
+      "baseline_hits": "19",
+      "selected_count": "19",
+      "selected_hits": "19",
+      "selected_option": "clahe_p1_s75",
+      "duration_ms": "10039"
+    },
+    {
+      "scene": "2",
+      "truth": "20",
+      "baseline_count": "20",
+      "baseline_hits": "20",
+      "selected_count": "20",
+      "selected_hits": "20",
+      "selected_option": "clahe_p3_s75",
+      "duration_ms": "9620"
+    }
+  ],
+  "cancellation_test": "passed",
+  "budget_test": "passed",
+  "failed_options_test": "passed",
+  "crack_forest_unchanged": true,
+  "signature_preserved": true,
+  "zipalign_16kb": "passed"
+}

@@ -1,0 +1,16 @@
+import br.com.pelotavision.*;import org.opencv.core.*;import org.opencv.imgcodecs.Imgcodecs;import org.opencv.imgproc.Imgproc;import java.util.*;import java.nio.file.*;import java.io.*;
+class NativeTuneCheck {
+ static void require(boolean ok,String why){if(!ok)throw new AssertionError(why);}
+ static String num(double n){return Double.isFinite(n)?Double.toString(n):"null";}
+ static void analyze(String name,Mat gray,Path output)throws Exception{
+  DetectionTuner.Report report=DetectionTuner.search(gray,new DetectionTuner.Option(3,75,false),new DetectionAssessment.Context(null,gray.cols(),gray.rows(),null,5),()->false,(done,total,label)->System.out.println(name+" "+done+"/"+total+" "+label),120000);require(report.trials.size()==12,"Incomplete search");DetectionTuner.Trial best=report.best();require(best!=null,"No result");StringBuilder json=new StringBuilder("{\"scene\":\""+name+"\",\"width\":"+gray.cols()+",\"height\":"+gray.rows()+",\"selected\":\""+best.option.id+"\",\"duration_ms\":"+report.durationMs+",\"trials\":[");
+  for(int i=0;i<report.trials.size();i++){DetectionTuner.Trial t=report.trials.get(i);DetectionAssessment.Metrics m=t.metrics;require(m!=null,"Native option failed: "+t.option.id+" "+t.error);if(i>0)json.append(',');json.append("{\"id\":\""+t.option.id+"\",\"score\":"+t.score+",\"count\":"+m.total+",\"valid\":"+m.valid+",\"stability\":"+t.stability+",\"ks\":"+num(m.weibull.ks)+"}");}
+  json.append("],\"detections\":[");for(int i=0;i<best.result.circles.size();i++){PelletDetector.Detection d=best.result.circles.get(i);if(i>0)json.append(',');json.append(String.format(Locale.ROOT,"{\"x\":%.9f,\"y\":%.9f,\"a\":%.9f,\"b\":%.9f,\"angle\":%.9f,\"fitted\":%s,\"partial\":%s,\"review\":%s,\"support\":%s,\"rms\":%s}",d.x,d.y,d.semiMajor,d.semiMinor,d.angleDeg,d.ellipseFitted,d.partial,d.needsReview,num(d.fitSupport),num(d.fitRms)));}json.append("]}");Files.writeString(output.resolve(name+"_search.json"),json.toString());System.out.printf(Locale.ROOT,"RESULT %s: %s score=%.3f count=%d valid=%d baseline_count=%d baseline_valid=%d duration=%dms%n",name,best.option.id,best.score,best.metrics.total,best.metrics.valid,report.trials.get(0).metrics.total,report.trials.get(0).metrics.valid,report.durationMs);
+ }
+ public static void main(String[] args)throws Exception{
+  nu.pattern.OpenCV.loadLocally();Core.setNumThreads(2);Path repo=Path.of(args[0]),output=repo.resolve("verification/autotune-0.8.0");Files.createDirectories(output);
+  for(String scene:new String[]{"gray20","brown40","dense","gray42","spaced","cluster","paired40"}){Mat gray=Imgcodecs.imread(repo.resolve("ml_training/data/"+scene+".png").toString(),0);require(!gray.empty(),"Missing fixture");analyze(scene,gray,output);gray.release();}
+  Mat blank=new Mat(300,400,CvType.CV_8UC1,new Scalar(100));DetectionTuner.Report report=DetectionTuner.search(blank,new DetectionTuner.Option(3,75,false),new DetectionAssessment.Context(null,400,300,null,5),()->false,(a,b,c)->{},30000);require(report.best().result.circles.isEmpty(),"Blank fabricated pellets");require(report.weak(),"Blank must be weak");blank.release();
+  System.out.println("PASS native search on seven scenes and uniform input");
+ }
+}

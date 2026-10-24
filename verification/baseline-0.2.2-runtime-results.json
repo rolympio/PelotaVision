@@ -1,0 +1,18 @@
+{
+  "app_version": "0.2.2",
+  "date_utc": "2026-10-11",
+  "build": "assembleDebug lintDebug testDebugUnitTest successful",
+  "tests": 9,
+  "failures": 0,
+  "errors": 0,
+  "lint_errors": 0,
+  "lint_warnings": 29,
+  "calculation_check": "passed",
+  "png_export": "native graphics encode/decode; eight 1 mm bars; 8–16 mm axis; mean 12 mm, synthetic sample",
+  "signing_certificate_same_as": "0.2.1",
+  "zipalign_16kb": "passed",
+  "camera_device_tested": false,
+  "mediastore_device_tested": false,
+  "detector_changed": false,
+  "physical_calibration_verified_for_user_photo": false
+}

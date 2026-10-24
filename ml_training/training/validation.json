@@ -1,0 +1,158 @@
+{
+  "model": "random_forest_20261018_v1",
+  "features": 72,
+  "n_base_pellets": 209,
+  "positive": 37,
+  "negative": 172,
+  "scenes": 7,
+  "augmentation_variants_per_training_pellet": 6,
+  "evaluation": "leave-one-scene-out, original held-out images only, fixed threshold 0.5; annotations provisional, synthetic or provenance unverified; no physical phone or real production validation",
+  "folds": [
+    {
+      "held_out_scene": "brown40",
+      "n": 40,
+      "positive": 4,
+      "confusion": [
+        [
+          36,
+          0
+        ],
+        [
+          0,
+          4
+        ]
+      ]
+    },
+    {
+      "held_out_scene": "cluster",
+      "n": 34,
+      "positive": 5,
+      "confusion": [
+        [
+          28,
+          1
+        ],
+        [
+          1,
+          4
+        ]
+      ]
+    },
+    {
+      "held_out_scene": "dense",
+      "n": 14,
+      "positive": 6,
+      "confusion": [
+        [
+          7,
+          1
+        ],
+        [
+          0,
+          6
+        ]
+      ]
+    },
+    {
+      "held_out_scene": "gray20",
+      "n": 20,
+      "positive": 4,
+      "confusion": [
+        [
+          16,
+          0
+        ],
+        [
+          0,
+          4
+        ]
+      ]
+    },
+    {
+      "held_out_scene": "gray42",
+      "n": 42,
+      "positive": 4,
+      "confusion": [
+        [
+          37,
+          1
+        ],
+        [
+          0,
+          4
+        ]
+      ]
+    },
+    {
+      "held_out_scene": "paired40",
+      "n": 40,
+      "positive": 8,
+      "confusion": [
+        [
+          32,
+          0
+        ],
+        [
+          8,
+          0
+        ]
+      ]
+    },
+    {
+      "held_out_scene": "spaced",
+      "n": 19,
+      "positive": 6,
+      "confusion": [
+        [
+          13,
+          0
+        ],
+        [
+          3,
+          3
+        ]
+      ]
+    }
+  ],
+  "confusion": [
+    [
+      169,
+      3
+    ],
+    [
+      12,
+      25
+    ]
+  ],
+  "metrics": {
+    "0": {
+      "precision": 0.9337016574585635,
+      "recall": 0.9825581395348837,
+      "f1-score": 0.9575070821529745,
+      "support": 172.0
+    },
+    "1": {
+      "precision": 0.8928571428571429,
+      "recall": 0.6756756756756757,
+      "f1-score": 0.7692307692307693,
+      "support": 37.0
+    },
+    "accuracy": 0.9282296650717703,
+    "macro avg": {
+      "precision": 0.9132794001578532,
+      "recall": 0.8291169076052797,
+      "f1-score": 0.863368925691872,
+      "support": 209.0
+    },
+    "weighted avg": {
+      "precision": 0.9264708103760152,
+      "recall": 0.9282296650717703,
+      "f1-score": 0.9241758688605267,
+      "support": 209.0
+    }
+  },
+  "roc_auc": 0.9121621621621622,
+  "uncertain_count": 3,
+  "sha256": "736bf0bbaf881cfc0465ea2de362285430820fbc3381cd9753f309cd5e09f8ce",
+  "final_fit": "All seven scenes after cross-validation. Scores reported above are out-of-fold, not final in-sample scores."
+}

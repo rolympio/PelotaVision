@@ -1,0 +1,17 @@
+# Treinamento reproduzível — experimental
+
+Python 3.12.14 foi usado. Crie um ambiente virtual, instale requirements.txt e execute `python train.py` nesta pasta. Depois, `python install_model.py` copia os pesos e metadados para os assets Android. Recompile e repita as verificações. Não há chamada de servidor na inferência.
+
+`data/annotations.json` é a fonte dos círculos e rótulos PROVISÓRIOS anotados pelo assistente. As imagens `*_labels.jpg` permitem revisar cada objeto: vermelho=trinca candidata, verde=sem indicação visível. Não são rótulos homologados. Ajuste label, x, y, radius e partial antes de treinar novamente. Os valores estão nos pixels das imagens PNG aqui incluídas, e cada group identifica uma cena. O manifesto conserva os nomes de origem e recorte do painel sintético. Não recrie grupos para cópias ou versões marcadas da mesma cena.
+
+O conjunto possui sete cenas limpas: 225 círculos aproximados, 209 pelotas inteiras usadas no classificador, 37 positivas e 172 negativas. Há uma cena explicitamente identificada como sintética e outras de origem não comprovada. Não há teste independente em fotos reais da usina.
+
+Seis variantes por pelota são usadas SOMENTE no treino de cada fold: original, escurecimento gamma, clareamento gamma, redução de contraste, gradiente de iluminação e desfoque leve. São 1254 amostras derivadas, não 1254 pelotas independentes. A validação deixa uma cena inteira fora por vez (LeaveOneGroupOut), testa a imagem original dessa cena e mantém todas as suas variantes fora do treino. O ajuste final usa todas as sete cenas depois da validação.
+
+RandomForest: 160 árvores, profundidade máxima 7, mínimo 2 amostras por folha, sqrt atributos, pesos de classe balanceados e semente 20261018. Os 72 atributos morfológicos são calculados sobre um recorte normalizado de 96x96 pixels, no interior de 78% do raio. Os pontos vermelhos não entram nos pixels de treinamento. Três imagens anotadas sem par limpo ficaram fora do treino; pares limpos/marcados e duplicatas não viraram novas cenas.
+
+`training/oof_predictions.csv` contém escores fora do treino por objeto. `validation.json` registra as métricas para limiar 0,5. O app usa, em sensibilidade 50, >=0,6 para POSSIBLE, <=0,4 para NO_INDICATION e intervalo intermediário para INCONCLUSIVE. Gates de qualidade, borda, raio e revisão podem acrescentar inconclusivas. O escore não é probabilidade calibrada. A localização da linha é uma heurística separada, não uma segmentação treinada.
+
+O arquivo PVF1 é big-endian: magic int32 0x50564631, versão int32 1, atributos int32 72, número de árvores int32. Cada árvore: número de nós int32; cada nó: atributo, filho esquerdo, filho direito (int32), limiar float64, escore da folha float64. Folhas usam atributo -2 e filhos -1. A entrada é float32, como no sklearn. O Java valida o cabeçalho e os índices; scores de referência permitem testar paridade. Não use o escore em decisões de qualidade sem validação externa.
+
+Para repetir a comparação nativa, obtenha OpenPnP OpenCV 4.9.0-0 (somente desktop), compile as classes Java de visão e os checks em verification/ml-0.5.0. DatasetCheck espera model.pvrf, pasta de imagens *_light0.png a *_light5.png e pasta de saída. As variantes são produzidas por features.lighting. O benchmark usa círculos provisórios e mede desenvolvimento, não ensaio metrológico. Os XML de teste e resultados detalhados estão em verification/ml-0.5.0.

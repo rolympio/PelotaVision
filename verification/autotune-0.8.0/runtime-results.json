@@ -1,0 +1,126 @@
+{
+  "app_version": "0.8.0",
+  "date": "2026-10-19",
+  "build": "assembleDebug testDebugUnitTest lintDebug successful",
+  "tests": 50,
+  "failures": 0,
+  "errors": 0,
+  "lint_errors": 0,
+  "lint_warnings": 70,
+  "physical_device_tested": false,
+  "production_accuracy_validated": false,
+  "ios_build_performed": false,
+  "search": {
+    "default_enabled": true,
+    "standard_options": 12,
+    "profiles": 4,
+    "sensitivities": [
+      55,
+      75,
+      90
+    ],
+    "includes_current": true,
+    "soft_budget_ms": 30000,
+    "cancel_uses_current": true,
+    "scope": "still photo only",
+    "minimum_expected_mm": 5,
+    "minimum_requires_independent_physical_scale": true,
+    "assumed_mean_scale_activates_minimum": false,
+    "minimum_filters_detections": false,
+    "weibull_mle": true,
+    "weibull_weighting": "number",
+    "minimum_weibull_n": 12,
+    "weibull_maximum_bonus": 5,
+    "distribution_fitting_changes_diameters": false,
+    "reranking_automatically_switches_contours": false
+  },
+  "scenes": [
+    {
+      "scene": "brown40",
+      "selected": "clahe_p1_s55",
+      "selected_count": 39,
+      "selected_valid": 38,
+      "baseline_count": 40,
+      "baseline_valid": 38,
+      "duration_ms": 4302,
+      "selected_score": 83.72751852043758
+    },
+    {
+      "scene": "cluster",
+      "selected": "clahe_p3_s55",
+      "selected_count": 32,
+      "selected_valid": 20,
+      "baseline_count": 32,
+      "baseline_valid": 18,
+      "duration_ms": 3240,
+      "selected_score": 74.07783797906387
+    },
+    {
+      "scene": "dense",
+      "selected": "clahe_p2_s55",
+      "selected_count": 26,
+      "selected_valid": 20,
+      "baseline_count": 25,
+      "baseline_valid": 19,
+      "duration_ms": 7807,
+      "selected_score": 76.41297776239098
+    },
+    {
+      "scene": "gray20",
+      "selected": "clahe_p3_s55",
+      "selected_count": 20,
+      "selected_valid": 20,
+      "baseline_count": 20,
+      "baseline_valid": 20,
+      "duration_ms": 8622,
+      "selected_score": 84.83218709051552
+    },
+    {
+      "scene": "gray42",
+      "selected": "clahe_p2_s90",
+      "selected_count": 42,
+      "selected_valid": 42,
+      "baseline_count": 42,
+      "baseline_valid": 42,
+      "duration_ms": 5854,
+      "selected_score": 87.00645784380278
+    },
+    {
+      "scene": "paired40",
+      "selected": "clahe_p3_s75",
+      "selected_count": 40,
+      "selected_valid": 40,
+      "baseline_count": 40,
+      "baseline_valid": 40,
+      "duration_ms": 3556,
+      "selected_score": 87.96659544118295
+    },
+    {
+      "scene": "spaced",
+      "selected": "clahe_p3_s55",
+      "selected_count": 19,
+      "selected_valid": 18,
+      "baseline_count": 19,
+      "baseline_valid": 17,
+      "duration_ms": 5219,
+      "selected_score": 80.18526362522195
+    }
+  ],
+  "analytic_lighting_ground_truth_count": 20,
+  "analytic_lighting_selected_hits": [
+    19,
+    19,
+    20
+  ],
+  "analytic_lighting_baseline_hits": [
+    19,
+    19,
+    20
+  ],
+  "cancellation_test": "passed",
+  "budget_test": "passed",
+  "failed_options_test": "passed",
+  "crack_forest_unchanged": true,
+  "signature_preserved": true,
+  "zipalign_16kb": "passed"
+}

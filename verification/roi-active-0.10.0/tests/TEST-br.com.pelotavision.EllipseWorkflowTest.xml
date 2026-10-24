@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="br.com.pelotavision.EllipseWorkflowTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-20T14:46:18" hostname="7317dd8b11cf" time="12.105">
+  <properties/>
+  <testcase name="actualSaverExportsEllipseAxesMeanEquivalentDiameterAndCalibration" classname="br.com.pelotavision.EllipseWorkflowTest" time="0.079"/>
+  <testcase name="shapeMeanIsByNumberAndExcludesUnknownPartialAndReview" classname="br.com.pelotavision.EllipseWorkflowTest" time="0.027"/>
+  <testcase name="rotatedEllipseIsUsedForRectangularAndCircularRoi" classname="br.com.pelotavision.EllipseWorkflowTest" time="0.087"/>
+  <testcase name="savedCompositionDrawsRotatedEllipseAndPreservesOriginal" classname="br.com.pelotavision.EllipseWorkflowTest" time="0.03"/>
+  <testcase name="providedScenesRenderNewEllipseReportsAndMeanMatchesNative" classname="br.com.pelotavision.EllipseWorkflowTest" time="11.881"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

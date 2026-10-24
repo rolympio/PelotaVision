@@ -1,0 +1,4 @@
+Signer #1 certificate DN: CN=PelotaVision Prototype, O=Development, C=BR
+Signer #1 certificate SHA-256 digest: 0d77d2917bd808a17f92e52568dbb6bc2b1767be0e25ca93fadc8e41c8d66b38
+Signer #1 certificate SHA-1 digest: c90df833d734a23fc7ac4c7ead2148ed2b2fdcc4
+Signer #1 certificate MD5 digest: 4953c6cb26e492eda19487b5a7b08ad1
