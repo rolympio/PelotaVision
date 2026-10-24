@@ -66,7 +66,7 @@ public final class MainActivity extends ComponentActivity {
     private volatile int detectionMethod=DetectionTuner.GRADIENT;
     /** Cena: bancada (padrão) ou correia (pelotas pequenas e numerosas). */
     private volatile boolean beltScene=false;
-    private int method(){return detectionMethod==DetectionTuner.NEURAL&&!NeuralPelletDetector.available()?DetectionTuner.GRADIENT:detectionMethod;}
+    private int method(){return detectionMethod==DetectionTuner.NEURAL&&!NeuralPelletDetector.available(beltScene)?DetectionTuner.GRADIENT:detectionMethod;}
     private volatile PelletDetector.Parameters parameters=PelletDetector.Parameters.automatic();
     private volatile Mode mode=Mode.LIVE;
     private volatile long epoch=0;
@@ -346,14 +346,14 @@ public final class MainActivity extends ComponentActivity {
         String message=r.summary()+"\nAjuste: "+r.optionId+"\nSem tratamento: "+r.baselineCount+" marcações; combinação escolhida: "+r.selectedCount+".\nBlocos escolhidos: original "+r.treatments[0]+", contraste "+r.treatments[1]+", ruído leve "+r.treatments[2]+", SR "+r.treatments[3]+".\n\nComparação heurística, sem contagem verdadeira de referência. Os contornos e as trincas usam a foto original; SR não é uma medição independente.";
         new AlertDialog.Builder(this).setTitle("Segmentação detalhada").setMessage(message).setPositiveButton("Fechar",null).setNeutralButton("Segmentar novamente",(d,w)->showSegmentationOptions()).show();
     }
-    /** Copia o ONNX do asset (sempre substituído) e instala; ausência ou falha só desativa o método neural. */
+    /** Copia os ONNX dos assets (sempre substituídos) e instala: bancada e, em slot separado, correia. Ausência ou falha só desativa o modelo afetado. */
     private void installNeuralModel(){
-        try{File target=new File(getCacheDir(),NeuralPelletDetector.MODEL);
-            try(InputStream input=getAssets().open(NeuralPelletDetector.MODEL);java.io.OutputStream output=new java.io.FileOutputStream(target)){byte[] buffer=new byte[16384];int n;while((n=input.read(buffer))!=-1)output.write(buffer,0,n);}
-            String meta;try(InputStream input=getAssets().open(NeuralPelletDetector.METADATA)){java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[8192];int n;while((n=input.read(buffer))!=-1)bytes.write(buffer,0,n);meta=new String(bytes.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);}
-            NeuralPelletDetector.install(target,meta);
-        }catch(Exception e){android.util.Log.w("PelotaVision","Rede neural indisponível",e);}
+        try{NeuralPelletDetector.install(copyAsset(NeuralPelletDetector.MODEL),readAsset(NeuralPelletDetector.METADATA));}catch(Exception e){android.util.Log.w("PelotaVision","Rede neural indisponível",e);}
+        try{NeuralPelletDetector.installBelt(copyAsset(NeuralPelletDetector.BELT_MODEL),readAsset(NeuralPelletDetector.BELT_METADATA));}catch(Exception e){android.util.Log.w("PelotaVision","Rede neural de correia indisponível; correia usa o modelo de bancada",e);}
     }
+    private File copyAsset(String name)throws java.io.IOException{File target=new File(getCacheDir(),name);
+        try(InputStream input=getAssets().open(name);java.io.OutputStream output=new java.io.FileOutputStream(target)){byte[] buffer=new byte[16384];int n;while((n=input.read(buffer))!=-1)output.write(buffer,0,n);}return target;}
+    private String readAsset(String name)throws java.io.IOException{try(InputStream input=getAssets().open(name)){java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[8192];int n;while((n=input.read(buffer))!=-1)bytes.write(buffer,0,n);return new String(bytes.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);}}
     private String superResolutionModel()throws java.io.IOException {
         File target=new File(getCacheDir(),FsrcnnUpscaler.MODEL);
         // The file is replaced from the packaged asset, so no stale/downloaded model can silently change inference.
@@ -789,7 +789,7 @@ public final class MainActivity extends ComponentActivity {
     }
     private double minimumInput(EditText input){String raw=input.getText().toString().trim().replace(',','.');try{double value=Double.parseDouble(raw);if(Double.isFinite(value)&&value>=0&&value<=1000)return value;}catch(NumberFormatException ignored){}throw new IllegalArgumentException("Informe mínimo entre 0 e 1000 mm; zero desativa o critério.");}
 
-    private PelletDetector.Result detectPellets(Mat gray,PelletDetector.Parameters cfg,int size,int scales){int m=method();NeuralPelletDetector nn=NeuralPelletDetector.get();size=cfg.workSide(size);PelletDetector.Result seeds=m==DetectionTuner.NEURAL&&nn!=null?nn.detect(gray,profile,sensitivity,cfg):m==DetectionTuner.LOG?new PelletDetector().detect(gray,cfg,size,scales):detector.detect(gray,cfg,size,scales);return new EllipseFitter().refine(gray,seeds,cfg.belt);}
+    private PelletDetector.Result detectPellets(Mat gray,PelletDetector.Parameters cfg,int size,int scales){int m=method();NeuralPelletDetector nn=NeuralPelletDetector.forScene(cfg.belt);size=cfg.workSide(size);PelletDetector.Result seeds=m==DetectionTuner.NEURAL&&nn!=null?nn.detect(gray,profile,sensitivity,cfg):m==DetectionTuner.LOG?new PelletDetector().detect(gray,cfg,size,scales):detector.detect(gray,cfg,size,scales);return new EllipseFitter().refine(gray,seeds,cfg.belt);}
     private void showAdjustments() {
         if(mode==Mode.PROCESSING||mode==Mode.SAVING)return;
         LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(10),dp(20),dp(8));ScrollView scroll=new ScrollView(this);scroll.addView(content);
@@ -803,9 +803,9 @@ public final class MainActivity extends ComponentActivity {
         String[] labels={"Pequenas · diâmetro 2,6–7,6% da largura","Médias · diâmetro 4,2–12% da largura","Grandes · diâmetro 8–21% da largura","Automático · tamanhos variados e iluminação"};
         String[] beltLabels={"Finas · diâmetro 0,8–1,6% da largura","Médias · diâmetro 1,2–2,4% da largura","Grossas · diâmetro 1,8–3,2% da largura","Automático · diâmetro 0,8–3,2% da largura"};
         for(int i=0;i<labels.length;i++){android.widget.RadioButton radio=new android.widget.RadioButton(this);radio.setId(optionIds[i]);radio.setText((beltScene?beltLabels:labels)[i]);radio.setTextColor(Color.WHITE);radio.setTextSize(12);sizes.addView(radio);}sizes.check(optionIds[profile]);content.addView(sizes);
-        scenes.setOnCheckedChangeListener((group,id)->{String[] l=id==sceneIds[1]?beltLabels:labels;for(int i=0;i<optionIds.length;i++)((android.widget.RadioButton)sizes.findViewById(optionIds[i])).setText(l[i]);});
         content.addView(text("Método de localização",14,Color.WHITE));android.widget.RadioGroup methods=new android.widget.RadioGroup(this);int[] methodIds={View.generateViewId(),View.generateViewId(),View.generateViewId()};String[] methodLabels={"Bordas · gradientes com CLAHE","LoG · segmentação alternativa",NeuralPelletDetector.available()?"Rede neural · StarDist (modelo de demonstração)":"Rede neural · indisponível"};for(int i=0;i<3;i++){android.widget.RadioButton radio=new android.widget.RadioButton(this);radio.setId(methodIds[i]);radio.setText(methodLabels[i]);radio.setTextColor(Color.WHITE);radio.setTextSize(12);radio.setEnabled(i!=DetectionTuner.NEURAL||NeuralPelletDetector.available());methods.addView(radio);}methods.check(methodIds[method()]);content.addView(methods);
-        content.addView(text(NeuralPelletDetector.status()+". A rede só propõe objetos; as elipses continuam medidas nas bordas da foto. Treinada sem fotos da usina: compare com os outros métodos antes de usar.",12,Color.LTGRAY));
+        TextView neuralNote=text("",12,Color.LTGRAY);Runnable neuralText=()->{boolean belt=scenes.getCheckedRadioButtonId()==sceneIds[1];neuralNote.setText(NeuralPelletDetector.status(belt)+(belt?". Correia: rede treinada com pseudo-rótulos de consenso (sem revisão humana).":". Treinada sem fotos da usina.")+" A rede só propõe objetos; as elipses continuam medidas nas bordas da foto. Compare com os outros métodos antes de usar.");};neuralText.run();content.addView(neuralNote);
+        scenes.setOnCheckedChangeListener((group,id)->{String[] l=id==sceneIds[1]?beltLabels:labels;for(int i=0;i<optionIds.length;i++)((android.widget.RadioButton)sizes.findViewById(optionIds[i])).setText(l[i]);neuralText.run();});
         TextView sensitivityLabel=text("Sensibilidade: "+sensitivity+"%",14,Color.WHITE);content.addView(sensitivityLabel);SeekBar slider=new SeekBar(this);slider.setMax(100);slider.setProgress(sensitivity);content.addView(slider);
         slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int p,boolean user){sensitivityLabel.setText("Sensibilidade: "+p+"%");}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});
         content.addView(text("Aplicar usa o ajuste manual nesta foto. A busca automática fica para a próxima foto. Maior sensibilidade pode criar falsas marcações. Alterar contornos pode exigir nova calibração e descarta revisões de trincas.",12,Color.LTGRAY));

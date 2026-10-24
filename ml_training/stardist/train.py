@@ -2,6 +2,11 @@
 
 Uso:
   python train.py --out modelo.onnx --metrics metricas.json [--exclude cluster,paired40] [--iterations 1500]
+  python train.py --conjunto correia --out belt.onnx --metrics belt_metrics.json [--iterations 6000]
+
+--conjunto bancada (padrão) é exatamente o treino anterior. --conjunto correia lê os pseudo-rótulos de
+ml_training/data_belt/pseudo (annotations.json + máscaras de peso) e usa só os recortes com split "treino";
+peso 0 na máscara ignora o pixel na BCE e no termo de distância.
 
 O ONNX tem entrada fixa 1x1x384x384 (cinza normalizado por percentis, ver common.py)
 e saída 1x33x384x384: canal 0 = probabilidade de interior, canais 1..32 = distâncias
@@ -120,6 +125,148 @@ def loss_fn(out, prob, dist, mask):
     return lp + .2 * ld + 1e-4 * reg, lp.item(), ld.item()
 
 
+# ---------------------------------------------------------------- correia (pseudo-rótulos com máscara de peso)
+
+BELT_SIDE = 224          # lado máximo (px da rede) da janela pré-calculada por recorte e escala
+BELT_SCALES = 2          # escalas RNET sorteadas por recorte
+BELT_NEG_RADIUS = 12.0   # raio de referência dos recortes negativos (Disco 03: espaçamento 24 px)
+DIST_Q = 4.              # distâncias guardadas em uint8 com passo de 0,25 px (máx. 63,75 < 4 x NOMINAL_RADIUS)
+
+
+def load_belt(data_dir, split='treino'):
+    """Recortes de correia: cinza, círculos (todos, inclusive parciais), máscara de peso 0/1."""
+    data_dir = Path(data_dir)
+    out = []
+    for s in json.load(open(data_dir / 'annotations.json', encoding='utf-8')):
+        if s['split'] != split:
+            continue
+        gray = cv2.imread(str(data_dir / s['image']), cv2.IMREAD_GRAYSCALE)
+        w = cv2.imread(str(data_dir / s['weight_mask']), cv2.IMREAD_GRAYSCALE)
+        if gray is None or w is None:
+            raise FileNotFoundError(s['group'])
+        circles = np.array([[a['x'], a['y'], a['radius']] for a in s['annotations']], np.float64).reshape(-1, 3)
+        partial = np.array([bool(a.get('partial')) for a in s['annotations']], bool)
+        full = circles[~partial, 2]
+        med = float(np.median(full)) if len(full) >= 5 else (s['radius_px'] or BELT_NEG_RADIUS)
+        out.append(dict(group=s['group'], source=s['source'], camera=s['camera'], negative=s['negative'], gray=gray,
+                        circles=circles, weight=(w > 127).astype(np.uint8), med_r=med))
+    return out
+
+
+def _belt_item(args):
+    """Janela aleatória do recorte na escala rn/med_r. Sem moldura artificial: se a janela tiver menos de CROP px,
+    completa com peso 0. Pelotas cortadas pela janela recebem peso 0 (distâncias truncadas não ensinam forma)."""
+    s, rn, u = args
+    sc = rn / s['med_r']
+    h, w = s['gray'].shape
+    side = int(min(h, w, math.floor(BELT_SIDE / sc)))
+    x0, y0 = int(u[0] * (w - side + 1)), int(u[1] * (h - side + 1))
+    g = s['gray'][y0:y0 + side, x0:x0 + side]
+    small = C.resize_for_net(g, sc)
+    wsm = cv2.resize(s['weight'][y0:y0 + side, x0:x0 + side], (small.shape[1], small.shape[0]), interpolation=cv2.INTER_NEAREST)
+    cc = s['circles'].copy()
+    cc[:, 0] = (cc[:, 0] - x0 + .5) * sc - .5
+    cc[:, 1] = (cc[:, 1] - y0 + .5) * sc - .5
+    cc[:, 2] *= sc
+    hh, ww = small.shape
+    lab = C.render_labels(small.shape, cc)
+    cut = np.nonzero((cc[:, 0] - cc[:, 2] < 0) | (cc[:, 1] - cc[:, 2] < 0) | (cc[:, 0] + cc[:, 2] > ww - 1) | (cc[:, 1] + cc[:, 2] > hh - 1))[0] + 1
+    if len(cut):
+        wsm[np.isin(lab, cut)] = 0
+    prob = C.prob_target(lab)
+    dist = np.minimum(C.star_distances(lab, max_dist=4 * C.NOMINAL_RADIUS), 255 / DIST_Q)
+    ph, pw = max(0, CROP - hh), max(0, CROP - ww)
+    pads = ((0, ph), (0, pw))
+    return dict(group=s['group'], small=small, pads=pads, prob=np.pad(prob, pads).astype(np.float16),
+                dist=np.rint(np.pad(dist, ((0, 0),) + pads) * DIST_Q).astype(np.uint8),
+                mask=np.pad(lab > 0, pads), weight=np.pad(wsm, pads))
+
+
+def prepare_belt(scenes, rng):
+    """Por recorte, BELT_SCALES raios de rede sorteados em RNET; janela aleatória que cabe em BELT_SIDE px."""
+    jobs = []
+    for s in scenes:
+        for rn in rng.choice(RNET, BELT_SCALES, replace=False):
+            jobs.append((s, float(rn), rng.random(2)))
+    from multiprocessing import Pool
+    with Pool(max(1, os.cpu_count() or 1)) as pool:
+        return pool.map(_belt_item, jobs, chunksize=4)
+
+
+def sample_belt(items, rng):
+    it = items[rng.integers(len(items))]
+    g = augment(it['small'], rng)
+    stats = C.norm_stats(g)
+    x = C.normalize(g, stats)
+    fill = (stats[2] - stats[0]) / (stats[1] - stats[0])
+    x = np.pad(x, it['pads'], constant_values=fill)
+    H, W = x.shape
+    y0, x0 = rng.integers(0, H - CROP + 1), rng.integers(0, W - CROP + 1)
+    sl = (slice(y0, y0 + CROP), slice(x0, x0 + CROP))
+    img, prob, mask, wt = x[sl], it['prob'][sl].astype(np.float32), it['mask'][sl], it['weight'][sl].astype(np.float32)
+    dist = it['dist'][(slice(None),) + sl].astype(np.float32) / DIST_Q
+    fx, fy, tr = (bool(v) for v in rng.integers(0, 2, 3))
+    img, prob, mask, wt = (C.apply_d4(a, fx, fy, tr) for a in (img, prob, mask, wt))
+    dist = C.apply_d4(dist, fx, fy, tr)[C.ray_permutation(fx, fy, tr)]
+    return img, prob, dist, mask, wt
+
+
+def batch_belt(items, rng, n):
+    xs, ps, ds, ms, ws = zip(*(sample_belt(items, rng) for _ in range(n)))
+    t = lambda a: torch.from_numpy(np.ascontiguousarray(np.stack(a))).float()
+    return t(xs)[:, None], t(ps)[:, None], t(ds), t(ms)[:, None], t(ws)[:, None]
+
+
+def loss_fn_weighted(out, prob, dist, mask, wt):
+    """Como loss_fn, mas peso 0 ignora o pixel (nem positivo nem negativo) na BCE e na distância."""
+    bce = F.binary_cross_entropy_with_logits(out[:, :1], prob, reduction='none')
+    lp = (wt * bce).sum() / wt.sum().clamp_min(1.)
+    err = (out[:, 1:] - dist).abs().mean(1, keepdim=True)
+    ld = (wt * prob * err).sum() / (wt * prob).sum().clamp_min(1e-6)
+    reg = ((1 - mask) * wt * out[:, 1:].abs()).mean()
+    return lp + .2 * ld + 1e-4 * reg, lp.item(), ld.item()
+
+
+def main_belt(a):
+    torch.manual_seed(SEED); rng = np.random.default_rng(SEED)
+    torch.set_num_threads(max(1, os.cpu_count() or 1))
+    torch.use_deterministic_algorithms(True, warn_only=True)
+    scenes = load_belt(a.data, 'treino')
+    t0 = time.time()
+    items = prepare_belt(scenes, rng)
+    cams = sorted({s['camera'] for s in scenes})
+    print(f'alvos: {len(items)} pares recorte/escala de {len(scenes)} recortes ({sum(s["negative"] for s in scenes)} negativos), '
+          f'cameras {cams}, em {time.time() - t0:.0f}s', flush=True)
+    model = StarDistNet()
+    opt = torch.optim.Adam(model.parameters(), lr=3e-4)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, a.iterations, eta_min=3e-5)
+    history = []
+    t0 = time.time()
+    for it in range(1, a.iterations + 1):
+        model.train()
+        x, p, d, m, w = batch_belt(items, rng, a.batch)
+        out = model(x, logits=True)
+        loss, lp, ld = loss_fn_weighted(out, p, d, m, w)
+        opt.zero_grad(); loss.backward(); opt.step(); sched.step()
+        history.append((lp, ld))
+        if it % 100 == 0 or it == 1:
+            h = np.array(history[-100:])
+            print(f'it {it:5d}  bce {h[:, 0].mean():.4f}  dist_mae_pond {h[:, 1].mean():.3f}  {time.time() - t0:.0f}s', flush=True)
+    out_path = Path(a.out); out_path.parent.mkdir(parents=True, exist_ok=True)
+    export(model, out_path)
+    metrics = dict(model_sha256=hashlib.sha256(out_path.read_bytes()).hexdigest(), conjunto='correia',
+                   iterations=a.iterations, batch=a.batch, crop=CROP, seed=SEED, belt_side=BELT_SIDE, belt_scales=BELT_SCALES,
+                   training_crops=len(scenes), training_negative_crops=int(sum(s['negative'] for s in scenes)),
+                   training_objects=int(sum(len(s['circles']) for s in scenes)), training_cameras=cams,
+                   training_sources=sorted({s['source'] for s in scenes}),
+                   training_seconds=round(time.time() - t0), torch=torch.__version__,
+                   parameters=int(sum(p.numel() for p in model.parameters())),
+                   final_bce=float(np.mean([h[0] for h in history[-200:]])),
+                   final_dist_mae_weighted_px=float(np.mean([h[1] for h in history[-200:]])),
+                   loss='BCE ponderada pela máscara (peso 0 ignora) + 0,2 x MAE das distâncias ponderado por prob x peso')
+    Path(a.metrics).write_text(json.dumps(metrics, indent=1, ensure_ascii=False), encoding='utf-8')
+
+
 def export(model, path):
     model.eval()
     dummy = torch.zeros(1, 1, C.TILE, C.TILE)
@@ -129,13 +276,18 @@ def export(model, path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--data', default=str(Path(__file__).resolve().parents[1] / 'data'))
+    ap.add_argument('--conjunto', choices=('bancada', 'correia'), default='bancada')
+    ap.add_argument('--data', default=None, help='padrão: ../data (bancada) ou ../data_belt/pseudo (correia)')
     ap.add_argument('--exclude', default='')
     ap.add_argument('--iterations', type=int, default=1500)
     ap.add_argument('--batch', type=int, default=8)
     ap.add_argument('--out', required=True)
     ap.add_argument('--metrics', required=True)
     a = ap.parse_args()
+    if a.data is None:
+        a.data = str(Path(__file__).resolve().parents[1] / ('data' if a.conjunto == 'bancada' else 'data_belt/pseudo'))
+    if a.conjunto == 'correia':
+        return main_belt(a)
     torch.manual_seed(SEED); rng = np.random.default_rng(SEED)
     torch.set_num_threads(max(1, os.cpu_count() or 1))
     torch.use_deterministic_algorithms(True, warn_only=True)

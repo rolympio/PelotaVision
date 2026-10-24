@@ -24,14 +24,16 @@ import java.util.List;
  */
 public final class NeuralPelletDetector {
     public static final String MODEL = "pellet_stardist.onnx", METADATA = "pellet_stardist.json";
+    /** Modelo específico da cena Correia (pseudo-rótulos de consenso); só é usado com cena Correia + Rede neural. */
+    public static final String BELT_MODEL = "pellet_stardist_belt.onnx", BELT_METADATA = "pellet_stardist_belt.json";
     /** Raios esperados (fração da largura) por perfil: pequenas, médias, grandes, auto (3 escalas). */
     static final double[][] PROFILE_RADII = {{.022}, {.035}, {.065}, {.02, .042, .09}};
     /** Correia: raios típicos medidos nas fotos reais de correia (0,4%–1,6% da largura). */
     static final double[][] BELT_RADII = {{.006}, {.009}, {.013}, {.005, .008, .013}};
     static final int MAX_CANDIDATES = 20000, MAX_OBJECTS = 600;
 
-    private static NeuralPelletDetector installed;
-    private static String status = "Modelo neural não instalado.";
+    private static NeuralPelletDetector installed, installedBelt;
+    private static String status = "Modelo neural não instalado.", beltStatus = "Modelo neural de correia não instalado.";
 
     public final String id, sha256;
     public final boolean demonstration;
@@ -74,10 +76,36 @@ public final class NeuralPelletDetector {
             return false;
         }
     }
+    /**
+     * Instala o modelo de correia (segundo slot). Sem ele, cena Correia + Rede neural usa o modelo de bancada
+     * e o status avisa (ver forScene/status(boolean)). A bancada nunca usa este modelo.
+     */
+    public static synchronized boolean installBelt(File onnx, String metadataJson) {
+        try {
+            installedBelt = new NeuralPelletDetector(onnx, metadataJson);
+            beltStatus = "Rede neural de correia " + installedBelt.id + (installedBelt.demonstration ? " (DEMONSTRAÇÃO, pseudo-rótulos sem revisão humana)" : "");
+            return true;
+        } catch (Throwable e) {
+            installedBelt = null;
+            beltStatus = "Rede neural de correia indisponível: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            return false;
+        }
+    }
+    public static synchronized NeuralPelletDetector getBelt() { return installedBelt; }
+    /** Modelo para a cena: correia usa o de correia se instalado; senão (e na bancada) o de bancada. */
+    public static synchronized NeuralPelletDetector forScene(boolean belt) { return belt && installedBelt != null ? installedBelt : installed; }
+    /** Verdadeiro quando a cena é Correia mas o modelo de correia falta e o de bancada está sendo usado. */
+    public static synchronized boolean beltFallback(boolean belt) { return belt && installedBelt == null && installed != null; }
+    public static synchronized String status(boolean belt) {
+        if (!belt) return status;
+        if (installedBelt != null) return beltStatus;
+        return installed == null ? status : beltStatus + " Correia usa o modelo de bancada: " + status;
+    }
     /** Instância avulsa (ex.: modelo de validação), sem instalar na aplicação. */
     static NeuralPelletDetector load(File onnx, String metadataJson) throws Exception { return new NeuralPelletDetector(onnx, metadataJson); }
     public static synchronized NeuralPelletDetector get() { return installed; }
     public static synchronized boolean available() { return installed != null; }
+    public static synchronized boolean available(boolean belt) { return forScene(belt) != null; }
     public static synchronized String status() { return status; }
 
     public static double threshold(int sensitivity) { return Math.max(.2, Math.min(.8, .75 - .005 * sensitivity)); }

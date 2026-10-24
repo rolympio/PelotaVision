@@ -36,7 +36,8 @@ public final class ReportJson {
     }
     /** Rastreabilidade do modelo quando a localização aplicada for a rede neural. */
     public static Object neuralModelJson(DetectionTuner.Option applied)throws Exception {
-        NeuralPelletDetector nn=NeuralPelletDetector.get();if(applied==null||!applied.neural()||nn==null)return JSONObject.NULL;JSONObject j=new JSONObject();
+        if(applied==null||!applied.neural())return JSONObject.NULL;NeuralPelletDetector nn=NeuralPelletDetector.forScene(applied.belt);if(nn==null)return JSONObject.NULL;JSONObject j=new JSONObject();
+        j.put("scene",applied.sceneName());j.put("model_scene",nn.metadata.optString("scene","bench"));j.put("belt_model_missing_fallback_to_bench",NeuralPelletDetector.beltFallback(applied.belt));j.put("label_origin",nn.metadata.optString("label_origin","provisional_assistant_circles"));j.put("ground_truth_labels",nn.metadata.optBoolean("ground_truth",false));
         j.put("model_id",nn.id);j.put("model_sha256",nn.sha256);j.put("demonstration_model",nn.demonstration);j.put("architecture",nn.metadata.optString("architecture"));j.put("probability_threshold",NeuralPelletDetector.threshold(applied.sensitivity));j.put("profile_radius_fraction_of_width",nn.metadata.opt("profile_radius_fraction_of_width"));
         j.put("role","proposes objects only; final ellipses are fitted to observed boundary gradients (ellipse_boundary_v1)");j.put("training",nn.metadata.opt("training"));j.put("validation_holdout",nn.metadata.opt("validation_holdout"));j.put("validated_on_plant_photos",false);return j;
     }

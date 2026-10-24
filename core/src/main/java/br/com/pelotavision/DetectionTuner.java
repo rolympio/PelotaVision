@@ -41,15 +41,15 @@ public final class DetectionTuner {
   LinkedHashMap<String,Option> options=new LinkedHashMap<>();options.put(current.id,current);
   // Both localization methods are mandatory and interleaved: LoG is tested early even under a time budget.
   // A rede neural (modelo de demonstração) só entra na busca quando o usuário a escolheu: o padrão não muda.
-  boolean neural=current.neural()&&NeuralPelletDetector.available();
+  boolean neural=current.neural()&&NeuralPelletDetector.available(current.belt);
   for(int profile:new int[]{1,3,0,2})for(int method:new int[]{LOG,GRADIENT,NEURAL}){if(method==NEURAL&&!neural)continue;Option o=new Option(profile,75,method,current.belt);options.put(o.id,o);}
   for(int sensitivity:new int[]{55,90})for(int profile:new int[]{1,3,0,2})for(int method:new int[]{LOG,GRADIENT}){Option o=new Option(profile,sensitivity,method,current.belt);options.put(o.id,o);}
   return new ArrayList<>(options.values());
  }
  public static PelletDetector.Result detect(Mat gray,Option option){return new EllipseFitter().refine(gray,seeds(gray,option,option.parameters.workSide(1024),12),option.belt);}
- /** Localização sem refinamento elíptico; o método neural exige o modelo instalado. */
+ /** Localização sem refinamento elíptico; o método neural exige o modelo instalado. Cena Correia usa o modelo de correia (NeuralPelletDetector.forScene). */
  public static PelletDetector.Result seeds(Mat gray,Option option,int maximumSide,int scales){
-  if(option.method==NEURAL){NeuralPelletDetector nn=NeuralPelletDetector.get();if(nn==null)throw new IllegalStateException(NeuralPelletDetector.status());return nn.detect(gray,option.profile,option.sensitivity,option.parameters);}
+  if(option.method==NEURAL){NeuralPelletDetector nn=NeuralPelletDetector.forScene(option.belt);if(nn==null)throw new IllegalStateException(NeuralPelletDetector.status(option.belt));return nn.detect(gray,option.profile,option.sensitivity,option.parameters);}
   maximumSide=option.parameters.workSide(maximumSide);
   return option.legacy?new PelletDetector().detect(gray,option.parameters,maximumSide,scales):new AdaptivePelletDetector().detect(gray,option.parameters,maximumSide,scales);}
  public static PelletDetector.Result detect(Mat gray,Option option,AnalysisWindow window){PelletDetector.Result result=detect(gray,option);return window==null?result:window.filterLocal(result);}

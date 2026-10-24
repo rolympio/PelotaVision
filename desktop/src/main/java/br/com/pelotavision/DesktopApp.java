@@ -44,6 +44,7 @@ public final class DesktopApp {
             log.append("appDir=").append(appDir()).append('\n');
             log.append("crackModel=").append(model("crack_forest.pvrf")).append(' ').append(model("crack_forest.pvrf").isFile()).append('\n');
             log.append("neuralModel=").append(NeuralPelletDetector.status()).append('\n');
+            log.append("neuralBeltModel=").append(NeuralPelletDetector.status(true)).append('\n');
             org.opencv.core.Mat bgr = Mats.readUpright(image);
             PhotoSession session = new PhotoSession(image, null, null, bgr);
             bgr.release();

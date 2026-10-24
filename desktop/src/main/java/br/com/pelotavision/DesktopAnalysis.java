@@ -26,7 +26,7 @@ final class DesktopAnalysis {
         Granulometry.Settings scale; // escala vigente (entra no contexto da busca, como no Android)
 
         /** O metodo neural so vale com o modelo instalado; sem ele, volta para bordas. */
-        int effectiveMethod() { return method == DetectionTuner.NEURAL && !NeuralPelletDetector.available() ? DetectionTuner.GRADIENT : method; }
+        int effectiveMethod() { return method == DetectionTuner.NEURAL && !NeuralPelletDetector.available(belt) ? DetectionTuner.GRADIENT : method; }
         DetectionTuner.Option option() { return new DetectionTuner.Option(profile, sensitivity, effectiveMethod(), belt); }
     }
 
@@ -65,15 +65,21 @@ final class DesktopAnalysis {
         return crackModel;
     }
 
-    /** Instala a rede StarDist da pasta modelos (pacote) ou pelotavision.modelDir (testes). */
+    /** Instala as redes StarDist (bancada e, em slot separado, correia) da pasta modelos (pacote) ou pelotavision.modelDir (testes). */
     static synchronized void installNeuralModel() {
-        if (NeuralPelletDetector.available()) return;
-        File onnx = DesktopApp.model(NeuralPelletDetector.MODEL), meta = DesktopApp.model(NeuralPelletDetector.METADATA);
-        try {
-            NeuralPelletDetector.install(onnx, new String(java.nio.file.Files.readAllBytes(meta.toPath()), java.nio.charset.StandardCharsets.UTF_8));
-        } catch (IOException e) {
-            NeuralPelletDetector.install(onnx, "{}");
+        if (!NeuralPelletDetector.available()) {
+            File onnx = DesktopApp.model(NeuralPelletDetector.MODEL), meta = DesktopApp.model(NeuralPelletDetector.METADATA);
+            NeuralPelletDetector.install(onnx, readOrEmpty(meta));
         }
+        if (NeuralPelletDetector.getBelt() == null) {
+            File onnx = DesktopApp.model(NeuralPelletDetector.BELT_MODEL), meta = DesktopApp.model(NeuralPelletDetector.BELT_METADATA);
+            NeuralPelletDetector.installBelt(onnx, readOrEmpty(meta)); // ausente: correia + rede usa o modelo de bancada (com aviso)
+        }
+    }
+
+    private static String readOrEmpty(File f) {
+        try { return new String(java.nio.file.Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8); }
+        catch (IOException e) { return "{}"; }
     }
 
     static String crackModelNote() {

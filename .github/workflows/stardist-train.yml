@@ -12,6 +12,9 @@ on:
       modo:
         description: 'treinar = treino completo; avaliar = reavaliar os ONNX ja gravados com o pos-processamento atual'
         default: 'treinar'
+      conjunto:
+        description: 'bancada = modelo de demonstracao (7 cenas); correia = modelo de correia (pseudo-rotulos de ml_training/data_belt/pseudo)'
+        default: 'bancada'
   push:
     branches-ignore: [main]
     paths: ['ml_training/stardist/*.py', 'ml_training/stardist/requirements.txt', '.github/workflows/stardist-train.yml']
@@ -30,6 +33,7 @@ jobs:
     env:
       ITER: ${{ github.event.inputs.iteracoes || '1500' }}
       MODO: ${{ github.event.inputs.modo || 'treinar' }}
+      CONJUNTO: ${{ github.event.inputs.conjunto || 'bancada' }}
       OUT: ml_training/stardist/output
     steps:
       - uses: actions/checkout@v6
@@ -46,33 +50,56 @@ jobs:
         run: |
           set +e
           mkdir -p output
-          { echo "commit $(git rev-parse --short HEAD) modo $MODO iteracoes $ITER nproc $(nproc)"
-            if [ "$MODO" = avaliar ]; then
-              cp ../../app/src/main/assets/pellet_stardist.onnx output/final.onnx &&
-              python -u evaluate.py --model output/holdout.onnx --metrics output/holdout_metrics.json &&
-              python -u evaluate.py --model output/final.onnx --metrics output/final_metrics.json
+          if [ "$CONJUNTO" = correia ]; then LOG=output/training_log_belt.txt; else LOG=output/training_log.txt; fi
+          echo "log=$LOG" >> "$GITHUB_OUTPUT"
+          { echo "commit $(git rev-parse --short HEAD) conjunto $CONJUNTO modo $MODO iteracoes $ITER nproc $(nproc)"
+            if [ "$CONJUNTO" = correia ]; then
+              if [ "$MODO" = avaliar ]; then
+                [ -f output/belt.onnx ] || cp ../../app/src/main/assets/pellet_stardist_belt.onnx output/belt.onnx
+              else
+                python -u train.py --conjunto correia --iterations "$ITER" --out output/belt.onnx --metrics output/belt_metrics.json
+              fi &&
+              python -u evaluate_belt.py --belt output/belt.onnx --out output/belt_validation.json &&
+              python -u check_onnx.py --conjunto correia --model output/belt.onnx --final-metrics output/belt_metrics.json \
+                --holdout-metrics output/belt_validation.json --metadata output/pellet_stardist_belt.json --reference output/reference_belt.json
             else
-              python -u train.py --exclude cluster,paired40 --iterations "$ITER" --out output/holdout.onnx --metrics output/holdout_metrics.json &&
-              python -u train.py --iterations "$ITER" --out output/final.onnx --metrics output/final_metrics.json
-            fi &&
-            python -u check_onnx.py --model output/final.onnx --final-metrics output/final_metrics.json \
-              --holdout-metrics output/holdout_metrics.json --metadata output/pellet_stardist.json --reference output/reference_dense.json
-          } > output/training_log.txt 2>&1
-          s=$?; tail -n 40 output/training_log.txt
+              if [ "$MODO" = avaliar ]; then
+                cp ../../app/src/main/assets/pellet_stardist.onnx output/final.onnx &&
+                python -u evaluate.py --model output/holdout.onnx --metrics output/holdout_metrics.json &&
+                python -u evaluate.py --model output/final.onnx --metrics output/final_metrics.json
+              else
+                python -u train.py --exclude cluster,paired40 --iterations "$ITER" --out output/holdout.onnx --metrics output/holdout_metrics.json &&
+                python -u train.py --iterations "$ITER" --out output/final.onnx --metrics output/final_metrics.json
+              fi &&
+              python -u check_onnx.py --model output/final.onnx --final-metrics output/final_metrics.json \
+                --holdout-metrics output/holdout_metrics.json --metadata output/pellet_stardist.json --reference output/reference_dense.json
+            fi
+          } > $LOG 2>&1
+          s=$?; tail -n 40 $LOG
           echo "status=$s" >> "$GITHUB_OUTPUT"
-          grep -E "^(it  *(1|100|1500|$ITER) |alvos|paridade|brown40|gray42|gray20|dense|cluster|spaced|paired40) " output/training_log.txt | while IFS= read -r l; do echo "::notice title=StarDist::$l"; done
-          [ $s -eq 0 ] || echo "::error title=StarDist::falhou (status $s): $(tail -n 3 output/training_log.txt | tr '\n' ' ')"
+          if [ "$CONJUNTO" = correia ]; then PAT="^(it  *(1|$ITER) |alvos|paridade|VALIDACAO|VAZIA) "; else PAT="^(it  *(1|100|1500|$ITER) |alvos|paridade|brown40|gray42|gray20|dense|cluster|spaced|paired40) "; fi
+          grep -E "$PAT" $LOG | head -n 9 | while IFS= read -r l; do echo "::notice title=StarDist $CONJUNTO::$(echo "$l" | cut -c1-900)"; done
+          [ $s -eq 0 ] || echo "::error title=StarDist::falhou (status $s): $(tail -n 3 $LOG | tr '\n' ' ')"
       - name: Instalar nos assets e gravar no branch
         if: ${{ !cancelled() }}
         run: |
+          A=app/src/main/assets
           if [ "${{ steps.train.outputs.status }}" = "0" ]; then
-            cp $OUT/final.onnx app/src/main/assets/pellet_stardist.onnx
-            cp $OUT/pellet_stardist.json app/src/main/assets/pellet_stardist.json
-            rm -f $OUT/final.onnx
+            if [ "$CONJUNTO" = correia ]; then
+              cp $OUT/belt.onnx $A/pellet_stardist_belt.onnx
+              cp $OUT/pellet_stardist_belt.json $A/pellet_stardist_belt.json
+            else
+              cp $OUT/final.onnx $A/pellet_stardist.onnx
+              cp $OUT/pellet_stardist.json $A/pellet_stardist.json
+            fi
           fi
+          rm -f $OUT/final.onnx
+          # Correia: se a avaliacao falhar, o ONNX treinado fica em output/ para "modo avaliar" sem retreinar.
+          if [ "${{ steps.train.outputs.status }}" = "0" ]; then rm -f $OUT/belt.onnx; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A $OUT app/src/main/assets/pellet_stardist.onnx app/src/main/assets/pellet_stardist.json 2>/dev/null || git add -A $OUT
-          git commit -m "StarDist: $MODO no CI ($ITER iteracoes, status ${{ steps.train.outputs.status }}) [skip ci]" || exit 0
+          if [ "$CONJUNTO" = correia ]; then FILES="$A/pellet_stardist_belt.onnx $A/pellet_stardist_belt.json"; else FILES="$A/pellet_stardist.onnx $A/pellet_stardist.json"; fi
+          git add -A $OUT $FILES 2>/dev/null || git add -A $OUT
+          git commit -m "StarDist $CONJUNTO: $MODO no CI ($ITER iteracoes, status ${{ steps.train.outputs.status }}) [skip ci]" || exit 0
           git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}"
           [ "${{ steps.train.outputs.status }}" = "0" ]

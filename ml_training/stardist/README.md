@@ -62,6 +62,40 @@ Depois copie `final.onnx` para `app/src/main/assets/pellet_stardist.onnx` e `pel
 
 Com dados reais, troque `--exclude` pelos grupos de validação e aumente as iterações. Em GPU, 10 a 20 mil iterações é um ponto de partida razoável.
 
+## Modelo de correia (pseudo-rótulos) — `pellet_stardist_belt.onnx`
+
+Segundo modelo, **separado** do de bancada. É usado **somente** com cena Correia + método Rede neural. A bancada continua com `pellet_stardist.onnx`, sem mudança.
+
+**Dados.** São os pseudo-rótulos de consenso de `ml_training/data_belt/pseudo`, gerados por `ml_training/data_belt/pseudo_label.py`. O processo, a divisão por câmera e as limitações estão em `ml_training/data_belt/README.md`. Não há verdade-terreno humana.
+
+**Treino (`train.py --conjunto correia`).**
+
+- Lê `annotations.json` e usa só os recortes `split: "treino"`.
+- Cada recorte é reescalado pelo raio mediano dos seus rótulos inteiros: duas escalas sorteadas em `RNET` (raio de 10,4 a 24 px na rede). Nos negativos, usa raio de 12 px.
+- A loss é a mesma da bancada, ponderada pela máscara (`loss_fn_weighted`). **Peso 0 ignora o pixel** na BCE, no termo de distância e na regularização. Pelotas cortadas pela janela de amostragem também recebem peso 0.
+- Não há moldura artificial: se a janela é menor que 128 px, o resto entra com peso 0.
+- Sem argumentos, `train.py` treina a bancada exatamente como antes. O caminho de bancada não foi alterado.
+
+**Avaliação (`evaluate_belt.py`).** Mede nos quadros de validação (Disco 11, Disco 12 e 4P10F, nunca vistos no treino) a concordância com o **consenso**, que não é verdade-terreno. Compara o modelo de correia, o de demonstração e os próprios rotuladores. Também conta detecções em quadros de correia vazia do Disco 03 que não entraram no treino.
+
+**Paridade e metadado (`check_onnx.py --conjunto correia`).** Compara ONNX Runtime × OpenCV 4.12 num quadro do Disco 11. Gera `output/reference_belt.json`, usado pelo `BeltSceneTest` Java no Windows, e `pellet_stardist_belt.json`, no mesmo esquema do de bancada, com `scene: "belt"`, `label_origin: "pseudo_consensus_v1"`, contagens, divisão e métricas.
+
+**Pelo GitHub.** Actions → "StarDist - treinar modelo de pelotas" → `conjunto = correia`. O workflow grava `app/src/main/assets/pellet_stardist_belt.{onnx,json}` e `ml_training/stardist/output/belt_*.json`, `reference_belt.json` e `training_log_belt.txt` no branch. `modo = avaliar` reavalia o ONNX de correia já gravado.
+
+**Localmente.**
+
+```
+python ../data_belt/pseudo_label.py            # na raiz: python ml_training/data_belt/pseudo_label.py
+python train.py --conjunto correia --iterations 6000 --out output/belt.onnx --metrics output/belt_metrics.json
+python evaluate_belt.py --belt output/belt.onnx --out output/belt_validation.json
+python check_onnx.py --conjunto correia --model output/belt.onnx --final-metrics output/belt_metrics.json \
+  --holdout-metrics output/belt_validation.json --metadata output/pellet_stardist_belt.json --reference output/reference_belt.json
+```
+
+**Sem o modelo de correia**, correia + rede cai para o modelo de bancada. O status avisa ("Correia usa o modelo de bancada"), e o JSON marca `belt_model_missing_fallback_to_bench: true`.
+
+<!-- RESULTADOS_CORREIA -->
+
 ## Contrato Python ↔ Java
 
 `common.py` é a referência de `core/.../NeuralPelletDetector.java`. Os dois implementam o mesmo pipeline:

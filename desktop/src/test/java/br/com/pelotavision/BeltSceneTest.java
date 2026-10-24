@@ -86,6 +86,53 @@ public class BeltSceneTest {
         assertTrue("correia deveria superar a bancada na maioria dos quadros de correia", better * 2 > comparable);
     }
 
+    /**
+     * Modelo de CORREIA (pseudo-rótulos de consenso): paridade Java/OpenCV x Python/ORT no quadro de referência
+     * (Disco 11, validação) e comparação demonstração x correia nos mesmos quadros e na correia vazia (Disco 03).
+     * Sem verdade-terreno: contagem, raio mediano e tempo. As métricas contra consenso ficam no metadado do modelo.
+     */
+    @Test public void beltModelParityAndComparison() throws Exception {
+        NeuralPelletDetector beltNet = NeuralPelletDetector.getBelt(), bench = NeuralPelletDetector.get();
+        if (beltNet == null) { record("CORREIA modelo de correia ausente: " + NeuralPelletDetector.status(true)); return; }
+        assertTrue("bancada nunca usa o modelo de correia", NeuralPelletDetector.forScene(false) == bench && NeuralPelletDetector.forScene(true) == beltNet);
+        File root = dir.getParentFile().getParentFile();
+        File refFile = new File(root, "ml_training/stardist/output/reference_belt.json");
+        JSONObject ref = new JSONObject(new String(Files.readAllBytes(refFile.toPath()), StandardCharsets.UTF_8));
+        assertEquals("referência de correia gerada com outro modelo", ref.getString("model_sha256"), beltNet.sha256);
+        DetectionTuner.Option nnBelt = new DetectionTuner.Option(3, 75, DetectionTuner.NEURAL, true);
+        Mat rb = Mats.readUpright(new File(root, ref.getString("image"))), rg = Mats.gray(rb);
+        rb.release();
+        PelletDetector.Result rr;
+        try { rr = beltNet.detect(rg, 3, 75, nnBelt.parameters); } finally { rg.release(); }
+        JSONArray expected = ref.getJSONArray("detections");
+        int matched = 0; double worstArea = 0;
+        for (int i = 0; i < expected.length(); i++) {
+            JSONObject e = expected.getJSONObject(i); PelletDetector.Detection best = null; double bd = Double.MAX_VALUE;
+            for (PelletDetector.Detection d : rr.circles) { double dd = Math.hypot(d.x - e.getDouble("x"), d.y - e.getDouble("y")); if (dd < bd) { bd = dd; best = d; } }
+            if (best != null && bd < 1) { matched++; worstArea = Math.max(worstArea, Math.abs(best.area / e.getDouble("area") - 1)); }
+        }
+        record(String.format(Locale.ROOT, "CORREIA PARIDADE modelo %s Java/OpenCV x Python/ORT %s: python=%d java=%d casadas=%d desvio_area_max=%.4f%% %dms",
+                beltNet.id, new File(ref.getString("image")).getName(), expected.length(), rr.circles.size(), matched, 100 * worstArea, rr.durationMs));
+        int tol = Math.max(1, expected.length() / 500);
+        assertTrue("contagem correia", Math.abs(expected.length() - rr.circles.size()) <= tol);
+        assertTrue("casamento correia", matched >= expected.length() - tol);
+        record("CORREIA rede (sementes, sem elipse) | demonstracao n r_med ms -> modelo de correia n r_med ms | r_esp");
+        String[] frames = {"img765.jpg", "img552.jpg", "20171227_11-41-37.jpg", "img109.jpg", "img378.jpg", "img574.jpg", "img588.jpg"};
+        for (String f : frames) {
+            Mat bgr = Mats.readUpright(new File(dir, "raw/" + f)), g = Mats.gray(bgr);
+            bgr.release();
+            try {
+                PelletDetector.Result a = bench.detect(g, 3, 75, nnBelt.parameters), b = beltNet.detect(g, 3, 75, nnBelt.parameters);
+                PelletDetector.Result viaTuner = DetectionTuner.seeds(g, nnBelt, 1024, 8);
+                assertEquals("DetectionTuner usa o modelo de correia na cena Correia", b.circles.size(), viaTuner.circles.size());
+                assertEquals("stardist_" + beltNet.id, viaTuner.method);
+                record(String.format(Locale.ROOT, "%-22s %s | %d r=%.1f %dms -> %d r=%.1f %dms | r_esp=%.1f", f,
+                        entry(f).optString("camera_checked", "?"), a.circles.size(), medianRadius(a), a.durationMs, b.circles.size(), medianRadius(b), b.durationMs,
+                        entry(f).getInt("spacing_px") / 2.));
+            } finally { g.release(); }
+        }
+    }
+
     @Test public void benchDefaultsUnchanged() {
         DetectionTuner.Option o = new DetectionTuner.Option(3, 75, DetectionTuner.GRADIENT);
         assertEquals(600, o.parameters.maxObjects);

@@ -120,7 +120,8 @@ final class MainFrame extends JFrame {
         updateProfileLabels();
         int savedMethod = prefs.getInt("method", prefs.getBoolean("legacy", false) ? 1 : 0);
         methodBox.setSelectedIndex(savedMethod < 0 || savedMethod > 2 ? 0 : savedMethod);
-        methodBox.setToolTipText(NeuralPelletDetector.status() + ". A rede so propoe objetos; as elipses sao medidas nas bordas. Sem treino em fotos da usina.");
+        methodBox.setToolTipText("<html>Bancada: " + NeuralPelletDetector.status(false) + "<br>Correia: " + NeuralPelletDetector.status(true)
+                + "<br>A rede so propoe objetos; as elipses sao medidas nas bordas. Modelo de correia treinado com pseudo-rotulos sem revisao humana.</html>");
         sensitivity.setValue(prefs.getInt("sensitivity", 75));
         autoSuggest.setSelected(prefs.getBoolean("auto", true));
         lockFocus.setSelected(prefs.getBoolean("lockFocus", true));
