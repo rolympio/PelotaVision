@@ -60,7 +60,8 @@ def prepare(scenes):
             cc[:, 0] = (cc[:, 0] + .5) * sc - .5
             cc[:, 1] = (cc[:, 1] + .5) * sc - .5
             cc[:, 2] *= sc
-            lab = C.render_labels(small.shape, cc)
+            pg = None if s.get('polygons') is None else [None if q is None else (q + .5) * sc - .5 for q in s['polygons']]
+            lab = C.render_labels(small.shape, cc, pg)
             prob = C.prob_target(lab)
             dist = np.minimum(C.star_distances(lab, max_dist=4 * C.NOMINAL_RADIUS), 4 * C.NOMINAL_RADIUS)
             h, w = small.shape
@@ -126,25 +127,6 @@ def export(model, path):
                       do_constant_folding=True, dynamo=False)
 
 
-def ort_runner(path):
-    import onnxruntime as ort
-    sess = ort.InferenceSession(str(path), providers=['CPUExecutionProvider'])
-    return lambda tile: sess.run(None, {'input': tile[None, None]})[0][0]
-
-
-def evaluate(path, scenes, groups_in_training):
-    run = ort_runner(path)
-    res = {}
-    for s in scenes:
-        t0 = time.time()
-        dets, ncand, limit = C.detect(run, s['gray'], profile=3, sensitivity=75)
-        m = C.match(dets, s['circles'], s['partial'])
-        m.update(role='treino' if s['group'] in groups_in_training else 'validacao_cena_inteira_fora',
-                 candidates=ncand, candidate_limit=limit, seconds=round(time.time() - t0, 2))
-        res[s['group']] = m
-    return res
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--data', default=str(Path(__file__).resolve().parents[1] / 'data'))
@@ -187,9 +169,8 @@ def main():
                    parameters=int(sum(p.numel() for p in model.parameters())),
                    final_bce=float(np.mean([h[0] for h in history[-200:]])),
                    final_dist_mae_weighted_px=float(np.mean([h[1] for h in history[-200:]])),
-                   evaluation_protocol='perfil Auto, sensibilidade 75, pós-processamento common.detect sobre o ONNX exportado; '
-                                       'casamento guloso centro<0,5r e razão de raios 0,7-1,43 contra círculos PROVISÓRIOS',
-                   scenes=evaluate(out_path, scenes, {s['group'] for s in train_scenes}))
+                   evaluation_protocol=C.PROTOCOL,
+                   scenes=C.evaluate(out_path, scenes, {s['group'] for s in train_scenes}))
     Path(a.metrics).write_text(json.dumps(metrics, indent=1, ensure_ascii=False), encoding='utf-8')
     for g, m in metrics['scenes'].items():
         print(g, m, flush=True)

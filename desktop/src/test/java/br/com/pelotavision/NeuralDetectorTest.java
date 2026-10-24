@@ -73,6 +73,8 @@ public class NeuralDetectorTest {
         PelletDetector.Result r;
         try { r = nn.detect(g, ref.getInt("profile"), ref.getInt("sensitivity"), new DetectionTuner.Option(3, 75, DetectionTuner.NEURAL).parameters); }
         finally { g.release(); }
+        NeuralPelletDetector.ScaleReport scales = nn.lastScales();
+        assertTrue("escala final", scales.finalScale != null && Math.abs(scales.finalScale / ref.getDouble("final_scale") - 1) < 1e-6);
         JSONArray expected = ref.getJSONArray("detections");
         int matched = 0; double worstCenter = 0, worstArea = 0;
         for (int i = 0; i < expected.length(); i++) {
@@ -81,8 +83,8 @@ public class NeuralDetectorTest {
             for (PelletDetector.Detection d : r.circles) { double dd = Math.hypot(d.x - e.getDouble("x"), d.y - e.getDouble("y")); if (dd < bd) { bd = dd; best = d; } }
             if (best != null && bd < 1) { matched++; worstCenter = Math.max(worstCenter, bd); worstArea = Math.max(worstArea, Math.abs(best.area / e.getDouble("area") - 1)); }
         }
-        record(String.format(Locale.ROOT, "PARIDADE Java/OpenCV x Python/ORT dense: python=%d java=%d casadas=%d desvio_centro_max=%.4fpx desvio_area_max=%.4f%% candidatos py=%d java=%d %dms",
-                expected.length(), r.circles.size(), matched, worstCenter, 100 * worstArea, ref.getInt("candidates"), r.candidates, r.durationMs));
+        record(String.format(Locale.ROOT, "PARIDADE Java/OpenCV x Python/ORT dense: python=%d java=%d casadas=%d desvio_centro_max=%.4fpx desvio_area_max=%.4f%% candidatos py=%d java=%d escala_final py=%.5f java=%.5f %dms",
+                expected.length(), r.circles.size(), matched, worstCenter, 100 * worstArea, ref.getInt("candidates"), r.candidates, ref.getDouble("final_scale"), scales.finalScale, r.durationMs));
         assertTrue("contagem", Math.abs(expected.length() - r.circles.size()) <= 1);
         assertTrue("casamento", matched >= expected.length() - 1);
         assertTrue("área", worstArea < .02);

@@ -8,7 +8,6 @@ import argparse, json, hashlib, time
 from pathlib import Path
 import numpy as np, cv2
 import common as C
-from train import ort_runner
 
 MODEL_ID = 'stardist_demo_20261024_v1'
 
@@ -29,7 +28,7 @@ def main():
     for k in ('model', 'final-metrics', 'holdout-metrics', 'metadata', 'reference'):
         ap.add_argument('--' + k, required=True)
     a = ap.parse_args()
-    ort_run, cv_run = ort_runner(a.model), cv_runner(a.model)
+    ort_run, cv_run = C.ort_runner(a.model), cv_runner(a.model)
     scenes = {s['group']: s for s in C.load_scenes(a.data)}
     rng = np.random.default_rng(3)
     # 1) saída bruta: ruído + bloco real
@@ -40,7 +39,8 @@ def main():
         o, c = ort_run(t), cv_run(t)
         diffs.append(float(np.abs(o - c).max()))
     # 2) pipeline completo nos dois motores
-    t0 = time.time(); ref, ncand, limit = C.detect(ort_run, scenes['dense']['gray'], 3, 75); t_ort = time.time() - t0
+    info = {}
+    t0 = time.time(); ref, ncand, limit = C.detect(ort_run, scenes['dense']['gray'], 3, 75, info); t_ort = time.time() - t0
     t0 = time.time(); alt, _, _ = C.detect(cv_run, scenes['dense']['gray'], 3, 75); t_cv = time.time() - t0
     m_ref = C.match(ref, scenes['dense']['circles'], scenes['dense']['partial'])
     parity = dict(opencv=cv2.__version__, max_abs_output_diff=max(diffs), detections_ort=len(ref), detections_opencv=len(alt),
@@ -49,6 +49,7 @@ def main():
     Path(a.reference).write_text(json.dumps(dict(
         model_sha256=hashlib.sha256(Path(a.model).read_bytes()).hexdigest(), image='ml_training/data/dense.png',
         gray='cv2.cvtColor(imread COLOR, BGR2GRAY)', profile=3, sensitivity=75, candidates=ncand, candidate_limit=limit,
+        final_scale=info['final_scale'], scale_trials=[dict(scale=t['scale'], kept=t['kept'], median_net_radius=t['rnet']) for t in info['trials']],
         detections=ref, match=m_ref), indent=1), encoding='utf-8')
     final, hold = (json.loads(Path(p).read_text(encoding='utf-8')) for p in (a.final_metrics, a.holdout_metrics))
     meta = dict(
@@ -62,6 +63,7 @@ def main():
         nms_overlap=C.NMS_OVERLAP, min_radius_net_px=C.MIN_RADIUS_NET,
         profile_radius_fraction_of_width={str(k): v for k, v in C.PROFILE_RADII.items()},
         threshold='max(0,2; min(0,8; 0,75 - 0,005 x sensibilidade))',
+        scale_selection='uma passada por raio do perfil; escolhe o raio mediano mais perto do nominal (log); passada final reescalada (fator 0,5-2)',
         training=dict(groups=final['training_groups'], objects='225 círculos PROVISÓRIOS do assistente em 7 cenas; uma sintética, demais de origem não comprovada',
                       iterations=final['iterations'], seed=final['seed'], torch=final['torch'],
                       note='Modelo de DEMONSTRAÇÃO do encanamento. Não foi treinado nem validado em fotos da usina.'),

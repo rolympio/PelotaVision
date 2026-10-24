@@ -9,6 +9,9 @@ on:
       iteracoes:
         description: 'Iteracoes de treino (lote 8, recortes 128 px)'
         default: '1500'
+      modo:
+        description: 'treinar = treino completo; avaliar = reavaliar os ONNX ja gravados com o pos-processamento atual'
+        default: 'treinar'
   push:
     branches-ignore: [main]
     paths: ['ml_training/stardist/*.py', 'ml_training/stardist/requirements.txt', '.github/workflows/stardist-train.yml']
@@ -26,6 +29,7 @@ jobs:
     timeout-minutes: 150
     env:
       ITER: ${{ github.event.inputs.iteracoes || '1500' }}
+      MODO: ${{ github.event.inputs.modo || 'treinar' }}
       OUT: ml_training/stardist/output
     steps:
       - uses: actions/checkout@v6
@@ -42,9 +46,15 @@ jobs:
         run: |
           set +e
           mkdir -p output
-          { echo "commit $(git rev-parse --short HEAD) iteracoes $ITER nproc $(nproc)"
-            python -u train.py --exclude cluster,paired40 --iterations "$ITER" --out output/holdout.onnx --metrics output/holdout_metrics.json &&
-            python -u train.py --iterations "$ITER" --out output/final.onnx --metrics output/final_metrics.json &&
+          { echo "commit $(git rev-parse --short HEAD) modo $MODO iteracoes $ITER nproc $(nproc)"
+            if [ "$MODO" = avaliar ]; then
+              cp ../../app/src/main/assets/pellet_stardist.onnx output/final.onnx &&
+              python -u evaluate.py --model output/holdout.onnx --metrics output/holdout_metrics.json &&
+              python -u evaluate.py --model output/final.onnx --metrics output/final_metrics.json
+            else
+              python -u train.py --exclude cluster,paired40 --iterations "$ITER" --out output/holdout.onnx --metrics output/holdout_metrics.json &&
+              python -u train.py --iterations "$ITER" --out output/final.onnx --metrics output/final_metrics.json
+            fi &&
             python -u check_onnx.py --model output/final.onnx --final-metrics output/final_metrics.json \
               --holdout-metrics output/holdout_metrics.json --metadata output/pellet_stardist.json --reference output/reference_dense.json
           } > output/training_log.txt 2>&1
@@ -63,6 +73,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A $OUT app/src/main/assets/pellet_stardist.onnx app/src/main/assets/pellet_stardist.json 2>/dev/null || git add -A $OUT
-          git commit -m "StarDist: modelo treinado no CI ($ITER iteracoes, status ${{ steps.train.outputs.status }})" || exit 0
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git commit -m "StarDist: $MODO no CI ($ITER iteracoes, status ${{ steps.train.outputs.status }}) [skip ci]" || exit 0
+          git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}"
           [ "${{ steps.train.outputs.status }}" = "0" ]

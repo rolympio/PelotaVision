@@ -8,7 +8,7 @@ estrelados; duplicatas saem por supressão de não máximos entre polígonos.
 O pós-processamento aqui é a REFERÊNCIA do Java (core/NeuralPelletDetector.java):
 mesma escala, normalização, blocos, candidatos, NMS e saída. Mudou um, mude o outro.
 """
-import json, math
+import json, math, time
 from pathlib import Path
 import numpy as np, cv2
 from scipy import ndimage
@@ -38,17 +38,45 @@ def load_scenes(data_dir):
         bgr = cv2.imread(str(data_dir / f"{s['group']}.png"), cv2.IMREAD_COLOR)
         if bgr is None:
             raise FileNotFoundError(s['group'])
-        circles = np.array([[a['x'], a['y'], a['radius']] for a in s['annotations']], np.float64)
+        polygons = [np.asarray(a['polygon'], np.float64) if a.get('polygon') else None for a in s['annotations']]
+        circles = np.array([equivalent_circle(pg) if pg is not None else [a['x'], a['y'], a['radius']]
+                            for a, pg in zip(s['annotations'], polygons)], np.float64)
         partial = np.array([bool(a.get('partial', False)) for a in s['annotations']])
-        scenes.append(dict(group=s['group'], gray=cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY), circles=circles, partial=partial))
+        scenes.append(dict(group=s['group'], gray=cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY), circles=circles, partial=partial,
+                           polygons=polygons if any(pg is not None for pg in polygons) else None))
     return scenes
 
-def render_labels(shape, circles):
-    """Rótulo por pixel: disco mais próximo em distância normalizada (contato vira fronteira)."""
+def equivalent_circle(polygon):
+    """Centroide e raio de área equivalente de um contorno anotado (px da imagem)."""
+    a, cx, cy, _ = polygon_props(polygon)
+    return [cx, cy, math.sqrt(a / math.pi)]
+
+def render_labels(shape, circles, polygons=None):
+    """Rótulo por pixel. Círculos: disco mais próximo em distância normalizada (contato vira fronteira).
+    Contornos (campo "polygon" na anotação, ex.: máscara revisada do SAM) são rasterizados como estão;
+    em sobreposição, vence o objeto anotado primeiro."""
     h, w = shape
     lab = np.zeros((h, w), np.int32)
     best = np.full((h, w), np.inf)
     for i, (x, y, r) in enumerate(circles, 1):
+        if polygons is not None and polygons[i - 1] is not None:
+            pg = polygons[i - 1]
+            x0, x1 = max(0, int(pg[:, 0].min())), min(w, int(pg[:, 0].max()) + 2)
+            y0, y1 = max(0, int(pg[:, 1].min())), min(h, int(pg[:, 1].max()) + 2)
+            if x1 <= x0 or y1 <= y0:
+                continue
+            yy, xx = np.mgrid[y0:y1, x0:x1].astype(np.float64)
+            inside = np.zeros(xx.shape, bool)
+            for (ax, ay), (bx, by) in zip(pg, np.roll(pg, -1, 0)):  # par-ímpar nos centros de pixel
+                if ay == by:
+                    continue
+                cross = ((ay > yy) != (by > yy)) & (xx < ax + (yy - ay) * (bx - ax) / (by - ay))
+                inside ^= cross
+            sub, cur = lab[y0:y1, x0:x1], best[y0:y1, x0:x1]
+            take = inside & (sub == 0)
+            sub[take] = i
+            cur[take] = 0
+            continue
         x0, x1 = max(0, int(x - r - 1)), min(w, int(x + r + 2))
         y0, y1 = max(0, int(y - r - 1)), min(h, int(y + r + 2))
         if x1 <= x0 or y1 <= y0:
@@ -304,16 +332,53 @@ def describe(obj, w, h):
     return dict(x=obj['cx'], y=obj['cy'], radius=math.sqrt(area / math.pi), area=area,
                 roundness=float(round_), partial=partial, score=obj['score'])
 
-def detect(run, gray, profile=3, sensitivity=75):
+REFINE_LIMITS = (.5, 2.)
+
+def _pass(run, gray, scale, thr):
+    cands = candidates_for_scale(run, gray, scale, thr)
+    kept, limit = nms(cands)
+    return cands, kept, limit
+
+def median(values):
+    """Mediana explícita (média dos dois centrais em n par), igual no Java."""
+    v = sorted(values)
+    n = len(v)
+    return v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2
+
+def _scale_stats(kept, scale):
+    if not kept:
+        return 0., float('nan')
+    cover = sum(k['area'] * k['score'] for k in kept)
+    rnet = median([math.sqrt(k['area'] / math.pi) * scale for k in kept])
+    return cover, rnet
+
+def detect(run, gray, profile=3, sensitivity=75, details=None):
+    """Escala em duas etapas. 1) Uma passada por raio esperado do perfil; escolhe a escala cujo raio
+    mediano (na entrada da rede) fica mais perto de NOMINAL_RADIUS, em log. A rede foi treinada com
+    raios de 10 a 24 px: em escala errada ela fragmenta (objetos ~25 px) ou encolhe (~10 px) as pelotas.
+    2) Passada final na escala que leva esse raio mediano a NOMINAL_RADIUS (fator limitado a 0,5-2).
+    Escalas nunca são misturadas."""
     h, w = gray.shape
     thr = threshold(sensitivity)
-    cands = []
+    trials = []
     for frac in PROFILE_RADII[profile]:
-        cands += candidates_for_scale(run, gray, NOMINAL_RADIUS / (frac * w), thr)
-    kept, limit = nms(cands)
-    dets = [describe(k, w, h) for k in kept]
-    dets.sort(key=lambda d: (d['y'], d['x']))
-    return dets, len(cands), limit
+        sc = NOMINAL_RADIUS / (frac * w)
+        cands, kept, limit = _pass(run, gray, sc, thr)
+        cover, rnet = _scale_stats(kept, sc)
+        trials.append(dict(scale=sc, cands=len(cands), kept=len(kept), cover=cover, rnet=rnet))
+    ok = [t for t in trials if t['kept'] > 0]
+    chosen = min(ok, key=lambda t: abs(math.log(t['rnet'] / NOMINAL_RADIUS))) if ok else None
+    dets, ncand, limit, final_scale = [], sum(t['cands'] for t in trials), False, None
+    if chosen is not None:
+        factor = min(REFINE_LIMITS[1], max(REFINE_LIMITS[0], NOMINAL_RADIUS / chosen['rnet']))
+        final_scale = chosen['scale'] * factor
+        cands, kept, limit = _pass(run, gray, final_scale, thr)
+        ncand += len(cands)
+        dets = [describe(k, w, h) for k in kept]
+        dets.sort(key=lambda d: (d['y'], d['x']))
+    if details is not None:
+        details.update(trials=trials, final_scale=final_scale)
+    return dets, ncand, limit
 
 # ---------------------------------------------------------------- métricas (desenvolvimento, não metrologia)
 
@@ -339,3 +404,28 @@ def match(dets, circles, partial=None):
             if partial is None or not partial[j]]
     return dict(detections=len(dets), annotated=len(circles), matched=tp, precision=round(p, 4), recall=round(r, 4),
                 f1=round(f1, 4), radius_abs_error_pct=round(100 * float(np.mean(errs)), 2) if errs else None)
+
+# ---------------------------------------------------------------- avaliação sobre o ONNX exportado
+
+def ort_runner(path):
+    import onnxruntime as ort
+    sess = ort.InferenceSession(str(path), providers=['CPUExecutionProvider'])
+    return lambda tile: sess.run(None, {'input': tile[None, None]})[0][0]
+
+
+PROTOCOL = ('perfil Auto, sensibilidade 75, pós-processamento common.detect (escolha de escala em duas etapas) sobre o ONNX '
+            'exportado; casamento guloso centro<0,5r e razão de raios 0,7-1,43 contra círculos PROVISÓRIOS')
+
+
+def evaluate(path, scenes, groups_in_training):
+    run = ort_runner(path)
+    res = {}
+    for s in scenes:
+        t0 = time.time()
+        info = {}
+        dets, ncand, limit = detect(run, s['gray'], profile=3, sensitivity=75, details=info)
+        m = match(dets, s['circles'], s['partial'])
+        m.update(role='treino' if s['group'] in groups_in_training else 'validacao_cena_inteira_fora',
+                 candidates=ncand, candidate_limit=limit, final_scale=info['final_scale'], seconds=round(time.time() - t0, 2))
+        res[s['group']] = m
+    return res

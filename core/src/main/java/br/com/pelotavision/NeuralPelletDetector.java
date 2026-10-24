@@ -92,26 +92,71 @@ public final class NeuralPelletDetector {
         }
     }
 
+    /** Diagnóstico da última detecção: escalas testadas e escala final (null se nada foi encontrado). */
+    public static final class ScaleReport {
+        public final double[] scales, medianNetRadius; public final int[] kept; public final Double finalScale;
+        ScaleReport(double[] s, double[] r, int[] k, Double f) { scales = s; medianNetRadius = r; kept = k; finalScale = f; }
+    }
+    private ScaleReport lastScales;
+    public synchronized ScaleReport lastScales() { return lastScales; }
+
+    static final double REFINE_MIN = .5, REFINE_MAX = 2;
+
+    /**
+     * Escala em duas etapas (igual a common.detect): uma passada por raio esperado do perfil; escolhe a
+     * escala cujo raio mediano na entrada da rede fica mais perto do nominal (em log); passada final na
+     * escala que leva esse raio ao nominal (fator 0,5–2). Escalas não são misturadas, porque em escala
+     * grande demais a rede fragmenta pelotas.
+     */
     public synchronized PelletDetector.Result detect(Mat gray, int profile, int sensitivity, PelletDetector.Parameters cfg) {
         if (gray.empty() || gray.type() != CvType.CV_8UC1) throw new IllegalArgumentException("Imagem cinza de 8 bits necessária");
         if (profile < 0 || profile > 3) throw new IllegalArgumentException("Perfil inválido");
         long start = System.nanoTime();
         int w = gray.cols(), h = gray.rows();
         double thr = threshold(sensitivity);
-        List<Candidate> candidates = new ArrayList<>();
-        for (double fraction : PROFILE_RADII[profile]) candidatesForScale(gray, nominalRadius / (fraction * w), thr, candidates);
+        double[] fr = PROFILE_RADII[profile], scales = new double[fr.length], medians = new double[fr.length];
+        int[] counts = new int[fr.length];
+        int total = 0, chosen = -1;
         boolean[] limit = {false};
-        List<Kept> kept = nms(candidates, limit);
-        List<PelletDetector.Detection> out = new ArrayList<>();
-        for (Kept k : kept) {
-            double radius = Math.sqrt(k.area / Math.PI);
-            double roundness = Math.min(1., 4 * Math.PI * k.area / Math.max(1e-9, k.perimeter * k.perimeter));
-            boolean partial = k.minX < 0 || k.minY < 0 || k.maxX > w - 1 || k.maxY > h - 1;
-            boolean review = radius < w * cfg.minRadiusFraction || radius > w * cfg.maxRadiusFraction || roundness < .62 || k.c.score < thr + .1;
-            out.add(new PelletDetector.Detection(k.cx, k.cy, radius, k.area, roundness, partial, review));
+        for (int i = 0; i < fr.length; i++) {
+            scales[i] = nominalRadius / (fr[i] * w);
+            List<Candidate> c = new ArrayList<>();
+            candidatesForScale(gray, scales[i], thr, c);
+            total += c.size();
+            boolean[] ignored = {false};
+            List<Kept> kept = nms(c, ignored);
+            counts[i] = kept.size();
+            double[] r = new double[kept.size()];
+            for (int k = 0; k < r.length; k++) r[k] = Math.sqrt(kept.get(k).area / Math.PI) * scales[i];
+            medians[i] = median(r);
+            if (counts[i] > 0 && (chosen < 0 || Math.abs(Math.log(medians[i] / nominalRadius)) < Math.abs(Math.log(medians[chosen] / nominalRadius)))) chosen = i;
         }
+        List<PelletDetector.Detection> out = new ArrayList<>();
+        Double finalScale = null;
+        if (chosen >= 0) {
+            double factor = Math.min(REFINE_MAX, Math.max(REFINE_MIN, nominalRadius / medians[chosen]));
+            finalScale = scales[chosen] * factor;
+            List<Candidate> c = new ArrayList<>();
+            candidatesForScale(gray, finalScale, thr, c);
+            total += c.size();
+            for (Kept k : nms(c, limit)) {
+                double radius = Math.sqrt(k.area / Math.PI);
+                double roundness = Math.min(1., 4 * Math.PI * k.area / Math.max(1e-9, k.perimeter * k.perimeter));
+                boolean partial = k.minX < 0 || k.minY < 0 || k.maxX > w - 1 || k.maxY > h - 1;
+                boolean review = radius < w * cfg.minRadiusFraction || radius > w * cfg.maxRadiusFraction || roundness < .62 || k.c.score < thr + .1;
+                out.add(new PelletDetector.Detection(k.cx, k.cy, radius, k.area, roundness, partial, review));
+            }
+        }
+        lastScales = new ScaleReport(scales, medians, counts, finalScale);
         out.sort(Comparator.comparingDouble((PelletDetector.Detection d) -> d.y).thenComparingDouble(d -> d.x));
-        return new PelletDetector.Result(out, w, h, candidates.size(), (System.nanoTime() - start) / 1_000_000, limit[0], "stardist_" + id);
+        return new PelletDetector.Result(out, w, h, total, (System.nanoTime() - start) / 1_000_000, limit[0], "stardist_" + id);
+    }
+
+    /** Mediana explícita (média dos dois centrais em n par), igual ao Python; NaN se vazio. */
+    static double median(double[] v) {
+        if (v.length == 0) return Double.NaN;
+        double[] s = v.clone(); java.util.Arrays.sort(s); int n = s.length;
+        return n % 2 == 1 ? s[n / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
     }
 
     // ------------------------------------------------------------ escala, blocos e candidatos

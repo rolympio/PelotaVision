@@ -787,7 +787,7 @@ public final class MainActivity extends ComponentActivity {
     }
     private double minimumInput(EditText input){String raw=input.getText().toString().trim().replace(',','.');try{double value=Double.parseDouble(raw);if(Double.isFinite(value)&&value>=0&&value<=1000)return value;}catch(NumberFormatException ignored){}throw new IllegalArgumentException("Informe mínimo entre 0 e 1000 mm; zero desativa o critério.");}
 
-    private PelletDetector.Result detectPellets(Mat gray,PelletDetector.Parameters cfg,int size,int scales){PelletDetector.Result seeds=method()==DetectionTuner.GRADIENT?detector.detect(gray,cfg,size,scales):DetectionTuner.seeds(gray,new DetectionTuner.Option(profile,sensitivity,method()),size,scales);return new EllipseFitter().refine(gray,seeds);}
+    private PelletDetector.Result detectPellets(Mat gray,PelletDetector.Parameters cfg,int size,int scales){int m=method();NeuralPelletDetector nn=NeuralPelletDetector.get();PelletDetector.Result seeds=m==DetectionTuner.NEURAL&&nn!=null?nn.detect(gray,profile,sensitivity,cfg):m==DetectionTuner.LOG?new PelletDetector().detect(gray,cfg,size,scales):detector.detect(gray,cfg,size,scales);return new EllipseFitter().refine(gray,seeds);}
     private void showAdjustments() {
         if(mode==Mode.PROCESSING||mode==Mode.SAVING)return;
         LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(10),dp(20),dp(8));ScrollView scroll=new ScrollView(this);scroll.addView(content);
