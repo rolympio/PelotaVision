@@ -1,0 +1,8 @@
+PASS: blank and four touching disks; positions and radii.
+ml_update/source/PelotaVision/verification/fixtures/1000411645.jpg: 129 circles in 452ms (desktop, not phone)
+ml_update/source/PelotaVision/verification/fixtures/1000411646.jpg: 46 circles in 828ms (desktop, not phone)
+ml_update/source/PelotaVision/verification/fixtures/1000411647.jpg: 240 circles in 234ms (desktop, not phone)
+PASS: one crack, multiple cracks counted once, round pores rejected, smooth surface, partial pellet, finite marks and resized photo.
+ml_update/source/PelotaVision/verification/fixtures/1000411645.jpg count=99 coverage=0.4456639591021838 ms=419
+ml_update/source/PelotaVision/verification/fixtures/1000411646.jpg count=42 coverage=0.43689405221177646 ms=453
+ml_update/source/PelotaVision/verification/fixtures/1000411647.jpg count=145 coverage=0.5567135678308497 ms=333

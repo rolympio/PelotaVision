@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="br.com.pelotavision.PhotoExportTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-18T18:14:39" hostname="a1f0c1447ae7" time="1.477">
+  <properties/>
+  <testcase name="LargeDiameterUsesObservedRangeWithoutChangingOneMmClasses" classname="br.com.pelotavision.PhotoExportTest" time="0.029"/>
+  <testcase name="encodedPngContainsPhotoAndHistogramFooter" classname="br.com.pelotavision.PhotoExportTest" time="0.057"/>
+  <testcase name="tooManyBinsFailExplicitlyWithoutChangingWidth" classname="br.com.pelotavision.PhotoExportTest" time="0.027"/>
+  <testcase name="zeroIncludedRegionsStillExportsExplicitFooter" classname="br.com.pelotavision.PhotoExportTest" time="0.021"/>
+  <testcase name="encodedChartHasEightOneMmBarsOverEightToSixteen" classname="br.com.pelotavision.PhotoExportTest" time="0.099"/>
+  <testcase name="uncalibratedHistogramIsExplicitlyPixels" classname="br.com.pelotavision.PhotoExportTest" time="0.021"/>
+  <testcase name="assumedMeanIsMarkedAndPreservesRelativeSizes" classname="br.com.pelotavision.PhotoExportTest" time="0.02"/>
+  <testcase name="actualCalibrationDialogAppliesCommaDecimalAndShowsInvalidInput" classname="br.com.pelotavision.PhotoExportTest" time="0.644"/>
+  <testcase name="actualDialogReferenceAndEstimatedMeanModes" classname="br.com.pelotavision.PhotoExportTest" time="0.558"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[java.lang.UnsatisfiedLinkError: no opencv_java4 in java.library.path: /usr/java/packages/lib:/usr/lib64:/lib64:/lib:/usr/lib:/workspace/scratch/6400e8b36208/ml_update/source/PelotaVision/app/src/testDebug/jniLibs:/workspace/scratch/6400e8b36208/ml_update/source/PelotaVision/app/src/test/jniLibs
+	at java.base/java.lang.ClassLoader.loadLibrary(ClassLoader.java:2434)
+	at java.base/java.lang.Runtime.loadLibrary0(Runtime.java:818)
+	at java.base/java.lang.System.loadLibrary(System.java:2006)
+	at org.opencv.android.StaticHelper.loadLibrary(StaticHelper.java:44)
+	at org.opencv.android.StaticHelper.initOpenCV(StaticHelper.java:19)
+	at org.opencv.android.OpenCVLoader.initLocal(OpenCVLoader.java:31)
+	at br.com.pelotavision.MainActivity.onCreate(MainActivity.java:116)
+	at android.app.Activity.$$robo$$android_app_Activity$performCreate(Activity.java:8290)
+	at android.app.Activity.performCreate(Activity.java)
+	at android.app.Activity.$$robo$$android_app_Activity$performCreate(Activity.java:8269)
+	at android.app.Activity.performCreate(Activity.java)
+	at android.app.Instrumentation.$$robo$$android_app_Instrumentation$callActivityOnCreate(Instrumentation.java:1384)
+	at android.app.Instrumentation.callActivityOnCreate(Instrumentation.java)
+	at org.robolectric.android.internal.RoboMonitoringInstrumentation.callActivityOnCreate(RoboMonitoringInstrumentation.java:382)
+	at org.robolectric.android.controller.ActivityController.lambda$create$0(ActivityController.java:138)
+	at org.robolectric.shadows.ShadowPausedLooper.runPaused(ShadowPausedLooper.java:243)
+	at org.robolectric.android.controller.ActivityController.create(ActivityController.java:136)
+	at org.robolectric.android.controller.ActivityController.create(ActivityController.java:146)
+	at org.robolectric.android.controller.ActivityController.setup(ActivityController.java:341)
+	at br.com.pelotavision.PhotoExportTest.actualCalibrationDialogAppliesCommaDecimalAndShowsInvalidInput(PhotoExportTest.java:112)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:489)
+	at org.robolectric.internal.SandboxTestRunner$2.lambda$evaluate$2(SandboxTestRunner.java:291)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:104)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+java.lang.UnsatisfiedLinkError: no opencv_java4 in java.library.path: /usr/java/packages/lib:/usr/lib64:/lib64:/lib:/usr/lib:/workspace/scratch/6400e8b36208/ml_update/source/PelotaVision/app/src/testDebug/jniLibs:/workspace/scratch/6400e8b36208/ml_update/source/PelotaVision/app/src/test/jniLibs
+	at java.base/java.lang.ClassLoader.loadLibrary(ClassLoader.java:2434)
+	at java.base/java.lang.Runtime.loadLibrary0(Runtime.java:818)
+	at java.base/java.lang.System.loadLibrary(System.java:2006)
+	at org.opencv.android.StaticHelper.loadLibrary(StaticHelper.java:44)
+	at org.opencv.android.StaticHelper.initOpenCV(StaticHelper.java:19)
+	at org.opencv.android.OpenCVLoader.initLocal(OpenCVLoader.java:31)
+	at br.com.pelotavision.MainActivity.onCreate(MainActivity.java:116)
+	at android.app.Activity.$$robo$$android_app_Activity$performCreate(Activity.java:8290)
+	at android.app.Activity.performCreate(Activity.java)
+	at android.app.Activity.$$robo$$android_app_Activity$performCreate(Activity.java:8269)
+	at android.app.Activity.performCreate(Activity.java)
+	at android.app.Instrumentation.$$robo$$android_app_Instrumentation$callActivityOnCreate(Instrumentation.java:1384)
+	at android.app.Instrumentation.callActivityOnCreate(Instrumentation.java)
+	at org.robolectric.android.internal.RoboMonitoringInstrumentation.callActivityOnCreate(RoboMonitoringInstrumentation.java:382)
+	at org.robolectric.android.controller.ActivityController.lambda$create$0(ActivityController.java:138)
+	at org.robolectric.shadows.ShadowPausedLooper.runPaused(ShadowPausedLooper.java:243)
+	at org.robolectric.android.controller.ActivityController.create(ActivityController.java:136)
+	at org.robolectric.android.controller.ActivityController.create(ActivityController.java:146)
+	at org.robolectric.android.controller.ActivityController.setup(ActivityController.java:341)
+	at br.com.pelotavision.PhotoExportTest.actualDialogReferenceAndEstimatedMeanModes(PhotoExportTest.java:134)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:489)
+	at org.robolectric.internal.SandboxTestRunner$2.lambda$evaluate$2(SandboxTestRunner.java:291)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:104)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+]]></system-err>
+</testsuite>

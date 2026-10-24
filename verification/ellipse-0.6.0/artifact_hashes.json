@@ -1,0 +1,8 @@
+{
+  "apk": "PelotaVision_0.6.0_Android.apk",
+  "apk_sha256": "26be0cc6b62d731fa11953d3f712a60c5e2124c63655bb1dca344ff2d3e29b85",
+  "size_bytes": 34813646,
+  "signature_preserved": true,
+  "zipalign_16kb": true,
+  "model_unchanged": true
+}

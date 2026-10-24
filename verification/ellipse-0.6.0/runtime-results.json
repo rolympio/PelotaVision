@@ -1,0 +1,67 @@
+{
+  "app_version": "0.6.0",
+  "date": "2026-10-18",
+  "build": "assembleDebug testDebugUnitTest lintDebug successful",
+  "tests": 32,
+  "failures": 0,
+  "errors": 0,
+  "additional_targeted_tests": 5,
+  "lint_errors": 0,
+  "lint_warnings": 51,
+  "physical_device_tested": false,
+  "true_3d_sphericity_measured": false,
+  "shape_metric": "projected ellipse minor/major axis ratio",
+  "shape_population": "valid fitted, non-partial, no review, in ROI",
+  "analytic_cases": 24,
+  "analytic_max_axis_ratio_error": 0.015216337301638072,
+  "analytic_max_semi_axis_error_px": 0.9399833679199219,
+  "shape_mean_example": [
+    {
+      "scene": "gray42",
+      "mean": 0.9197053686224951,
+      "included": 42,
+      "excluded": 0
+    },
+    {
+      "scene": "spaced",
+      "mean": 0.9418481536840572,
+      "included": 17,
+      "excluded": 2
+    },
+    {
+      "scene": "dense",
+      "mean": 0.9262635912550433,
+      "included": 19,
+      "excluded": 6
+    },
+    {
+      "scene": "gray20",
+      "mean": 0.9582200296392527,
+      "included": 20,
+      "excluded": 0
+    },
+    {
+      "scene": "brown40",
+      "mean": 0.8836784735156628,
+      "included": 38,
+      "excluded": 2
+    },
+    {
+      "scene": "cluster",
+      "mean": 0.9283883335013796,
+      "included": 18,
+      "excluded": 14
+    },
+    {
+      "scene": "paired40",
+      "mean": 0.9445921273675,
+      "included": 40,
+      "excluded": 0
+    }
+  ],
+  "crack_forest_unchanged": true,
+  "crack_score_max_difference_after_ellipse_refinement": 0,
+  "zipalign_16kb": "passed",
+  "signature_preserved": true,
+  "ios_build_performed": false
+}

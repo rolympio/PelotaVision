@@ -1,0 +1,22 @@
+legacy 0 matched 78 truth 225 pred 479 full 70 / 209
+legacy 1 matched 81 truth 225 pred 484 full 71 / 209
+legacy 2 matched 78 truth 225 pred 466 full 72 / 209
+legacy 3 matched 69 truth 225 pred 428 full 62 / 209
+legacy 4 matched 73 truth 225 pred 418 full 64 / 209
+legacy 5 matched 79 truth 225 pred 471 full 72 / 209
+adaptive 0 matched 214 truth 225 pred 218 full 203 / 209
+adaptive 1 matched 201 truth 225 pred 207 full 193 / 209
+adaptive 2 matched 214 truth 225 pred 217 full 204 / 209
+adaptive 3 matched 211 truth 225 pred 214 full 201 / 209
+adaptive 4 matched 214 truth 225 pred 218 full 202 / 209
+adaptive 5 matched 217 truth 225 pred 219 full 206 / 209
+original adaptive by scene:
+{'scene': 'brown40', 'lighting': 0, 'detector': 'adaptive', 'truth_all': 40, 'truth_full': 40, 'predicted': 40, 'matched_all': 39, 'matched_full': 39, 'false_positives': 1, 'precision': 0.975, 'recall_all': 0.975, 'recall_full': 0.975, 'median_relative_radius_error': 0.08218412395833338}
+{'scene': 'gray42', 'lighting': 0, 'detector': 'adaptive', 'truth_all': 42, 'truth_full': 42, 'predicted': 42, 'matched_all': 42, 'matched_full': 42, 'false_positives': 0, 'precision': 1.0, 'recall_all': 1.0, 'recall_full': 1.0, 'median_relative_radius_error': 0.017888901097074368}
+{'scene': 'gray20', 'lighting': 0, 'detector': 'adaptive', 'truth_all': 20, 'truth_full': 20, 'predicted': 20, 'matched_all': 20, 'matched_full': 20, 'false_positives': 0, 'precision': 1.0, 'recall_all': 1.0, 'recall_full': 1.0, 'median_relative_radius_error': 0.05179688138020845}
+{'scene': 'dense', 'lighting': 0, 'detector': 'adaptive', 'truth_all': 30, 'truth_full': 14, 'predicted': 25, 'matched_all': 25, 'matched_full': 14, 'false_positives': 0, 'precision': 1.0, 'recall_all': 0.8333333333333334, 'recall_full': 1.0, 'median_relative_radius_error': 0.02013052971311471}
+{'scene': 'cluster', 'lighting': 0, 'detector': 'adaptive', 'truth_all': 34, 'truth_full': 34, 'predicted': 32, 'matched_all': 30, 'matched_full': 30, 'false_positives': 2, 'precision': 0.9375, 'recall_all': 0.8823529411764706, 'recall_full': 0.8823529411764706, 'median_relative_radius_error': 0.030100833919988267}
+{'scene': 'spaced', 'lighting': 0, 'detector': 'adaptive', 'truth_all': 19, 'truth_full': 19, 'predicted': 19, 'matched_all': 18, 'matched_full': 18, 'false_positives': 1, 'precision': 0.9473684210526315, 'recall_all': 0.9473684210526315, 'recall_full': 0.9473684210526315, 'median_relative_radius_error': 0.030441845224056567}
+{'scene': 'paired40', 'lighting': 0, 'detector': 'adaptive', 'truth_all': 40, 'truth_full': 40, 'predicted': 40, 'matched_all': 40, 'matched_full': 40, 'false_positives': 0, 'precision': 1.0, 'recall_all': 1.0, 'recall_full': 1.0, 'median_relative_radius_error': 0.027644248915449372}
+app policy OOF at 40/60: {'possible': 25, 'negative': 181, 'uncertain': 3}
+possible TP 25 FP 0 negative FN 12

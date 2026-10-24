@@ -1,0 +1,9 @@
+PASS analytic ellipses=24 max_ratio_error=0.015216337301638072 max_semi_axis_error_px=0.9399833679199219; uniform region excluded; isolated elongated pellet found
+brown40: detected=40 mean=0.883678 included=38 excluded=2 duration=524ms
+gray42: detected=42 mean=0.919705 included=42 excluded=0 duration=460ms
+gray20: detected=20 mean=0.958220 included=20 excluded=0 duration=441ms
+dense: detected=25 mean=0.926264 included=19 excluded=6 duration=460ms
+cluster: detected=32 mean=0.928388 included=18 excluded=14 duration=419ms
+spaced: detected=19 mean=0.941848 included=17 excluded=2 duration=329ms
+paired40: detected=40 mean=0.944592 included=40 excluded=0 duration=481ms
+PASS RF score parity before/after ellipse refinement, max error=0.0

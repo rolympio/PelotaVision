@@ -1,0 +1,10 @@
+{
+  "model": "random_forest_20261018_v1",
+  "features": 72,
+  "n_base_pellets": 209,
+  "positive": 37,
+  "negative": 172,
+  "scenes": 7,
+  "sha256": "736bf0bbaf881cfc0465ea2de362285430820fbc3381cd9753f309cd5e09f8ce",
+  "evaluation": "leave-one-scene-out, original held-out images only, fixed threshold 0.5; annotations provisional, synthetic or provenance unverified; no physical phone or real production validation"
+}

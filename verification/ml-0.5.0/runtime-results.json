@@ -1,0 +1,39 @@
+{
+  "app_version": "0.5.0",
+  "date": "2026-10-18",
+  "build": "assembleDebug testDebugUnitTest lintDebug successful",
+  "tests": 27,
+  "failures": 0,
+  "errors": 0,
+  "lint_errors": 0,
+  "lint_warnings": 46,
+  "physical_device_tested": false,
+  "signing_certificate_same_as": "0.4.0",
+  "certificate_sha256": "0d77d2917bd808a17f92e52568dbb6bc2b1767be0e25ca93fadc8e41c8d66b38",
+  "zipalign_16kb": "passed",
+  "model": "random_forest_20261018_v1",
+  "model_sha256": "736bf0bbaf881cfc0465ea2de362285430820fbc3381cd9753f309cd5e09f8ce",
+  "train_pellets": 209,
+  "train_positive": 37,
+  "scenes": 7,
+  "label_status": "assistant visual provisional, not expert ground truth",
+  "validation": "leave-one-scene-out; synthetic or unverified provenance; no external real production validation",
+  "crack_recall_oof_at_0_5": 0.6756756756756757,
+  "crack_confusion_oof_at_0_5": [
+    [
+      169,
+      3
+    ],
+    [
+      12,
+      25
+    ]
+  ],
+  "detector_full_matches_development_original": [
+    203,
+    209
+  ],
+  "detector_note": "development set, approximate annotation; not metrology",
+  "roi_scale_preserved": true,
+  "ios_build_performed": false
+}

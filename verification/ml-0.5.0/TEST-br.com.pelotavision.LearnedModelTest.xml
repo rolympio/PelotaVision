@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="br.com.pelotavision.LearnedModelTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-18T18:14:29" hostname="a1f0c1447ae7" time="9.283">
+  <properties/>
+  <testcase name="packagedForestMatchesAllTrainingReferenceVectors" classname="br.com.pelotavision.LearnedModelTest" time="0.07"/>
+  <testcase name="learnedScoreAndDetectorMethodSurviveRoiReviewAndExport" classname="br.com.pelotavision.LearnedModelTest" time="0.062"/>
+  <testcase name="sevenSuppliedScenesRenderOriginalMarkersAndHistogramUsingAppComposer" classname="br.com.pelotavision.LearnedModelTest" time="9.15"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

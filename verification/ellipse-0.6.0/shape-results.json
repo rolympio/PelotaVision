@@ -1,0 +1,44 @@
+[
+  {
+    "scene": "gray42",
+    "mean": 0.9197053686224951,
+    "included": 42,
+    "excluded": 0
+  },
+  {
+    "scene": "spaced",
+    "mean": 0.9418481536840572,
+    "included": 17,
+    "excluded": 2
+  },
+  {
+    "scene": "dense",
+    "mean": 0.9262635912550433,
+    "included": 19,
+    "excluded": 6
+  },
+  {
+    "scene": "gray20",
+    "mean": 0.9582200296392527,
+    "included": 20,
+    "excluded": 0
+  },
+  {
+    "scene": "brown40",
+    "mean": 0.8836784735156628,
+    "included": 38,
+    "excluded": 2
+  },
+  {
+    "scene": "cluster",
+    "mean": 0.9283883335013796,
+    "included": 18,
+    "excluded": 14
+  },
+  {
+    "scene": "paired40",
+    "mean": 0.9445921273675,
+    "included": 40,
+    "excluded": 0
+  }
+]
