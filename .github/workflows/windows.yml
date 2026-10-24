@@ -29,7 +29,7 @@ jobs:
     timeout-minutes: 45
     defaults:
       run:
-        shell: bash
+        shell: bash -eo pipefail {0}
     steps:
       - uses: actions/checkout@v6
 
@@ -56,7 +56,7 @@ jobs:
       - name: Preparar OpenCV Java para o build
         run: |
           J="C:/opencv-4.12.0/opencv/build/java"
-          ls -la "$J" "$J/x64"
+          ls -la "$J" "$J/x64" || { echo "::error::OpenCV Java nao encontrado em $J: $(ls C:/opencv-4.12.0/opencv/build | tr '\n' ' ')"; exit 1; }
           mkdir -p desktop/opencv-java/x64
           cp "$J/opencv-4120.jar" desktop/opencv-java/
           cp "$J/x64/opencv_java4120.dll" desktop/opencv-java/x64/
@@ -76,7 +76,9 @@ jobs:
       - name: Empacotar versao portatil (sem instalador, sem admin)
         run: |
           JH=$(cygpath -u "$JAVA_HOME")
-          VN=$(grep -oP "^version = '\K[^']+" desktop/build.gradle)
+          trap 'echo "::error title=Empacotamento::linha $LINENO: $BASH_COMMAND"' ERR
+          VN=$(sed -n "s/^version = '\(.*\)'.*/\1/p" desktop/build.gradle)
+          [ -n "$VN" ] || { echo "::error::versao nao encontrada"; exit 1; }
           echo "PV_DESKTOP_VERSION=$VN" >> "$GITHUB_ENV"
           IN=pkg/input; rm -rf pkg; mkdir -p "$IN/modelos" pkg/dist
           cp desktop/build/libs/pelotavision-desktop.jar "$IN/"
@@ -86,13 +88,18 @@ jobs:
           for d in vcruntime140.dll vcruntime140_1.dll msvcp140.dll; do [ -f "$JH/bin/$d" ] && cp "$JH/bin/$d" "$IN/" || echo "sem $d no JDK"; done
           cp app/src/main/assets/crack_forest.pvrf app/src/main/assets/metadata.json "$IN/modelos/"
           cp app/src/main/assets/FSRCNN_* "$IN/modelos/"
-          cp "C:/opencv-4.12.0/opencv/LICENSE" "$IN/OpenCV_LICENSE.txt"
-          "$JH/bin/jpackage" --type app-image --name PelotaVision --app-version "$VN" \
+          LIC=$(find "C:/opencv-4.12.0/opencv" -maxdepth 3 -iname "LICENSE*" -type f | head -1 || true)
+          if [ -n "$LIC" ]; then cp "$LIC" "$IN/OpenCV_LICENSE.txt"; else echo "::warning::LICENSE do OpenCV nao encontrado no pacote oficial"; fi
+          set +e
+          JP_OUT=$("$JH/bin/jpackage" --type app-image --name PelotaVision --app-version "$VN" \
             --input "$IN" --main-jar pelotavision-desktop.jar --main-class br.com.pelotavision.DesktopApp \
             --java-options "-Xmx3g" --vendor "PelotaVision" --description "PelotaVision Windows $VN (nucleo Android 0.11.0)" \
-            --dest pkg/dist
+            --dest pkg/dist 2>&1); JP_RC=$?
+          set -e
+          echo "$JP_OUT"
+          [ $JP_RC -eq 0 ] || { echo "::error title=jpackage::$(echo "$JP_OUT" | tail -8 | tr '\n' ' ')"; exit 1; }
           cp desktop/LEIA-ME.txt pkg/dist/PelotaVision/
-          ls -R pkg/dist/PelotaVision | head -40
+          find pkg/dist/PelotaVision -maxdepth 2 > pkg/conteudo.txt; cat pkg/conteudo.txt
 
       - name: Autoteste do pacote montado
         run: |

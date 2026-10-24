@@ -95,6 +95,11 @@ jobs:
               txt=", ".join(f"{k}: {v}" for k,v in sorted(sev.items())) or "sem ocorrencias"
               print("## Lint\n\n"+txt+"\n")
               print(f"::notice title=Lint::{txt}", file=sys.stderr)
+              for i in issues:
+                  if i.get('severity') in ('Error','Fatal'):
+                      loc=i.find('location'); f=loc.get('file','') if loc is not None else ''; ln=loc.get('line','') if loc is not None else ''
+                      f=f.split('/pelotavision/')[-1] if '/pelotavision/' in f else f.split('/work/')[-1]
+                      print(f"::error title=Lint {i.get('id')}::{f}:{ln} {i.get('message')}", file=sys.stderr)
           EOF
 
       - name: Publicar APK
