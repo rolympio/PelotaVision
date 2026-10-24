@@ -1,0 +1,153 @@
+# PelotaVision — Android 0.11.0
+
+## Segmentação detalhada — novo na 0.11.0
+
+Depois de abrir/fotografar e aplicar a ROI, toque em **Segmentar ROI → Detalhada**. Em imagem inteira, o botão é **Segmentar foto**. O diálogo permite comparar os pixels originais com contraste local (CLAHE suave) e redução leve de ruído (bilateral), e buscar previamente os perfis de detecção em um bloco original representativo, na mesma resolução dos blocos da análise. **Rápida** mantém o fluxo anterior. Ao escolher detalhada, **Buscar ajuste na ROI** e a reanálise manual passam a aplicar esse modo na mesma foto. Abrir outra foto começa pelo fluxo rápido, antes de uma seleção explícita.
+
+O modo detalhado recupera a região diretamente do arquivo original, antes da redução de exibição. Não amplia uma cópia já reduzida para simular resolução. A leitura regional respeita as oito orientações EXIF, incluindo espelhamento. A ROI continua editável na foto inteira, mas o processamento e o relatório usam a área ativa. Para proteger memória, a área decodificada é limitada a aproximadamente 8 MP por uma amostragem inteira de potência de dois; a resolução usada e a amostragem ficam visíveis e no JSON. Acima desse orçamento não se promete resolução nativa completa. Reduzir a ROI pode permitir recuperar mais detalhe real.
+
+O algoritmo usa blocos de até 640×640 pixels da região original, com sobreposição de aproximadamente 35%; os últimos blocos são ancorados ao limite, mantendo a mesma largura. Os perfis de raios são relativos à largura de cada bloco, não à foto inteira. Cada centro pertence à faixa delimitada pelos pontos médios dos centros vizinhos. Uma supressão geométrica adicional remove propostas quase coincidentes, sem somar duas vezes os objetos da sobreposição. Os blocos não são redimensionados para o detector normal: ficam abaixo dos limites de 800/1024 pixels. Contornos de tratamento são reajustados com os pixels originais, e todas as trincas são classificadas/localizadas na região original em cinza. A seleção de tratamento usa o mesmo tipo de evidência heurística de cobertura e geometria; não é uma avaliação de acurácia.
+
+### Super-resolução opcional
+
+**Testar super-resolução FSRCNN 2× (experimental)** vem desmarcado. O modelo embarcado é o FSRCNN geral de Saafke/OpenCV, pré-treinado em T91/General100, sem treinamento nas pelotas desta aplicação. Não é DLSS, não usa nuvem e não foi validado para medição granulométrica. Licença, modelo de origem, hashes e adaptação estão em `third_party/FSRCNN`.
+
+Com SR habilitada, blocos de 320×320 são ampliados 2×, permanecendo abaixo dos limites internos do detector. A proposta de elipse é convertida de volta e reajustada na imagem original. Propostas de SR sem correspondência com a análise original recebem alerta de revisão. A imagem reconstruída nunca é usada para inferir trincas. A SR concorre com a análise sem tratamento e só é escolhida onde sua pontuação superar a alternativa corrente por mais de 2 pontos. Portanto, marcar a opção não significa que SR será usada em todos os blocos. A comparação informa quantos blocos escolheram cada tratamento.
+
+A contagem de referência **Sem tratamento** da comparação é obtida com o mesmo plano de blocos daquela execução. Como o plano de SR usa blocos menores, sua contagem não deve ser interpretada como ganho da rede quando comparada com uma execução em blocos de 640. Mais marcações podem ser finos, poros ou divisões indevidas. O ganho de acurácia e de repetibilidade ainda exige fotos reais com contagens e medidas de referência.
+
+### Uso e rastreabilidade
+
+1. Calibre pela correia, por px/mm ou por referência escolhida; aplique a ROI.
+2. Abra **Segmentar ROI**, mantenha a comparação de tratamentos e, se desejar, a busca de configuração. Ative SR somente para ensaio.
+3. Toque **Detalhada** e acompanhe os blocos. O pré-ajuste usa o orçamento anterior de 30 s; os blocos têm orçamento de 3 minutos, verificado entre etapas. Operações nativas em andamento não são interrompidas no meio.
+4. Cancelar ou atingir um limite mantém a análise anterior; um resultado parcial não é apresentado como relatório completo. Há limites de quantidade de blocos e 6.000 propostas coletadas; uma ROI excessiva pede redução da área.
+5. Toque em **Detalhada · ver comparação** para conferir resolução, amostragem, blocos, configuração e contagens por tratamento. A original de entrada continua preservada.
+6. Confira elipses/trincas e salve. O JSON acrescenta `detailed_analysis`: dimensões de entrada, mapeamento afim para a prévia, amostragem, blocos, tratamentos escolhidos, SR testada e uso de pixels originais para contornos/trincas. O CSV continua com 32 colunas e as medidas usam a mesma referência física. A calibração pela correia/px-mm permanece independente do zoom. Se uma referência de objeto interna mudar de contorno na reanálise, a escala baseada nela é removida com aviso, como no fluxo anterior; selecione novamente essa referência.
+
+O modo detalhado muda propostas e pode descartar revisões manuais de trincas ao reanalisar. A calibração posterior altera as medidas, mas não refaz automaticamente as escolhas de tratamento dos blocos; reexecute para aplicar o novo contexto físico à seleção heurística. A forma continua sendo a razão projetada 2D b/a. Não se afirma ganho de acurácia a partir da aparência da imagem ou da pontuação automática. Evidências atuais em `verification/detail-0.11.0`.
+
+A área de interesse passa a ser a **imagem ativa na tela e a entrada efetiva da análise**, mantendo a fotografia inteira para editar a seleção e calibrar. Depois de aplicar uma ROI retangular ou circular, somente o recorte fica visível. Os comandos **Segmentar ROI** e **Buscar ajuste na ROI** processam esse recorte: iluminação, parâmetros relativos ao tamanho da imagem, contornos, trincas e comparação de ajustes deixam de usar a região descartada. O relatório usa a mesma ROI. O RF de trincas é o mesmo da 0.5.0; não houve novo treinamento.
+
+## Instalação
+
+Android 10 ou superior, ARM64. Extraia o ZIP de instalação e abra o APK. O pacote e o certificado de desenvolvimento continuam os mesmos, permitindo atualizar a 0.10.0. O projeto inclui também a compilação x86_64 para testes. Esta entrega não atualiza o iPhone.
+
+## Fluxo recomendado: correia, ROI e segmentação
+
+1. Fotografe ou abra a foto inteira, com as duas bordas da correia visíveis, incluindo as faixas sem material.
+2. Em **Escala / mm → Calibrar pela largura da correia**, informe a largura real em mm. Confira a proposta de linhas e arraste seus quatro pontos ou as próprias linhas para corrigir as bordas. Não use a largura do leito de material.
+3. Marque **Conferi as bordas e a largura real da correia** e aplique. O editor de ROI será aberto. A medida é sempre informada e confirmada pela pessoa.
+4. Escolha **Retângulo** ou **Círculo**. Arraste as alças para ajustar lados/cantos, arraste dentro para mover e use dois dedos para redimensionar. **Visualizar ROI com zoom** permite inspecionar; não redefine a área analisada.
+5. Toque em **Aplicar**. O aplicativo mostra somente a ROI, enquadrada na área da imagem. O exterior de uma ROI circular fica mascarado. A seleção não é destrutiva: **Área → Imagem inteira** recupera a fotografia.
+6. Escolha **Segmentar ROI** para usar o ajuste atual, ou **Buscar ajuste na ROI** para comparar perfis/sensibilidades de acordo com a iluminação do recorte. O comando **Ajustes → Aplicar manual** e a reanálise de trincas também passam a usar a ROI. Ao voltar para a imagem inteira após analisar um recorte, segmente a foto novamente.
+7. Confira as elipses e os alertas. Toque numa pelota para revisar a trinca ou informar uma medida de referência. Sem escala física, o histograma permanece em pixels; a classe em mm não define a escala.
+8. Toque em **Salvar relatório**. O PNG contém a ROI sem marcações, a ROI com elipses/possíveis trincas e o histograma. A foto inteira de entrada é salva separadamente com `_original`, byte a byte.
+
+Ao alterar a ROI, as marcações e estatísticas anteriores deixam de aparecer; o botão de salvar fica bloqueado até analisar a área ativa. Reaplicar a mesma seleção preserva o resultado. Se uma análise falhar, a foto, o recorte e a calibração existentes ficam disponíveis para tentar novamente.
+
+## Escala, coordenadas e referências
+
+O recorte de entrada é feito em **1:1 pixel**, sem redimensionamento. A ampliação na tela é só de apresentação. As coordenadas dos resultados e do CSV são traduzidas para a foto inteira; os eixos e áreas das elipses não são multiplicados pelo zoom. A calibração pela correia ou por px/mm original usa as dimensões originais, inclusive quando as bordas já não aparecem na ROI. Uma referência de objeto que ficou fora da área analisada permanece arquivada e pode ser editada em **Escala / mm → Editar referência selecionada**. Ela não é vinculada a outra pelota por número. Se a referência estiver dentro da nova análise e seu contorno mudar, a escala baseada nela é removida e o app pede nova seleção.
+
+O JSON inclui `processing_scope` com dimensões reais da entrada, deslocamento local→foto inteira e confirmação de que o recorte não altera a escala. `report_viewport` registra a transformação para os dois painéis do PNG. `detection_suggestion.input_scope` informa em qual entrada a busca ocorreu. Na ROI circular, pixels externos são substituídos na entrada do algoritmo pela mediana calculada somente dos pixels internos; o exterior original não participa da iluminação ou das trincas. Apenas elipses inteiras dentro da ROI entram no resultado. Um recorte quadrado do RF que atravesse a máscara circular fica inconclusivo.
+
+A sugestão usa os mesmos métodos de bordas e LoG, com correção de iluminação e escore de cobertura. Não há estimativa física automática da largura da correia, nem tamanhos forçados para uma média. O mínimo esperado de 5 mm só influencia a pontuação quando existe uma escala física independente, informada pelo usuário.
+
+**Limites mantidos:** referência no mesmo plano, trecho plano e câmera aproximadamente perpendicular. Não há retificação de perspectiva nem compensação de altura do leito, lente ou abaulamento. Variação de largura marcada superior a 8% bloqueia a calibração pela correia; esse limite não é incerteza metrológica validada. Pelotas pequenas/desfocadas podem ficar inconclusivas, e trinca não indicada não comprova ausência de defeito. O relatório é uma medida projetada por número, não um ensaio de peneiramento. Não houve teste desta versão em telefone físico nem validação industrial.
+
+## Projeto e compilação
+
+Java 17, Gradle 8.9, Android Gradle Plugin 8.7.3, SDK/build-tools 35. As dependências continuam em `app/build.gradle`. Configure o SDK em `local.properties` ou no Android Studio. Execute:
+
+```sh
+./gradlew assembleDebug testDebugUnitTest lintDebug
+```
+
+O modelo e todos os arquivos de produção estão em `app/src/main`. `ml_training` e `verification` incluem material de treinamento e evidências históricas, que conservam os números e versões originais. Evidências da ROI ativa ficam em `verification/roi-active-0.10.0`; as da calibração pela correia permanecem em `verification/belt-0.9.0`.
+
+## Funcionalidades mantidas da 0.8.1
+
+A versão conserva busca inicial de ajustes, calibração por objeto escolhido, ajuste de elipses, forma aparente 2D b/a, revisão de trincas, classes fixas e exportação PNG/CSV/JSON. Uma foto não mede esfericidade 3D nem equivale a um ensaio de peneiramento.
+
+## Sugestão inicial de detecção — correção 0.8.1
+
+Ao abrir ou fotografar, a busca compara **quatro perfis × três sensibilidades (55/75/90%) × dois métodos (bordas e LoG)**, totalizando 24 combinações, ou 25 se o ajuste atual for diferente. A configuração atual vem primeiro. LoG médio com sensibilidade de 75% é testado logo a seguir, mesmo quando LoG não estava selecionado. Os métodos são intercalados, para que a restrição de tempo não deixe LoG sempre por último.
+
+O problema da 0.8.0 foi demonstrado pelos prints enviados: o automático tinha menos marcações que o manual com LoG médio/74%. Havia duas limitações: LoG só entrava na busca se fosse o ajuste atual; a pontuação recompensava a proporção de elipses válidas e podia preferir uma seleção incompleta. Não bastava aumentar a sensibilidade ou escolher a maior contagem, porque algumas opções dividiam objetos e ultrapassavam 180 marcações.
+
+**Critério novo:** a busca mede quanto da região visual de primeiro plano é explicada pela união das marcações, e quanto dessa área tem elipses válidas. Contornos duplicados não multiplicam cobertura. A qualidade das bordas é ponderada por área, para evitar premiar muitas elipses minúsculas em detrimento de pelotas maiores. Também são consideradas pureza de primeiro plano, estabilidade e sobreposições. Ajustes parciais/inconclusivos mantêm seus alertas; o algoritmo não os transforma artificialmente em elipses válidas nem os inclui indevidamente na esfericidade média.
+
+A evidência de imagem usa uma cópia em cinza de até 384 px, suavização e limiar Otsu. Quando há uma tendência forte de iluminação, um plano de fundo estimado por quantis locais é subtraído antes do limiar; os indicadores dessa compensação são registrados no JSON. A polaridade claro/escuro vem do contraste entre interior e exterior de elipses confiáveis, com escolha de um resultado de apoio entre as opções. Baixo contraste, polaridade ambígua ou máscara quase vazia/cheia desativam esse critério; nesse caso usa-se a pontuação geométrica anterior, com aviso de pouca evidência quando aplicável. Não é uma segmentação verdadeira conhecida e pode confundir sombra com objeto. A cobertura percentual é **área visual explicada**, não acurácia nem percentual de pelotas corretamente identificadas.
+
+Com evidência disponível, o escore soma 45×cobertura do primeiro plano + 25×cobertura por elipses válidas + 15×qualidade de ajuste ponderada por área + 10×concordância + 5×pureza + até 1 ponto por Rosin–Rammler, e desconta sobreposição, objetos válidos abaixo do mínimo quando calibrados e limite de candidatos. O resultado é limitado a 0–100. Não é probabilidade. As contagens não entram diretamente como prêmio nesse critério. Sem evidência suficiente, mantém-se o escore geométrico v1. Os pesos são experimentais.
+
+**Rosin–Rammler/Weibull**, por número e com n≥12, continua sendo auxiliar. Não é normal e não altera diâmetros nem força uma curva. A comparação não pressupõe uma média de 12 mm. O mínimo esperado de **5 mm** continua configurável (0 desativa), e só pontua com escala física externa independente; escala estimada pela média não ativa o critério. Nenhum objeto é apagado por essa regra. O arquivo de teste recebido não tem escala física validada e foi comparado em pixels.
+
+A busca mantém o orçamento de 30 s verificado entre opções, sem interromper uma operação JNI em andamento; o preparo das evidências e a análise de trincas podem acrescentar tempo. A interface mostra progresso e permite cancelar a busca usando o ajuste atual. A triagem de trincas roda somente na opção aplicada. A comparação é na foto parada; a câmera ao vivo usa um único ajuste. É possível desligar **Sugerir ajuste ao abrir ou fotografar** e usar **Aplicar manual**.
+
+**Sugestão → comparação:** mostra método, perfil, sensibilidade, pontos, elipses válidas/total, cobertura visual, sobreposições e discrepância RR. Na 0.10.0, todos esses critérios são calculados no recorte ativo. Alterar a ROI invalida a comparação antiga e exige segmentação ou busca explícita. Alterar apenas a calibração recalcula a recomendação no mesmo conjunto de opções, sem trocar contornos automaticamente. A referência excluída é localizada por sua geometria arquivada, nunca por um índice que possa apontar para outra pelota após o recorte. A área dessa referência não entra na pontuação. Trocar ajuste reanalisa trincas e descarta as revisões manuais.
+
+**Rastreabilidade:** JSON registra `photo_setting_search_coverage_v2`, opções aplicadas/recomendadas, parâmetros, cobertura total/válida, pureza, qualidade ponderada, resolução/limiar/polaridade da evidência e hipóteses de escala. CSV mantém 32 colunas. O detector, refinador elíptico, medidas, compositor PNG e classificador de trincas não foram retreinados nem modificados nesta correção.
+
+**Arquivo enviado:** a reprodução no original de 1536×865 px obteve 68 marcações no automático 0.8.0, 122 no manual LoG médio/74% e 125 no novo automático LoG médio/90%. As 122 marcações do manual tiveram correspondência um a um no novo resultado; as três adicionais são inconclusivas, duas de borda. Isso é concordância com o ajuste de referência, **não verdade-terreno**. Os prints do celular mostram 80/124; são referências de uso e não devem ser confundidos com a reprodução no arquivo original aqui disponível. Outros arquivos, resoluções, codificações e versões de OpenCV podem produzir resultados diferentes.
+
+A comparação visual e as evidências completas estão em `verification/coverage-0.8.1`. É necessário revisar as marcações e validar em celular físico e amostras reais.
+
+## Calibrar tocando na referência
+
+1. Fotografe ou abra a imagem e espere a identificação das pelotas. Se usar uma esfera padrão, coloque-a no mesmo plano e distância das pelotas, com boa visibilidade do contorno.
+2. Toque na elipse da pelota que você consegue localizar fisicamente. No mesmo painel usado para revisar trincas, toque em **Calibrar**. Se o classificador estiver indisponível, o toque abre a calibração diretamente. O aplicativo nunca escolhe sozinho qual objeto é o padrão.
+3. Na imagem ampliada, escolha **Pelota · eixo maior**, **Pelota · eixo menor** ou **Esfera padrão · diâmetro**. A linha amarela indica a dimensão. Meça com paquímetro o mesmo eixo e informe o valor em **mm** (aceita vírgula ou ponto). Na esfera, informe o diâmetro conhecido.
+4. Confira a prévia de px/mm, eixos em mm, média e número de classes. Escolha a largura de classe (por exemplo, 1 mm) e toque em **Aplicar escala**. A escala de toda a foto e o histograma são recalculados imediatamente.
+5. A referência recebe a marca **REF**. Toque nela para editar a medida. Em uma pelota incluída na amostra, o toque abre o painel de revisão, com o botão Calibrar; em uma referência excluída ou fora da ROI, abre diretamente a calibração.
+
+A esfera padrão fica **excluída das estatísticas por padrão**. A pelota medida com paquímetro permanece incluída por padrão. O campo **Excluir referência das estatísticas** permite alterar essa escolha. A exclusão remove o objeto da contagem de pelotas, contagem de trincas, média de forma e histograma; o contorno REF continua visível. As revisões manuais ficam preservadas na lista completa e reaparecem se o objeto for reincluído. Não confunda um número renumerado na ROI com a identidade original da referência.
+
+Só é possível calibrar por uma elipse inteira, ajustada e sem alerta. Contorno errado gera escala errada: confira a sobreposição antes de aplicar. O formulário amplia a referência, mas não oferece ajuste manual de sua borda nesta versão. **Cancelar** ou informar medida inválida mantém a escala anterior. A escolha da dimensão importa: para eixos de 12 e 10 mm, informar 12 mm como eixo maior não torna o diâmetro equivalente igual a 12 mm.
+
+**Cálculo:** px/mm = dimensão da elipse na imagem original orientada / dimensão real informada. Para a esfera padrão, usa-se o diâmetro equivalente à área, √(eixo maior × eixo menor); os dois eixos são mostrados para conferência. Uma projeção alongada exibe uma observação. Para os eixos maior e menor, a elipse é mapeada de volta à imagem original antes da medição, inclusive se os fatores de redimensionamento horizontal e vertical diferirem. O histograma continua usando diâmetro equivalente à área e classes definidas em mm, sem forçar uma média ou faixa.
+
+**Vínculo à foto:** a referência e sua escala não passam para outra imagem. Alterar a ROI conserva a escala e a marca REF, inclusive fora da área; os objetos da amostra são recalculados. Reanalisar a mesma foto conserva a calibração apenas quando o mesmo índice de objeto, dimensões e geometria permanecem idênticos; se o contorno mudar, a referência é removida e deve ser escolhida novamente. Não há busca automática de uma referência semelhante. Outra distância, zoom ou plano exige nova referência.
+
+**Escala / mm** mantém as opções manuais e acrescenta **Usar objeto selecionado na foto** para mudar as classes/exclusões sem perder a referência. **Remover escala** elimina também a referência e sua exclusão, retornando ao histograma em pixels; as regras da ROI continuam valendo.
+
+**Registro:** o PNG mantém original → imagem com marcações/REF → resumo da medida e escala → histograma. O JSON `physical_scale.selected_object` registra seleção pelo usuário, identificador único, data, índice da detecção na imagem completa, número exibido quando escolhida, tipo de medida, valor em mm, comprimento em pixels originais, px/mm, elipse original/analisada e exclusão. O CSV acrescenta seis colunas de calibração, totalizando 32; as 26 anteriores mantêm posição. Quando a referência estiver excluída, ela fica no bloco de calibração do JSON, sem aparecer como uma pelota da amostra.
+
+Esta é uma **calibração de escala 2D por uma referência**, sem correção de perspectiva, distorção de lente ou diferenças de profundidade. A medida digitada não é verificada pelo aplicativo. Uma referência bem medida não corrige contornos detectados incorretamente nem garante equivalência com granulometria por peneiramento.
+
+## Granulometria e ROI
+
+Para elipses válidas, área projetada estimada = πab, raio equivalente = √(ab), diâmetro equivalente = 2√(ab). O histograma conserva classes configuráveis, inclusive 1 mm, e usa o diâmetro equivalente à área. Eixos individuais são registrados em pixels e em mm quando houver calibração. O campo de px/mm continua se referindo à imagem original orientada e o redimensionamento interno é corrigido. Não se força média de 12 mm nem faixa de 8–16 mm.
+
+A ROI retangular exige a elipse inteira dentro dos limites usando suas extensões rotacionadas exatas. A ROI circular calcula a maior distância da borda da elipse ao centro da ROI, em vez de substituir a elipse por um círculo de raio equivalente. A ROI não recorta/redimensiona a imagem nem altera px/mm. Mudar a seleção atualiza a média de forma, a contagem e o histograma; as revisões de trincas são preservadas para os objetos que voltarem à seleção.
+
+Objetos sem ajuste confiável retêm a estimativa anterior de localização/área e ficam marcados para revisão. Podem entrar no histograma se o usuário permitir objetos de revisão; nunca entram na média b/a. A escolha “Localização alternativa · LoG” muda a geração de candidatos, mas os marcadores finais também passam pelo ajuste elíptico.
+
+## Método e limites
+
+O detector anterior localiza candidatos com gradientes/Hough e CLAHE, com alternativa LoG. Para cenas esparsas, contornos de objetos isolados ajudam quando pelotas alongadas não geram candidatos circulares. Ao redor de cada candidato, o ajuste busca gradientes de borda em 96 direções, seleciona observações na vizinhança esperada e usa ajuste robusto de elipse com amostragem determinística, refinamento e gates de cobertura, resíduo e coerência de polaridade. Não é segmentação neural, não corrige perspectiva e não garante contorno correto em pelotas sobrepostas. Propostas circulares internas são apenas sementes de localização; a elipse final é medida a partir de bordas observadas.
+
+Os gates incluem cobertura ≥55% das direções, pelo menos sete dos oito setores, resíduo normalizado RMS ≤0,055 e ≥70% de coerência de polaridade entre bordas usadas. São parâmetros experimentais, não uma probabilidade de acerto. Elipses muito alongadas, fora da faixa inicial, ou sem borda suficiente podem ficar inconclusivas.
+
+O modelo de trincas usa o mesmo recorte circular de referência da versão 0.5.0, mesmo que a elipse desloque o centro ou altere a área. Isso preserva seus 72 atributos e o escore; os traçados são limitados ao interior da elipse. Elipses com b/a<0,65 ficam inconclusivas na triagem de trincas porque diferem muito do domínio de treinamento. Essa restrição do classificador não exclui uma elipse geometricamente válida da média de forma. As limitações do treino sintético e dos rótulos provisórios continuam; não houve validação na usina.
+
+## Saída e dados
+
+O PNG conserva a sequência: original sem marcações → imagem com elipses/trincas/ROI → resumo com média b/a e n → histograma. O arquivo original separado permanece inalterado. CSV e JSON preservam os campos anteriores e acrescentam eixos maior/menor, orientação, b/a, validade do ajuste, inclusão na média, eixos em mm e indicadores de ajuste. Valores de forma sem ajuste são vazios/null, não 1.
+
+O JSON `shape_analysis` registra fórmula, média, população, exclusões e `true_3d_sphericity:false`. O campo `radius_px` é o raio equivalente à área; não é o semieixo maior. `ellipse_major_axis_px` e `ellipse_minor_axis_px` são diâmetros completos. A orientação é a do semieixo maior em graus [0,180), a partir do eixo x da foto, no sentido horário em coordenadas com y crescente para baixo. A circularidade `roundness` de elipses ajustadas é derivada do perímetro aproximado da elipse, não do perímetro real segmentado.
+
+## Compilar e verificar
+
+JDK 17, SDK Platform 35, Build Tools 35.0.0, Gradle 8.9, AGP 8.7.3, OpenCV Android 4.12.0. `./gradlew assembleDebug testDebugUnitTest lintDebug`.
+
+A chave de desenvolvimento (alias androiddebugkey) mantém compatibilidade de atualização com a 0.11.0. Ela **não fica no repositório**: para compilar localmente, copie-a para `signing/prototype.keystore` (ignorado pelo git). Não é chave de publicação em produção.
+
+### Compilação automática (GitHub Actions)
+
+Cada envio para `main` executa `.github/workflows/android.yml`: `assembleDebug testDebugUnitTest lintDebug`, conferência do certificado do APK (SHA-256 `0D77D291…D66B38`) e publicação do APK e dos relatórios como artefatos da execução. Segredos necessários em *Settings → Secrets and variables → Actions*: `PV_KEYSTORE_BASE64` (keystore em base64), `PV_STORE_PASSWORD`, `PV_KEY_PASSWORD`, `PV_KEY_ALIAS`. Sem o segredo da chave, o APK é gerado com chave temporária e não atualiza instalações existentes. O projeto gera APKs ARM64 e x86_64, mas a entrega é ARM64.
+
+Verificações da sugestão: `verification/autotune-0.8.0`. Verificações da calibração: `verification/reference-0.7.0`; histórico geométrico: `verification/ellipse-0.6.0`. Ensaios analíticos verificam eixos, razão e ângulo em 24 elipses de contraste/polaridade/orientação conhecidos; também testam região uniforme e objeto isolado alongado. Testes Android simulados cobrem ROI rotacionada/circular, média, exclusões, calibração de eixos, CSV/JSON e PNG sem alteração da original. Os relatórios PNG foram desenhados pelo compositor real do app em Robolectric com gráficos nativos; as detecções foram calculadas pelas mesmas classes Java em JNI desktop. Não são capturas da câmera de um telefone.
+
+O código e os dados do treino da versão 0.5.0 continuam em `ml_training`; documentação e validações anteriores foram preservadas como histórico. Não houve execução em celular físico nem validação metrológica em amostras reais com verdade-terreno de forma 3D.

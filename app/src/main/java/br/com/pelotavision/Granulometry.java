@@ -1,0 +1,128 @@
+package br.com.pelotavision;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+/** Fixed-width classes over the observed range; bin width never scales diameters. */
+public final class Granulometry {
+    public static final int MAX_BINS=5000;
+    public static final class Settings {
+        public final double originalPixelsPerMm,binWidthMm,knownMeanMm,referencePixels,referenceMm;
+        public final boolean excludePartial,excludeReview;
+        public final String calibrationSource;
+        public final ObjectCalibration.Reference selectedObject;
+        public final BeltCalibration.Reference beltReference;
+        public Settings(double pixelsPerMm,double binWidth,boolean partial,boolean review) {
+            this(pixelsPerMm,binWidth,partial,review,"pixels_per_mm",Double.NaN,Double.NaN,Double.NaN);
+        }
+        private Settings(double scale,double binWidth,boolean partial,boolean review,String source,double mean,double pixels,double mm) {this(scale,binWidth,partial,review,source,mean,pixels,mm,null);}
+        private Settings(double scale,double binWidth,boolean partial,boolean review,String source,double mean,double pixels,double mm,ObjectCalibration.Reference selectedObject) {
+            this(scale,binWidth,partial,review,source,mean,pixels,mm,selectedObject,null);
+        }
+        private Settings(double scale,double binWidth,boolean partial,boolean review,String source,double mean,double pixels,double mm,ObjectCalibration.Reference selectedObject,BeltCalibration.Reference beltReference) {
+            this.selectedObject=selectedObject;this.beltReference=beltReference;
+            positive(scale);positive(binWidth);
+            originalPixelsPerMm=scale;binWidthMm=binWidth;excludePartial=partial;excludeReview=review;
+            calibrationSource=source;knownMeanMm=mean;referencePixels=pixels;referenceMm=mm;
+        }
+        public static Settings selectedObject(ObjectCalibration.Reference reference,double binWidth,boolean partial,boolean review){
+            if(reference==null)throw new IllegalArgumentException("Selecione a referência na foto.");
+            return new Settings(reference.originalPixelsPerMm,binWidth,partial,review,"user_selected_object",Double.NaN,reference.originalReferencePixels,reference.realMm,reference);
+        }
+        public Settings withHistogram(double binWidth,boolean partial,boolean review){return new Settings(originalPixelsPerMm,binWidth,partial,review,calibrationSource,knownMeanMm,referencePixels,referenceMm,selectedObject,beltReference);}
+        public static Settings belt(BeltCalibration.Reference reference,double binWidth,boolean partial,boolean review){
+            if(reference==null)throw new IllegalArgumentException("Marque as bordas da correia.");
+            return new Settings(reference.originalPixelsPerMm,binWidth,partial,review,"belt_width_user_confirmed",Double.NaN,reference.originalWidthPixels,reference.realWidthMm,null,reference);
+        }
+        public static Settings reference(double pixels,double mm,double binWidth,boolean partial,boolean review) {
+            positive(pixels);positive(mm);
+            return new Settings(pixels/mm,binWidth,partial,review,"reference_length",Double.NaN,pixels,mm);
+        }
+        public static Settings estimatedMean(double mean,double binWidth,boolean partial,boolean review) {
+            positive(mean);
+            return new Settings(1,binWidth,partial,review,"assumed_mean",mean,Double.NaN,Double.NaN);
+        }
+        public static Settings pixels(double binWidth){return new Settings(1,binWidth,true,false,"pixels_only",Double.NaN,Double.NaN,Double.NaN);}
+        public boolean pixelsOnly(){return "pixels_only".equals(calibrationSource);}
+        public String unit(){return pixelsOnly()?"px":"mm";}
+        public boolean estimated(){return calibrationSource.startsWith("assumed_mean");}
+        public double analyzedPixelsPerMm(int ow,int oh,int width,int height) {
+            if(beltReference!=null&&!beltReference.matches(ow,oh,width,height))throw new IllegalArgumentException("A referência da correia pertence a outra imagem. Recalibre.");
+            double value=pixelsOnly()?1:originalPixelsPerMm*resizeRatio(ow,oh,width,height);positive(value);return value;
+        }
+    }
+    private static void positive(double v) {
+        if(!Double.isFinite(v)||v<=0)throw new IllegalArgumentException("Escala, referência e classe devem ser números positivos.");
+    }
+    private static double resizeRatio(int ow,int oh,int width,int height) {
+        if(ow<=0||oh<=0||width<=0||height<=0)throw new IllegalArgumentException("Dimensões inválidas.");
+        return Math.sqrt((double)width/ow*((double)height/oh));
+    }
+    public static final class Item {
+        public final double diameterPx;
+        public final boolean partial,review;
+        public Item(double diameter,boolean partial,boolean review) {diameterPx=diameter;this.partial=partial;this.review=review;}
+    }
+    public static final class Distribution {
+        public final Settings settings;
+        public final double analyzedPixelsPerMm,d10,d50,d90,requestedBinWidthMm,meanMm,minMm,maxMm;
+        public final int included,excluded,originalWidth,originalHeight;
+        private final int[] counts;
+        private final double firstIndex;
+        private Distribution(Settings cfg,double scale,double first,int[] bins,List<Double> diameters,int excluded,int ow,int oh) {
+            settings=cfg;analyzedPixelsPerMm=scale;counts=bins.clone();included=diameters.size();this.excluded=excluded;
+            requestedBinWidthMm=cfg.binWidthMm;firstIndex=first;
+            originalWidth=ow;originalHeight=oh;Collections.sort(diameters);
+            d10=percentile(diameters,.10);d50=percentile(diameters,.50);d90=percentile(diameters,.90);
+            minMm=included==0?Double.NaN:diameters.get(0);maxMm=included==0?Double.NaN:diameters.get(included-1);
+            double mean=0;for(double v:diameters)mean+=v/included;meanMm=included==0?Double.NaN:mean;
+        }
+        public int binCount(){return counts.length;}
+        public int count(int index){return counts[index];}
+        public double lower(int index){return (firstIndex+index)*settings.binWidthMm;}
+        public double upper(int index){return lower(index+1);}
+        public double percent(int index){return included==0?0:100.*counts[index]/included;}
+        public boolean includes(Item item) {return accepted(item,settings);}
+        public double diameterMm(double pixels){return pixels/analyzedPixelsPerMm;}
+    }
+    private static boolean accepted(Item item,Settings settings) {
+        return Double.isFinite(item.diameterPx)&&item.diameterPx>0&&
+            !(settings.excludePartial&&item.partial)&&!(settings.excludeReview&&item.review);
+    }
+    public static Distribution compute(List<Item> items,Settings settings,int ow,int oh,int width,int height) {
+        double ratio=resizeRatio(ow,oh,width,height);
+        List<Double> pixels=new ArrayList<>();int excluded=0;
+        for(Item item:items){if(accepted(item,settings))pixels.add(item.diameterPx);else excluded++;}
+        if("assumed_mean".equals(settings.calibrationSource)) {
+            if(pixels.isEmpty())throw new IllegalArgumentException("Não há pelotas incluídas para estimar a escala pela média.");
+            double meanPixels=0;for(double v:pixels)meanPixels+=v/pixels.size();
+            settings=new Settings(meanPixels/settings.knownMeanMm/ratio,settings.binWidthMm,settings.excludePartial,settings.excludeReview,
+                "assumed_mean_locked",settings.knownMeanMm,Double.NaN,Double.NaN);
+        }
+        double scale=settings.analyzedPixelsPerMm(ow,oh,width,height),min=Double.POSITIVE_INFINITY,max=0;
+        List<Double> diameters=new ArrayList<>();
+        for(double px:pixels){double mm=px/scale;positive(mm);diameters.add(mm);min=Math.min(min,mm);max=Math.max(max,mm);}
+        double first=diameters.isEmpty()?0:classIndex(min,settings.binWidthMm);
+        double last=diameters.isEmpty()?-1:Math.max(first,Math.ceil(boundaryQuotient(max,settings.binWidthMm))-1),number=last-first+1;
+        if(!Double.isFinite(first)||!Double.isFinite(last)||number>MAX_BINS||number<0||
+                (!diameters.isEmpty()&&(first+1)*settings.binWidthMm<=first*settings.binWidthMm))
+            throw new IllegalArgumentException("Mais de 5000 classes ou largura muito pequena. Aumente a classe; ela não será alterada automaticamente.");
+        int[] bins=new int[(int)number];
+        // The final upper edge is inclusive, as in standard numeric histograms.
+        for(double mm:diameters)bins[Math.min(bins.length-1,(int)(classIndex(mm,settings.binWidthMm)-first))]++;
+        return new Distribution(settings,scale,first,bins,diameters,excluded,ow,oh);
+    }
+    private static double boundaryQuotient(double diameter,double width) {
+        double quotient=diameter/width,nearest=Math.rint(quotient);
+        // Correct only floating point roundoff at a boundary (e.g. 0.3/0.1).
+        if(Math.abs(quotient-nearest)<=4*Math.ulp(quotient))quotient=nearest;
+        return quotient;
+    }
+    private static double classIndex(double diameter,double width){return Math.floor(boundaryQuotient(diameter,width));}
+    private static double percentile(List<Double> sorted,double q) {
+        if(sorted.isEmpty())return Double.NaN;
+        double position=(sorted.size()-1)*q;int lo=(int)Math.floor(position),hi=(int)Math.ceil(position);
+        return sorted.get(lo)+(sorted.get(hi)-sorted.get(lo))*(position-lo);
+    }
+}

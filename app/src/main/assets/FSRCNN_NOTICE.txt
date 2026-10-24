@@ -1,0 +1,10 @@
+FSRCNN TensorFlow implementation and pretrained model: Saafke / FSRCNN_Tensorflow
+https://github.com/Saafke/FSRCNN_Tensorflow
+Licensed under Apache License 2.0; see FSRCNN_LICENSE.txt.
+
+The upstream x2 model was trained on T91 and finetuned on General100, as reported by its author. This model has not been trained on pellet images. No learned weights were changed. The packaged graph ends at conv8; PelotaVision performs the original x2 channel rearrangement and scalar output bias in Java.
+
+Channel rearrangement follows the OpenCV dnn_superres reference implementation, distributed under Apache License 2.0:
+https://github.com/opencv/opencv_contrib/blob/4.12.0/modules/dnn_superres/src/dnn_superres.cpp
+
+Model use in PelotaVision is experimental. Contour proposals may use this model; final ellipse refinement and crack inference use original grayscale pixels.

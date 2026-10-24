@@ -1,0 +1,17 @@
+{
+  "source_repository": "https://github.com/Saafke/FSRCNN_Tensorflow",
+  "model_url": "https://raw.githubusercontent.com/Saafke/FSRCNN_Tensorflow/master/models/FSRCNN_x2.pb",
+  "license": "Apache-2.0",
+  "download_date": "2026-10-20",
+  "training_data_as_reported_by_author": [
+    "T91",
+    "General100"
+  ],
+  "pellet_specific_training": false,
+  "new_training_performed": false,
+  "adaptation": "Remove terminal DepthToSpace, NHWC_output and NCHW_output from frozen GraphDef. OpenCV DNN forwards conv8. Java reproduces x2 channel shuffle and applies the unchanged b8 scalar (0.20388786494731903) after shuffle. Weights unchanged.",
+  "original_sha256": "366b33f0084c7b3f2bf6724f0a2c77bca94fcec9d7b6d72389d330073b380d5c",
+  "packaged_sha256": "8672ea3a739eb0c2e23c4d21f7d48f3826eb517320bb98879294c602b9c3806d",
+  "new_runtime_dependency": false,
+  "inference": "OpenCV DNN CPU, offline"
+}

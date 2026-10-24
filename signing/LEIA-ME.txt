@@ -1,0 +1,3 @@
+Coloque aqui prototype.keystore para compilar localmente.
+O arquivo e ignorado pelo git. No GitHub Actions a chave vem do segredo PV_KEYSTORE_BASE64.
+Certificado esperado (SHA-256): 0D77D2917BD808A17F92E52568DBB6BC2B1767BE0E25CA93FADC8E41C8D66B38

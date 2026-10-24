@@ -1,0 +1,11 @@
+.gradle/
+**/build/
+local.properties
+*.iml
+.idea/
+
+# Chaves de assinatura nunca entram no repositorio
+signing/*.keystore
+signing/*.jks
+*.keystore
+*.jks
