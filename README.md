@@ -1,4 +1,31 @@
-# PelotaVision — Android 0.11.0
+# PelotaVision — Android 0.12.0 · Windows 0.3.0
+
+## Rede neural StarDist — novo na 0.12.0 (experimental)
+
+Há um terceiro método de localização, ao lado de **Bordas** e **LoG**: a **Rede neural (StarDist)**. No Android, fica em Ajustes de detecção → Método de localização. No Windows, fica no seletor "Metodo".
+
+A rede prevê cada pelota como um polígono estrelado de 32 raios. Esse formato separa bem pelotas que se tocam. A rede só **propõe** os objetos. A elipse final continua medida nas bordas da foto, com os mesmos gates, e trincas, calibração, CSV e PNG não mudaram.
+
+O JSON ganha o bloco `neural_model`, que registra:
+
+- id e SHA-256 do modelo;
+- limiar usado;
+- descrição do treino;
+- validação com cenas fora do treino;
+- `validated_on_plant_photos:false`.
+
+A busca automática de ajuste **só inclui a rede quando ela é o método escolhido**. Com Bordas ou LoG, o comportamento da 0.11.0 é preservado.
+
+**O modelo distribuído é de demonstração.** Foi treinado nas 7 cenas provisórias de `ml_training/data`, não em fotos da usina. A comparação abaixo foi medida no CI do Windows, com o núcleo Java real e OpenCV 4.12, no perfil Auto com sensibilidade 75. A referência são os círculos provisórios, então os números servem ao desenvolvimento, não à metrologia.
+
+| Cena fora do treino | Bordas F1 | LoG F1 | Rede F1 |
+|---|---|---|---|
+| cluster (34 pelotas encostadas) | 0,97 | 0,39 | 1,00 |
+| paired40 (40 pelotas, outro fundo) | 0,98 | 0,11 | 0,98 |
+
+Nessas duas cenas, a rede empata com Bordas. Isso **não** demonstra superioridade. O LoG fica em desvantagem porque foi travado no perfil Auto, enquanto a busca do app normalmente escolheria outro perfil para ele. O ganho real só pode ser medido com fotos rotuladas da usina.
+
+O retreino é reproduzível: localmente, ou pelo GitHub Actions ("StarDist - treinar modelo de pelotas"), que grava o modelo de volta no branch. A paridade Java × Python é verificada no CI: 30/30 objetos, com desvio de centro abaixo de 0,001 px. Detalhes, formato de anotação por contorno e próximos passos estão em `ml_training/stardist/README.md`.
 
 ## Segmentação detalhada — novo na 0.11.0
 
