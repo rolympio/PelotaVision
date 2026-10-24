@@ -123,7 +123,9 @@ public final class NeuralPelletDetector {
         for (int i = 0; i < fr.length; i++) {
             scales[i] = nominalRadius / (fr[i] * w);
             List<Candidate> c = new ArrayList<>();
-            candidatesForScale(gray, scales[i], thr, c);
+            // Correia: a escolha de escala usa só um recorte central que cabe em um bloco (mediana do raio).
+            Mat trial = cfg.belt ? centerCrop(gray, scales[i]) : gray;
+            try { candidatesForScale(trial, scales[i], thr, c); } finally { if (trial != gray) trial.release(); }
             total += c.size();
             boolean[] ignored = {false};
             List<Kept> kept = nms(c, ignored, cfg.maxObjects, cfg.belt ? 4 * MAX_CANDIDATES : MAX_CANDIDATES);
@@ -152,6 +154,15 @@ public final class NeuralPelletDetector {
         lastScales = new ScaleReport(scales, medians, counts, finalScale);
         out.sort(Comparator.comparingDouble((PelletDetector.Detection d) -> d.y).thenComparingDouble(d -> d.x));
         return new PelletDetector.Result(out, w, h, total, (System.nanoTime() - start) / 1_000_000, limit[0], "stardist_" + id);
+    }
+
+    /** Recorte central com lado (em px originais) que, reescalado, cabe em um bloco da rede. */
+    Mat centerCrop(Mat gray, double scale) {
+        int side = (int) Math.floor(tile / scale);
+        int cw = Math.min(gray.cols(), side), ch = Math.min(gray.rows(), side), x0 = (gray.cols() - cw) / 2, y0 = (gray.rows() - ch) / 2;
+        Mat sub = gray.submat(y0, y0 + ch, x0, x0 + cw), copy = sub.clone();
+        sub.release();
+        return copy;
     }
 
     /** Mediana explícita (média dos dois centrais em n par), igual ao Python; NaN se vazio. */
@@ -250,7 +261,8 @@ public final class NeuralPelletDetector {
     // ------------------------------------------------------------ geometria (idêntica ao Python)
 
     List<Kept> nms(List<Candidate> candidates, boolean[] limit) { return nms(candidates, limit, MAX_OBJECTS, MAX_CANDIDATES); }
-    List<Kept> nms(List<Candidate> candidates, boolean[] limit, int maxObjects, int maxCandidates) {
+    List<Kept> nms(List<Candidate> candidates, boolean[] limit, int maxObjects, int maxCandidates) { return nms(candidates, limit, maxObjects, maxCandidates, nmsOverlap, minRadiusNet); }
+    static List<Kept> nms(List<Candidate> candidates, boolean[] limit, int maxObjects, int maxCandidates, double nmsOverlap, double minRadiusNet) {
         List<Candidate> order = new ArrayList<>(candidates);
         order.sort((a, b) -> Float.compare(b.score, a.score)); // estável, como sorted() do Python
         if (order.size() > maxCandidates) { limit[0] = true; order = order.subList(0, maxCandidates); }

@@ -1,5 +1,33 @@
 # PelotaVision — Android 0.12.0 · Windows 0.3.0
 
+## Cena Bancada / Correia — novo na 0.12.0
+
+O app passa a ter duas cenas:
+
+- **Bancada:** é o padrão. Mantém exatamente os perfis, os limites e a lista de busca da 0.11.0.
+- **Correia:** para fotos de câmera fixa sobre a correia, com pelotas pequenas e numerosas.
+
+No Android, a escolha fica em Ajustes de detecção → Cena. No Windows, fica no seletor "Cena".
+
+O que muda na **Correia**:
+
+- **Perfis de raio:** de 0,4% a 1,6% da largura da foto (Finas, Médias, Grossas e Auto).
+- **Até 5000 objetos por foto.** A bancada continua com 600.
+- **Resolução:** o trabalho usa até 1600 px, e o ajuste elíptico amplia a imagem até 2× para que pelotas de 5 a 10 px tenham borda suficiente.
+- **Ajustes internos:** as bandas Hough e as escalas da rede são próprias da correia, e a evidência da busca é calculada em 1024 px.
+- **Modo detalhado indisponível.** Ele mede os perfis pelo bloco, não pela foto.
+- **Triagem de trincas:** fica inconclusiva por construção, porque o recorte da pelota tem menos de 20 px.
+- **Pelotas encobertas:** são ajustadas só pela borda visível.
+- **JSON:** ganha o bloco `scene` com todos esses parâmetros.
+
+**Primeira execução nas 371 fotos reais de correia**, em `ml_training/data_belt`, sem rótulos e no CI do Windows. Os números abaixo são contagens de 8 quadros de discos diferentes, sem verdade-terreno:
+
+- **LoG:** passou de 1 a 309 objetos na bancada para 1000 a 2500 na correia. O raio mediano ficou coerente com o espaçamento entre pelotas.
+- **Bordas:** encontra poucas pelotas (40 a 150), porque o Hough não lida bem com empacotamento denso.
+- **Rede de demonstração:** chega a 1300 a 3300 objetos, mas é lenta e **marca cerca de 1100 objetos numa correia vazia**. Ela nunca viu esse tipo de foto, então não use a rede na correia antes de treinar com dados de correia rotulados.
+
+Por ora, o método recomendado para correia é o **LoG**.
+
 ## Rede neural StarDist — novo na 0.12.0 (experimental)
 
 Há um terceiro método de localização, ao lado de **Bordas** e **LoG**: a **Rede neural (StarDist)**. No Android, fica em Ajustes de detecção → Método de localização. No Windows, fica no seletor "Metodo".

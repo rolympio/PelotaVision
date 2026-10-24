@@ -2,12 +2,16 @@ package br.com.pelotavision;
 
 import org.json.JSONObject;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
 
 import java.util.List;
 
 import static org.junit.Assert.*;
 
 /** Opção neural no fluxo de ajuste: identidade, compatibilidade e opt-in na busca. */
+@RunWith(RobolectricTestRunner.class) @Config(sdk=33,manifest=Config.NONE)
 public class NeuralOptionTest {
     @Test public void legacyConstructorKeepsIdsAndNeuralHasItsOwn() {
         assertEquals("log_p1_s75", new DetectionTuner.Option(1, 75, true).id);

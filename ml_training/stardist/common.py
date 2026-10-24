@@ -368,7 +368,13 @@ def detect(run, gray, profile=3, sensitivity=75, details=None, belt=False):
     trials = []
     for frac in (BELT_RADII if belt else PROFILE_RADII)[profile]:
         sc = NOMINAL_RADIUS / (frac * w)
-        cands, kept, limit = _pass(run, gray, sc, thr, belt)
+        trial = gray
+        if belt:  # correia: a escolha de escala usa só um recorte central que cabe em um bloco
+            side = int(math.floor(TILE / sc))
+            cw, ch = min(w, side), min(h, side)
+            x0, y0 = (w - cw) // 2, (h - ch) // 2
+            trial = gray[y0:y0 + ch, x0:x0 + cw]
+        cands, kept, limit = _pass(run, trial, sc, thr, belt)
         cover, rnet = _scale_stats(kept, sc)
         trials.append(dict(scale=sc, cands=len(cands), kept=len(kept), cover=cover, rnet=rnet))
     ok = [t for t in trials if t['kept'] > 0]
