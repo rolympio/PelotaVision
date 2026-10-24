@@ -1,0 +1,207 @@
+{
+ "id": "stardist_demo_20261024_v1",
+ "file": "pellet_stardist.onnx",
+ "sha256": "53c78a9ec69dafc90e45c281408c1050a5cc1763bf514750e5be1808c5c543dc",
+ "demonstration": true,
+ "architecture": "StarDist 2D (Schmidt et al. 2018) reimplementado em PyTorch: U-Net 3 níveis (16-32-64-128) + cabeça 32; 488161 parâmetros",
+ "input": {
+  "name": "input",
+  "shape": [
+   1,
+   1,
+   384,
+   384
+  ],
+  "gray": "BGR2GRAY",
+  "normalization": "(v-p1)/(p99.8-p1) do histograma da imagem reduzida"
+ },
+ "output": {
+  "name": "output",
+  "shape": [
+   1,
+   33,
+   384,
+   384
+  ],
+  "channel0": "probabilidade",
+  "channels": "distâncias em px da rede"
+ },
+ "rays": 32,
+ "tile": 384,
+ "overlap": 64,
+ "nominal_radius_px": 16.0,
+ "norm_low": 0.01,
+ "norm_high": 0.998,
+ "nms_overlap": 0.5,
+ "min_radius_net_px": 3.0,
+ "profile_radius_fraction_of_width": {
+  "0": [
+   0.022
+  ],
+  "1": [
+   0.035
+  ],
+  "2": [
+   0.065
+  ],
+  "3": [
+   0.02,
+   0.042,
+   0.09
+  ]
+ },
+ "threshold": "max(0,2; min(0,8; 0,75 - 0,005 x sensibilidade))",
+ "training": {
+  "groups": [
+   "brown40",
+   "gray42",
+   "gray20",
+   "dense",
+   "cluster",
+   "spaced",
+   "paired40"
+  ],
+  "objects": "225 círculos PROVISÓRIOS do assistente em 7 cenas; uma sintética, demais de origem não comprovada",
+  "iterations": 1500,
+  "seed": 20261024,
+  "torch": "2.5.1+cpu",
+  "note": "Modelo de DEMONSTRAÇÃO do encanamento. Não foi treinado nem validado em fotos da usina."
+ },
+ "validation_holdout": {
+  "trained_without": [
+   "cluster",
+   "paired40"
+  ],
+  "scenes": {
+   "cluster": {
+    "detections": 86,
+    "annotated": 34,
+    "matched": 19,
+    "precision": 0.2209,
+    "recall": 0.5588,
+    "f1": 0.3167,
+    "radius_abs_error_pct": 9.79,
+    "role": "validacao_cena_inteira_fora",
+    "candidates": 10958,
+    "candidate_limit": false,
+    "seconds": 7.46
+   },
+   "paired40": {
+    "detections": 66,
+    "annotated": 40,
+    "matched": 29,
+    "precision": 0.4394,
+    "recall": 0.725,
+    "f1": 0.5472,
+    "radius_abs_error_pct": 18.31,
+    "role": "validacao_cena_inteira_fora",
+    "candidates": 4444,
+    "candidate_limit": false,
+    "seconds": 3.76
+   }
+  },
+  "protocol": "perfil Auto, sensibilidade 75, pós-processamento common.detect sobre o ONNX exportado; casamento guloso centro<0,5r e razão de raios 0,7-1,43 contra círculos PROVISÓRIOS"
+ },
+ "training_fit": {
+  "brown40": {
+   "detections": 42,
+   "annotated": 40,
+   "matched": 40,
+   "precision": 0.9524,
+   "recall": 1.0,
+   "f1": 0.9756,
+   "radius_abs_error_pct": 2.86,
+   "role": "treino",
+   "candidates": 7561,
+   "candidate_limit": false,
+   "seconds": 4.92
+  },
+  "gray42": {
+   "detections": 46,
+   "annotated": 42,
+   "matched": 41,
+   "precision": 0.8913,
+   "recall": 0.9762,
+   "f1": 0.9318,
+   "radius_abs_error_pct": 5.31,
+   "role": "treino",
+   "candidates": 11873,
+   "candidate_limit": false,
+   "seconds": 7.16
+  },
+  "gray20": {
+   "detections": 20,
+   "annotated": 20,
+   "matched": 20,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "radius_abs_error_pct": 3.62,
+   "role": "treino",
+   "candidates": 10499,
+   "candidate_limit": false,
+   "seconds": 6.83
+  },
+  "dense": {
+   "detections": 69,
+   "annotated": 30,
+   "matched": 24,
+   "precision": 0.3478,
+   "recall": 0.8,
+   "f1": 0.4848,
+   "radius_abs_error_pct": 3.35,
+   "role": "treino",
+   "candidates": 9939,
+   "candidate_limit": false,
+   "seconds": 6.5
+  },
+  "cluster": {
+   "detections": 37,
+   "annotated": 34,
+   "matched": 33,
+   "precision": 0.8919,
+   "recall": 0.9706,
+   "f1": 0.9296,
+   "radius_abs_error_pct": 8.13,
+   "role": "treino",
+   "candidates": 8563,
+   "candidate_limit": false,
+   "seconds": 5.79
+  },
+  "spaced": {
+   "detections": 39,
+   "annotated": 19,
+   "matched": 15,
+   "precision": 0.3846,
+   "recall": 0.7895,
+   "f1": 0.5172,
+   "radius_abs_error_pct": 2.15,
+   "role": "treino",
+   "candidates": 7638,
+   "candidate_limit": false,
+   "seconds": 5.1
+  },
+  "paired40": {
+   "detections": 40,
+   "annotated": 40,
+   "matched": 40,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "radius_abs_error_pct": 6.72,
+   "role": "treino",
+   "candidates": 6777,
+   "candidate_limit": false,
+   "seconds": 4.9
+  }
+ },
+ "opencv_parity": {
+  "opencv": "4.12.0",
+  "max_abs_output_diff": 8.392333984375e-05,
+  "detections_ort": 69,
+  "detections_opencv": 69,
+  "seconds_ort": 6.55,
+  "seconds_opencv": 6.31
+ },
+ "license": "Código e pesos: mesmos termos do PelotaVision; método StarDist (BSD-3) reimplementado, sem código copiado."
+}

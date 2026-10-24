@@ -1,0 +1,117 @@
+{
+ "model_sha256": "a86bf26ce8c05946f70302206b6e6e1ee1efb9a863f611afb85445c7277bf264",
+ "iterations": 1500,
+ "batch": 8,
+ "crop": 128,
+ "seed": 20261024,
+ "training_groups": [
+  "brown40",
+  "gray42",
+  "gray20",
+  "dense",
+  "spaced"
+ ],
+ "excluded_groups": [
+  "cluster",
+  "paired40"
+ ],
+ "training_seconds": 934,
+ "torch": "2.5.1+cpu",
+ "parameters": 488161,
+ "final_bce": 0.2645414592325687,
+ "final_dist_mae_weighted_px": 3.517442262172699,
+ "evaluation_protocol": "perfil Auto, sensibilidade 75, pós-processamento common.detect sobre o ONNX exportado; casamento guloso centro<0,5r e razão de raios 0,7-1,43 contra círculos PROVISÓRIOS",
+ "scenes": {
+  "brown40": {
+   "detections": 106,
+   "annotated": 40,
+   "matched": 9,
+   "precision": 0.0849,
+   "recall": 0.225,
+   "f1": 0.1233,
+   "radius_abs_error_pct": 4.24,
+   "role": "treino",
+   "candidates": 8753,
+   "candidate_limit": false,
+   "seconds": 5.94
+  },
+  "gray42": {
+   "detections": 66,
+   "annotated": 42,
+   "matched": 33,
+   "precision": 0.5,
+   "recall": 0.7857,
+   "f1": 0.6111,
+   "radius_abs_error_pct": 5.12,
+   "role": "treino",
+   "candidates": 12204,
+   "candidate_limit": false,
+   "seconds": 7.24
+  },
+  "gray20": {
+   "detections": 20,
+   "annotated": 20,
+   "matched": 20,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "radius_abs_error_pct": 3.85,
+   "role": "treino",
+   "candidates": 11108,
+   "candidate_limit": false,
+   "seconds": 6.62
+  },
+  "dense": {
+   "detections": 65,
+   "annotated": 30,
+   "matched": 24,
+   "precision": 0.3692,
+   "recall": 0.8,
+   "f1": 0.5053,
+   "radius_abs_error_pct": 4.72,
+   "role": "treino",
+   "candidates": 14726,
+   "candidate_limit": false,
+   "seconds": 8.45
+  },
+  "cluster": {
+   "detections": 86,
+   "annotated": 34,
+   "matched": 19,
+   "precision": 0.2209,
+   "recall": 0.5588,
+   "f1": 0.3167,
+   "radius_abs_error_pct": 9.79,
+   "role": "validacao_cena_inteira_fora",
+   "candidates": 10958,
+   "candidate_limit": false,
+   "seconds": 7.46
+  },
+  "spaced": {
+   "detections": 28,
+   "annotated": 19,
+   "matched": 18,
+   "precision": 0.6429,
+   "recall": 0.9474,
+   "f1": 0.766,
+   "radius_abs_error_pct": 2.18,
+   "role": "treino",
+   "candidates": 8244,
+   "candidate_limit": false,
+   "seconds": 4.96
+  },
+  "paired40": {
+   "detections": 66,
+   "annotated": 40,
+   "matched": 29,
+   "precision": 0.4394,
+   "recall": 0.725,
+   "f1": 0.5472,
+   "radius_abs_error_pct": 18.31,
+   "role": "validacao_cena_inteira_fora",
+   "candidates": 4444,
+   "candidate_limit": false,
+   "seconds": 3.76
+  }
+ }
+}

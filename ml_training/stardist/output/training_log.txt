@@ -1,3 +1,54 @@
-commit 40e25e6 iteracoes 3000 nproc 2
-alvos: 35 pares cena/escala em 11s
-it     1  bce 0.6430  dist_mae_pond 5.297  1s
+commit 7c206d6 iteracoes 1500 nproc 2
+alvos: 35 pares cena/escala em 19s
+it     1  bce 0.6929  dist_mae_pond 5.655  1s
+it   100  bce 0.4085  dist_mae_pond 7.547  64s
+it   200  bce 0.2840  dist_mae_pond 7.076  126s
+it   300  bce 0.2786  dist_mae_pond 5.839  188s
+it   400  bce 0.2681  dist_mae_pond 5.618  250s
+it   500  bce 0.2657  dist_mae_pond 5.664  312s
+it   600  bce 0.2732  dist_mae_pond 5.355  374s
+it   700  bce 0.2718  dist_mae_pond 4.671  437s
+it   800  bce 0.2648  dist_mae_pond 4.376  499s
+it   900  bce 0.2677  dist_mae_pond 4.307  561s
+it  1000  bce 0.2602  dist_mae_pond 4.109  623s
+it  1100  bce 0.2644  dist_mae_pond 4.030  685s
+it  1200  bce 0.2626  dist_mae_pond 3.861  747s
+it  1300  bce 0.2683  dist_mae_pond 3.711  809s
+it  1400  bce 0.2644  dist_mae_pond 3.590  871s
+it  1500  bce 0.2647  dist_mae_pond 3.445  933s
+/home/runner/work/PelotaVision/PelotaVision/ml_training/stardist/train.py:48: TracerWarning: Converting a tensor to a Python boolean might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  return torch.cat([p if logits else torch.sigmoid(p), self.dist(f)], 1)
+brown40 {'detections': 106, 'annotated': 40, 'matched': 9, 'precision': 0.0849, 'recall': 0.225, 'f1': 0.1233, 'radius_abs_error_pct': 4.24, 'role': 'treino', 'candidates': 8753, 'candidate_limit': False, 'seconds': 5.94}
+gray42 {'detections': 66, 'annotated': 42, 'matched': 33, 'precision': 0.5, 'recall': 0.7857, 'f1': 0.6111, 'radius_abs_error_pct': 5.12, 'role': 'treino', 'candidates': 12204, 'candidate_limit': False, 'seconds': 7.24}
+gray20 {'detections': 20, 'annotated': 20, 'matched': 20, 'precision': 1.0, 'recall': 1.0, 'f1': 1.0, 'radius_abs_error_pct': 3.85, 'role': 'treino', 'candidates': 11108, 'candidate_limit': False, 'seconds': 6.62}
+dense {'detections': 65, 'annotated': 30, 'matched': 24, 'precision': 0.3692, 'recall': 0.8, 'f1': 0.5053, 'radius_abs_error_pct': 4.72, 'role': 'treino', 'candidates': 14726, 'candidate_limit': False, 'seconds': 8.45}
+cluster {'detections': 86, 'annotated': 34, 'matched': 19, 'precision': 0.2209, 'recall': 0.5588, 'f1': 0.3167, 'radius_abs_error_pct': 9.79, 'role': 'validacao_cena_inteira_fora', 'candidates': 10958, 'candidate_limit': False, 'seconds': 7.46}
+spaced {'detections': 28, 'annotated': 19, 'matched': 18, 'precision': 0.6429, 'recall': 0.9474, 'f1': 0.766, 'radius_abs_error_pct': 2.18, 'role': 'treino', 'candidates': 8244, 'candidate_limit': False, 'seconds': 4.96}
+paired40 {'detections': 66, 'annotated': 40, 'matched': 29, 'precision': 0.4394, 'recall': 0.725, 'f1': 0.5472, 'radius_abs_error_pct': 18.31, 'role': 'validacao_cena_inteira_fora', 'candidates': 4444, 'candidate_limit': False, 'seconds': 3.76}
+alvos: 49 pares cena/escala em 29s
+it     1  bce 0.6929  dist_mae_pond 7.465  1s
+it   100  bce 0.4176  dist_mae_pond 7.442  62s
+it   200  bce 0.3076  dist_mae_pond 6.943  124s
+it   300  bce 0.2880  dist_mae_pond 5.824  186s
+it   400  bce 0.2841  dist_mae_pond 5.754  247s
+it   500  bce 0.2816  dist_mae_pond 5.709  309s
+it   600  bce 0.2800  dist_mae_pond 5.323  372s
+it   700  bce 0.2805  dist_mae_pond 4.660  435s
+it   800  bce 0.2872  dist_mae_pond 4.213  497s
+it   900  bce 0.2844  dist_mae_pond 3.661  559s
+it  1000  bce 0.2738  dist_mae_pond 3.191  621s
+it  1100  bce 0.2728  dist_mae_pond 2.860  684s
+it  1200  bce 0.2759  dist_mae_pond 2.803  746s
+it  1300  bce 0.2812  dist_mae_pond 2.634  809s
+it  1400  bce 0.2749  dist_mae_pond 2.523  871s
+it  1500  bce 0.2785  dist_mae_pond 2.546  934s
+/home/runner/work/PelotaVision/PelotaVision/ml_training/stardist/train.py:48: TracerWarning: Converting a tensor to a Python boolean might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  return torch.cat([p if logits else torch.sigmoid(p), self.dist(f)], 1)
+brown40 {'detections': 42, 'annotated': 40, 'matched': 40, 'precision': 0.9524, 'recall': 1.0, 'f1': 0.9756, 'radius_abs_error_pct': 2.86, 'role': 'treino', 'candidates': 7561, 'candidate_limit': False, 'seconds': 4.92}
+gray42 {'detections': 46, 'annotated': 42, 'matched': 41, 'precision': 0.8913, 'recall': 0.9762, 'f1': 0.9318, 'radius_abs_error_pct': 5.31, 'role': 'treino', 'candidates': 11873, 'candidate_limit': False, 'seconds': 7.16}
+gray20 {'detections': 20, 'annotated': 20, 'matched': 20, 'precision': 1.0, 'recall': 1.0, 'f1': 1.0, 'radius_abs_error_pct': 3.62, 'role': 'treino', 'candidates': 10499, 'candidate_limit': False, 'seconds': 6.83}
+dense {'detections': 69, 'annotated': 30, 'matched': 24, 'precision': 0.3478, 'recall': 0.8, 'f1': 0.4848, 'radius_abs_error_pct': 3.35, 'role': 'treino', 'candidates': 9939, 'candidate_limit': False, 'seconds': 6.5}
+cluster {'detections': 37, 'annotated': 34, 'matched': 33, 'precision': 0.8919, 'recall': 0.9706, 'f1': 0.9296, 'radius_abs_error_pct': 8.13, 'role': 'treino', 'candidates': 8563, 'candidate_limit': False, 'seconds': 5.79}
+spaced {'detections': 39, 'annotated': 19, 'matched': 15, 'precision': 0.3846, 'recall': 0.7895, 'f1': 0.5172, 'radius_abs_error_pct': 2.15, 'role': 'treino', 'candidates': 7638, 'candidate_limit': False, 'seconds': 5.1}
+paired40 {'detections': 40, 'annotated': 40, 'matched': 40, 'precision': 1.0, 'recall': 1.0, 'f1': 1.0, 'radius_abs_error_pct': 6.72, 'role': 'treino', 'candidates': 6777, 'candidate_limit': False, 'seconds': 4.9}
+paridade {'opencv': '4.12.0', 'max_abs_output_diff': 8.392333984375e-05, 'detections_ort': 69, 'detections_opencv': 69, 'seconds_ort': 6.55, 'seconds_opencv': 6.31}
