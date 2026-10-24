@@ -3,6 +3,7 @@ name: Android - compilar, testar e empacotar
 on:
   push:
     branches: [main]
+    paths-ignore: ['docs/**', '**/*.md', 'tools/ci_status.sh']
     tags: ['v*']
   pull_request:
   workflow_dispatch:
