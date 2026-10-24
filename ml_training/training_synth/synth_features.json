@@ -1,0 +1,17 @@
+{
+ "seed": 20261024,
+ "per_donor": 12,
+ "extra_neg": 6,
+ "samples": 3632,
+ "positive": 1423,
+ "negative": 2209,
+ "excluded_invisible_positives": 149,
+ "visibility_min": 0.6,
+ "donors": 131,
+ "photos": [
+  "1000411645.jpg",
+  "1000411646.jpg",
+  "1000411647.jpg"
+ ],
+ "opencv": "5.0.0"
+}

@@ -29,6 +29,10 @@ O modo detalhado muda propostas e pode descartar revisões manuais de trincas ao
 
 A área de interesse passa a ser a **imagem ativa na tela e a entrada efetiva da análise**, mantendo a fotografia inteira para editar a seleção e calibrar. Depois de aplicar uma ROI retangular ou circular, somente o recorte fica visível. Os comandos **Segmentar ROI** e **Buscar ajuste na ROI** processam esse recorte: iluminação, parâmetros relativos ao tamanho da imagem, contornos, trincas e comparação de ajustes deixam de usar a região descartada. O relatório usa a mesma ROI. O RF de trincas é o mesmo da 0.5.0; não houve novo treinamento.
 
+## Trincas: modelo candidato com dados sintéticos (em validação)
+
+A triagem de trincas do app **continua com o modelo de 18/10/2026**. Em `ml_training/crack_synthesis/` há um gerador procedural, sem IA generativa, que desenha trincas com máscara exata sobre pelotas reais sem trinca. Em `ml_training/training_synth/` está um modelo candidato treinado com esses dados. O candidato só entra no app se vencer o atual numa bandeja real fotografada, com critério fixado antes: ver `ml_training/crack_validation/README.md`. Trinca é análise de **bancada**. Na correia, pelotas de 10–25 px não resolvem trinca, e o app as deixa inconclusivas.
+
 ## Instalação
 
 Android 10 ou superior, ARM64. Extraia o ZIP de instalação e abra o APK. O pacote e o certificado de desenvolvimento continuam os mesmos, permitindo atualizar a 0.10.0. O projeto inclui também a compilação x86_64 para testes. Esta entrega não atualiza o iPhone.
