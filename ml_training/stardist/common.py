@@ -205,9 +205,68 @@ def candidates_for_scale(run, gray, scale, thr):
                 out.append((float(prob[py, px]), np.stack([vx, vy], 1).astype(np.float32), scale))
     return out
 
-def polygon_area(p):
-    x, y = p[:, 0].astype(np.float64), p[:, 1].astype(np.float64)
-    return abs(float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))) / 2
+def polygon_props(p):
+    """Área, centroide e perímetro (fórmulas de Green/shoelace) do polígono fechado."""
+    a = cx = cy = per = 0.
+    n = len(p)
+    for i in range(n):
+        x0, y0 = float(p[i][0]), float(p[i][1])
+        x1, y1 = float(p[(i + 1) % n][0]), float(p[(i + 1) % n][1])
+        c = x0 * y1 - x1 * y0
+        a += c; cx += (x0 + x1) * c; cy += (y0 + y1) * c
+        per += math.hypot(x1 - x0, y1 - y0)
+    a /= 2
+    if abs(a) < 1e-12:
+        return 0., float(np.mean(p[:, 0])), float(np.mean(p[:, 1])), per
+    return abs(a), cx / (6 * a), cy / (6 * a), per
+
+def _cross(o, a, b):
+    return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+def convex_hull(p):
+    """Cadeia monótona de Andrew; saída anti-horária (área positiva), sem colineares."""
+    pts = sorted((float(x), float(y)) for x, y in p)
+    if len(pts) < 3:
+        return pts
+    lower, upper = [], []
+    for q in pts:
+        while len(lower) >= 2 and _cross(lower[-2], lower[-1], q) <= 0:
+            lower.pop()
+        lower.append(q)
+    for q in reversed(pts):
+        while len(upper) >= 2 and _cross(upper[-2], upper[-1], q) <= 0:
+            upper.pop()
+        upper.append(q)
+    return lower[:-1] + upper[:-1]
+
+def intersection_area(a, b):
+    """Sutherland–Hodgman: área de interseção de dois polígonos convexos anti-horários."""
+    out = list(a)
+    m = len(b)
+    for i in range(m):
+        if not out:
+            break
+        c0, c1 = b[i], b[(i + 1) % m]
+        inp, out = out, []
+        n = len(inp)
+        for j in range(n):
+            p, q = inp[j], inp[(j + 1) % n]
+            pin, qin = _cross(c0, c1, p) >= 0, _cross(c0, c1, q) >= 0
+            if pin:
+                out.append(p)
+            if pin != qin:
+                dx, dy = q[0] - p[0], q[1] - p[1]
+                ex, ey = c1[0] - c0[0], c1[1] - c0[1]
+                den = dx * ey - dy * ex
+                if den != 0:
+                    t = ((c0[0] - p[0]) * ey - (c0[1] - p[1]) * ex) / den
+                    out.append((p[0] + t * dx, p[1] + t * dy))
+    if len(out) < 3:
+        return 0.
+    s = 0.
+    for i in range(len(out)):
+        s += out[i][0] * out[(i + 1) % len(out)][1] - out[(i + 1) % len(out)][0] * out[i][1]
+    return abs(s) / 2
 
 def nms(cands):
     """Ordena por score (estável) e suprime polígonos com interseção/menor área > NMS_OVERLAP."""
@@ -217,18 +276,17 @@ def nms(cands):
     kept = []
     for i in order:
         score, poly, scale = cands[i]
-        area = polygon_area(poly)
+        area, cx, cy, per = polygon_props(poly)
         if area < math.pi * (MIN_RADIUS_NET / scale) ** 2:
             continue
-        hull = cv2.convexHull(poly.reshape(-1, 1, 2)).reshape(-1, 2).astype(np.float32)
-        box = (poly[:, 0].min(), poly[:, 1].min(), poly[:, 0].max(), poly[:, 1].max())
+        hull = convex_hull(poly)
+        box = (float(poly[:, 0].min()), float(poly[:, 1].min()), float(poly[:, 0].max()), float(poly[:, 1].max()))
         dup = False
         for k in kept:
             kb = k['box']
             if box[0] > kb[2] or kb[0] > box[2] or box[1] > kb[3] or kb[1] > box[3]:
                 continue
-            inter, _ = cv2.intersectConvexConvex(hull, k['hull'], handleNested=True)
-            if inter / max(1e-9, min(area, k['area'])) > NMS_OVERLAP:
+            if intersection_area(hull, k['hull']) > NMS_OVERLAP * min(area, k['area']):
                 dup = True
                 break
         if dup:
@@ -236,18 +294,14 @@ def nms(cands):
         if len(kept) >= MAX_OBJECTS:
             limit = True
             break
-        kept.append(dict(score=score, poly=poly, hull=hull, area=area, box=box))
+        kept.append(dict(score=score, poly=poly, hull=hull, area=area, cx=cx, cy=cy, per=per, box=box))
     return kept, limit
 
 def describe(obj, w, h):
-    poly = obj['poly']
-    m = cv2.moments(poly.reshape(-1, 1, 2))
-    area = abs(m['m00'])
-    cx, cy = (m['m10'] / m['m00'], m['m01'] / m['m00']) if m['m00'] != 0 else tuple(poly.mean(0))
-    per = cv2.arcLength(poly.reshape(-1, 1, 2), True)
-    round_ = min(1., 4 * math.pi * area / max(1e-9, per * per))
-    partial = bool(poly[:, 0].min() < 0 or poly[:, 1].min() < 0 or poly[:, 0].max() > w - 1 or poly[:, 1].max() > h - 1)
-    return dict(x=float(cx), y=float(cy), radius=math.sqrt(area / math.pi), area=float(area),
+    poly, area = obj['poly'], obj['area']
+    round_ = min(1., 4 * math.pi * area / max(1e-9, obj['per'] ** 2))
+    partial = bool(obj['box'][0] < 0 or obj['box'][1] < 0 or obj['box'][2] > w - 1 or obj['box'][3] > h - 1)
+    return dict(x=obj['cx'], y=obj['cy'], radius=math.sqrt(area / math.pi), area=area,
                 roundness=float(round_), partial=partial, score=obj['score'])
 
 def detect(run, gray, profile=3, sensitivity=75):

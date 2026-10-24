@@ -1,7 +1,7 @@
 """Treino reproduzível do detector StarDist de pelotas (PyTorch, CPU ou GPU) e exportação ONNX.
 
 Uso:
-  python train.py --out modelo.onnx --metrics metricas.json [--exclude cluster,paired40] [--iterations 3000]
+  python train.py --out modelo.onnx --metrics metricas.json [--exclude cluster,paired40] [--iterations 1500]
 
 O ONNX tem entrada fixa 1x1x384x384 (cinza normalizado por percentis, ver common.py)
 e saída 1x33x384x384: canal 0 = probabilidade de interior, canais 1..32 = distâncias
@@ -13,7 +13,7 @@ import numpy as np, cv2, torch, torch.nn as nn, torch.nn.functional as F
 import common as C
 
 SEED = 20261024
-CROP = 192
+CROP = 128
 PAD = 32
 RNET = np.geomspace(10.4, 24.0, 7)  # raios na escala da rede vistos no treino
 
@@ -31,8 +31,8 @@ class StarDistNet(nn.Module):
         self.u3, self.d3 = nn.ConvTranspose2d(8 * c, 4 * c, 2, 2), block(8 * c, 4 * c)
         self.u2, self.d2 = nn.ConvTranspose2d(4 * c, 2 * c, 2, 2), block(4 * c, 2 * c)
         self.u1, self.d1 = nn.ConvTranspose2d(2 * c, c, 2, 2), block(2 * c, c)
-        self.feat = nn.Sequential(nn.Conv2d(c, 64, 3, padding=1), nn.ReLU(inplace=True))
-        self.prob, self.dist = nn.Conv2d(64, 1, 1), nn.Conv2d(64, rays, 1)
+        self.feat = nn.Sequential(nn.Conv2d(c, 32, 3, padding=1), nn.ReLU(inplace=True))
+        self.prob, self.dist = nn.Conv2d(32, 1, 1), nn.Conv2d(32, rays, 1)
         nn.init.constant_(self.dist.bias, C.NOMINAL_RADIUS * .6)
 
     def forward(self, x, logits=False):
@@ -149,7 +149,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--data', default=str(Path(__file__).resolve().parents[1] / 'data'))
     ap.add_argument('--exclude', default='')
-    ap.add_argument('--iterations', type=int, default=3000)
+    ap.add_argument('--iterations', type=int, default=1500)
     ap.add_argument('--batch', type=int, default=8)
     ap.add_argument('--out', required=True)
     ap.add_argument('--metrics', required=True)

@@ -53,7 +53,7 @@ def main():
     final, hold = (json.loads(Path(p).read_text(encoding='utf-8')) for p in (a.final_metrics, a.holdout_metrics))
     meta = dict(
         id=MODEL_ID, file='pellet_stardist.onnx', sha256=final['model_sha256'], demonstration=True,
-        architecture='StarDist 2D (Schmidt et al. 2018) reimplementado em PyTorch: U-Net 3 níveis (16-32-64-128) + cabeça 64; '
+        architecture='StarDist 2D (Schmidt et al. 2018) reimplementado em PyTorch: U-Net 3 níveis (16-32-64-128) + cabeça 32; '
                      f"{final['parameters']} parâmetros",
         input=dict(name='input', shape=[1, 1, C.TILE, C.TILE], gray='BGR2GRAY',
                    normalization=f'(v-p{C.NORM_LOW * 100:g})/(p{C.NORM_HIGH * 100:g}-p{C.NORM_LOW * 100:g}) do histograma da imagem reduzida'),

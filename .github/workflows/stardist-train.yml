@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       iteracoes:
-        description: 'Iteracoes de treino (lote 8, recortes 192 px)'
-        default: '3000'
+        description: 'Iteracoes de treino (lote 8, recortes 128 px)'
+        default: '1500'
   push:
     branches-ignore: [main]
     paths: ['ml_training/stardist/*.py', 'ml_training/stardist/requirements.txt', '.github/workflows/stardist-train.yml']
@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     env:
-      ITER: ${{ github.event.inputs.iteracoes || '3000' }}
+      ITER: ${{ github.event.inputs.iteracoes || '1500' }}
       OUT: ml_training/stardist/output
     steps:
       - uses: actions/checkout@v6
@@ -50,10 +50,10 @@ jobs:
           } > output/training_log.txt 2>&1
           s=$?; tail -n 40 output/training_log.txt
           echo "status=$s" >> "$GITHUB_OUTPUT"
-          grep -E "^(paridade|brown40|gray42|gray20|dense|cluster|spaced|paired40) " output/training_log.txt | while IFS= read -r l; do echo "::notice title=StarDist::$l"; done
+          grep -E "^(it  *(1|100|1500|$ITER) |alvos|paridade|brown40|gray42|gray20|dense|cluster|spaced|paired40) " output/training_log.txt | while IFS= read -r l; do echo "::notice title=StarDist::$l"; done
           [ $s -eq 0 ] || echo "::error title=StarDist::falhou (status $s): $(tail -n 3 output/training_log.txt | tr '\n' ' ')"
       - name: Instalar nos assets e gravar no branch
-        if: always()
+        if: ${{ !cancelled() }}
         run: |
           if [ "${{ steps.train.outputs.status }}" = "0" ]; then
             cp $OUT/final.onnx app/src/main/assets/pellet_stardist.onnx
