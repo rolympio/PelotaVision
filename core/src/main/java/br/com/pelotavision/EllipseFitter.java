@@ -6,9 +6,11 @@ public final class EllipseFitter {
  private static final int RAYS=96;
  private static final class Edge {Point p;int sector,polarity;Edge(double x,double y,int sector,int polarity){p=new Point(x,y);this.sector=sector;this.polarity=polarity;}}
  private static final class Fit {double x,y,a,b,angle,support,rms;Fit(RotatedRect r){x=r.center.x;y=r.center.y;if(r.size.width>=r.size.height){a=r.size.width/2;b=r.size.height/2;angle=r.angle;}else{a=r.size.height/2;b=r.size.width/2;angle=r.angle+90;}angle=((angle%180)+180)%180;}}
- public PelletDetector.Result refine(Mat gray,PelletDetector.Result seeds){
+ public PelletDetector.Result refine(Mat gray,PelletDetector.Result seeds){return refine(gray,seeds,false);}
+ /** belt: trabalha até 1600 px e amplia até 2x, para que pelotas de 5–10 px tenham borda suficiente (raio >= 7 na escala de ajuste). */
+ public PelletDetector.Result refine(Mat gray,PelletDetector.Result seeds,boolean belt){
   if(gray.empty()||gray.type()!=CvType.CV_8UC1||gray.cols()!=seeds.width||gray.rows()!=seeds.height)throw new IllegalArgumentException("Imagem e detecções incompatíveis");
-  long start=System.nanoTime();double scale=Math.min(1,800./Math.max(gray.cols(),gray.rows()));int w=(int)Math.round(gray.cols()*scale),h=(int)Math.round(gray.rows()*scale);double sx=w/(double)gray.cols(),sy=h/(double)gray.rows();
+  long start=System.nanoTime();double scale=belt?Math.min(2,1600./Math.max(gray.cols(),gray.rows())):Math.min(1,800./Math.max(gray.cols(),gray.rows()));int w=(int)Math.round(gray.cols()*scale),h=(int)Math.round(gray.rows()*scale);double sx=w/(double)gray.cols(),sy=h/(double)gray.rows();
   Mat small=new Mat(),dx=new Mat(),dy=new Mat();List<PelletDetector.Detection> out=new ArrayList<>();
   try{
    Imgproc.resize(gray,small,new Size(w,h),0,0,Imgproc.INTER_LINEAR);Imgproc.GaussianBlur(small,small,new Size(5,5),1);Imgproc.Sobel(small,dx,CvType.CV_32F,1,0);Imgproc.Sobel(small,dy,CvType.CV_32F,0,1);float[] gx=new float[w*h],gy=new float[w*h];dx.get(0,0,gx);dy.get(0,0,gy);

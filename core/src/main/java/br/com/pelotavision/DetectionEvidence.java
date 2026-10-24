@@ -6,8 +6,10 @@ public final class DetectionEvidence {
  private final byte[] foreground;
  DetectionEvidence(int w,int h,int iw,int ih,byte[] mask,boolean available,boolean bright,double threshold,double contrast){this(w,h,iw,ih,mask,available,bright,threshold,contrast,false,0);}
  private DetectionEvidence(int w,int h,int iw,int ih,byte[] mask,boolean available,boolean bright,double threshold,double contrast,boolean normalized,double span){width=w;height=h;imageWidth=iw;imageHeight=ih;foreground=mask;this.available=available;brightForeground=bright;this.threshold=threshold;polarityContrast=contrast;illuminationCorrected=normalized;backgroundPlaneSpan=span;}
- public static DetectionEvidence create(Mat gray,List<PelletDetector.Result> results){
-  double resize=Math.min(1,384./Math.max(gray.cols(),gray.rows()));int w=Math.max(1,(int)Math.round(gray.cols()*resize)),h=Math.max(1,(int)Math.round(gray.rows()*resize));Mat small=new Mat(),binary=new Mat();
+ public static DetectionEvidence create(Mat gray,List<PelletDetector.Result> results){return create(gray,results,384);}
+ /** Correia: 1024 px, para que pelotas de ~10 px não virem 2–3 px na máscara de evidência. */
+ public static DetectionEvidence create(Mat gray,List<PelletDetector.Result> results,int side){
+  double resize=Math.min(1,side/(double)Math.max(gray.cols(),gray.rows()));int w=Math.max(1,(int)Math.round(gray.cols()*resize)),h=Math.max(1,(int)Math.round(gray.rows()*resize));Mat small=new Mat(),binary=new Mat();
   try{
    Imgproc.resize(gray,small,new Size(w,h),0,0,Imgproc.INTER_AREA);Imgproc.GaussianBlur(small,small,new Size(5,5),1.3);byte[] values=new byte[w*h];small.get(0,0,values);
    double threshold=Imgproc.threshold(small,binary,0,255,Imgproc.THRESH_BINARY|Imgproc.THRESH_OTSU);byte[] mask=new byte[w*h];binary.get(0,0,mask);

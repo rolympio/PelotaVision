@@ -222,6 +222,7 @@ final class DesktopExport {
         json.put("region_of_interest", ReportJson.regionJson(region, s.regionExcluded()));
         json.put("detection_suggestion", ReportJson.suggestionJson(s.rankedSuggestions(), out.applied));
         json.put("neural_model", ReportJson.neuralModelJson(out.applied));
+        json.put("scene", ReportJson.sceneJson(out.applied));
         json.put("processing_scope", ReportJson.processingScopeJson(out.window));
         json.put("detailed_analysis", JSONObject.NULL);
         json.put("method", result.method);

@@ -19,6 +19,7 @@ final class DesktopAnalysis {
         int profile = 3;            // 0 pequenas, 1 medias, 2 grandes, 3 auto (padrao Android)
         int sensitivity = 75;       // padrao Android
         int method = DetectionTuner.GRADIENT; // GRADIENT bordas, LOG segmentacao, NEURAL StarDist
+        boolean belt = false;       // cena de correia (pelotas pequenas e numerosas)
         boolean autoSuggest = true; // padrao Android
         int crackSensitivity = 50;  // padrao Android
         double minimumExpectedMm = 5;
@@ -26,7 +27,7 @@ final class DesktopAnalysis {
 
         /** O metodo neural so vale com o modelo instalado; sem ele, volta para bordas. */
         int effectiveMethod() { return method == DetectionTuner.NEURAL && !NeuralPelletDetector.available() ? DetectionTuner.GRADIENT : method; }
-        DetectionTuner.Option option() { return new DetectionTuner.Option(profile, sensitivity, effectiveMethod()); }
+        DetectionTuner.Option option() { return new DetectionTuner.Option(profile, sensitivity, effectiveMethod(), belt); }
     }
 
     static final class Output {
@@ -153,6 +154,6 @@ final class DesktopAnalysis {
     static PelletDetector.Result live(Mat gray, Config cfg) {
         DetectionTuner.Option option = cfg.option();
         PelletDetector.Result seeds = DetectionTuner.seeds(gray, option, 640, 8);
-        return new EllipseFitter().refine(gray, seeds);
+        return new EllipseFitter().refine(gray, seeds, option.belt);
     }
 }

@@ -19,11 +19,19 @@ import java.util.List;
 public final class PelletDetector {
     public static final class Parameters {
         public final double minRadiusFraction, maxRadiusFraction, threshold;
-        public Parameters(double min, double max, double threshold) {
+        /** Cena de correia: pelotas pequenas e numerosas; muda resolução de trabalho, bandas e limite de objetos. */
+        public final boolean belt;
+        public final int maxObjects;
+        public static final int BENCH_MAX_OBJECTS = 600, BELT_MAX_OBJECTS = 5000;
+        public Parameters(double min, double max, double threshold) { this(min, max, threshold, false); }
+        public Parameters(double min, double max, double threshold, boolean belt) {
             if (!(min > 0 && max > min && max < .3 && threshold > 0 && threshold < 1))
                 throw new IllegalArgumentException("Invalid detection parameters");
             minRadiusFraction = min; maxRadiusFraction = max; this.threshold = threshold;
+            this.belt = belt; maxObjects = belt ? BELT_MAX_OBJECTS : BENCH_MAX_OBJECTS;
         }
+        /** Lado máximo de trabalho: bancada usa o valor pedido; correia usa até 1600 px para não perder pelotas de ~10 px. */
+        public int workSide(int requested) { return belt ? Math.max(requested, 1600) : requested; }
         public static Parameters automatic() { return new Parameters(.012, .15, .045); }
         public static Parameters medium() { return new Parameters(.021, .060, .045); }
     }
@@ -150,7 +158,7 @@ public final class PelletDetector {
                             || overlap(candidate.radius,accepted.radius,distance)>.30) {duplicate=true;break;}
                 }
                 if(!duplicate) {
-                    if(seeds.size()==600) {limit=true;break;}
+                    if(seeds.size()==config.maxObjects) {limit=true;break;}
                     seeds.add(candidate);
                 }
             }

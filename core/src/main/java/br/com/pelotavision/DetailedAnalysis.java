@@ -12,6 +12,7 @@ public final class DetailedAnalysis {
  }
  public static final class Output {public final PelletDetector.Result result;public final CrackAnalysis cracks;public final Report report;Output(PelletDetector.Result r,CrackAnalysis c,Report d){result=r;cracks=c;report=d;}}
  public static Output run(Mat original,DetailGeometry map,DetectionTuner.Option option,boolean compare,FsrcnnUpscaler sr,Granulometry.Settings scale,int ow,int oh,double minimum,CrackModel model,int crackSensitivity,BooleanSupplier cancel,DetectionTuner.Progress progress){
+  if(option.belt)throw new IllegalArgumentException("Na correia use a análise rápida: ela já trabalha na resolução nativa (até 1600 px) e o modo detalhado mede os perfis pelo bloco, não pela foto.");
   long start=System.nanoTime();List<TilePlan.Tile> tiles=TilePlan.create(original.cols(),original.rows(),sr!=null);if(tiles.size()>(sr==null?80:240))throw new IllegalArgumentException("ROI muito grande para este modo. Reduza a área selecionada.");
   List<PelletDetector.Detection> all=new ArrayList<>(),baselineAll=new ArrayList<>();int[] treatments=new int[4];List<Double> scores=new ArrayList<>();int candidates=0;boolean limit=false;
   for(TilePlan.Tile tile:tiles){check(cancel,start);Mat sub=original.submat(tile.top,tile.top+tile.height,tile.left,tile.left+tile.width);Mat gray=sub.clone();sub.release();

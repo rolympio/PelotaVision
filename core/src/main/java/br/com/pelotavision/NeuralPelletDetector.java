@@ -26,6 +26,8 @@ public final class NeuralPelletDetector {
     public static final String MODEL = "pellet_stardist.onnx", METADATA = "pellet_stardist.json";
     /** Raios esperados (fração da largura) por perfil: pequenas, médias, grandes, auto (3 escalas). */
     static final double[][] PROFILE_RADII = {{.022}, {.035}, {.065}, {.02, .042, .09}};
+    /** Correia: raios típicos medidos nas fotos reais de correia (0,4%–1,6% da largura). */
+    static final double[][] BELT_RADII = {{.006}, {.009}, {.013}, {.005, .008, .013}};
     static final int MAX_CANDIDATES = 20000, MAX_OBJECTS = 600;
 
     private static NeuralPelletDetector installed;
@@ -114,7 +116,7 @@ public final class NeuralPelletDetector {
         long start = System.nanoTime();
         int w = gray.cols(), h = gray.rows();
         double thr = threshold(sensitivity);
-        double[] fr = PROFILE_RADII[profile], scales = new double[fr.length], medians = new double[fr.length];
+        double[] fr = (cfg.belt ? BELT_RADII : PROFILE_RADII)[profile], scales = new double[fr.length], medians = new double[fr.length];
         int[] counts = new int[fr.length];
         int total = 0, chosen = -1;
         boolean[] limit = {false};
@@ -124,7 +126,7 @@ public final class NeuralPelletDetector {
             candidatesForScale(gray, scales[i], thr, c);
             total += c.size();
             boolean[] ignored = {false};
-            List<Kept> kept = nms(c, ignored);
+            List<Kept> kept = nms(c, ignored, cfg.maxObjects, cfg.belt ? 4 * MAX_CANDIDATES : MAX_CANDIDATES);
             counts[i] = kept.size();
             double[] r = new double[kept.size()];
             for (int k = 0; k < r.length; k++) r[k] = Math.sqrt(kept.get(k).area / Math.PI) * scales[i];
@@ -139,7 +141,7 @@ public final class NeuralPelletDetector {
             List<Candidate> c = new ArrayList<>();
             candidatesForScale(gray, finalScale, thr, c);
             total += c.size();
-            for (Kept k : nms(c, limit)) {
+            for (Kept k : nms(c, limit, cfg.maxObjects, cfg.belt ? 4 * MAX_CANDIDATES : MAX_CANDIDATES)) {
                 double radius = Math.sqrt(k.area / Math.PI);
                 double roundness = Math.min(1., 4 * Math.PI * k.area / Math.max(1e-9, k.perimeter * k.perimeter));
                 boolean partial = k.minX < 0 || k.minY < 0 || k.maxX > w - 1 || k.maxY > h - 1;
@@ -247,10 +249,11 @@ public final class NeuralPelletDetector {
 
     // ------------------------------------------------------------ geometria (idêntica ao Python)
 
-    List<Kept> nms(List<Candidate> candidates, boolean[] limit) {
+    List<Kept> nms(List<Candidate> candidates, boolean[] limit) { return nms(candidates, limit, MAX_OBJECTS, MAX_CANDIDATES); }
+    List<Kept> nms(List<Candidate> candidates, boolean[] limit, int maxObjects, int maxCandidates) {
         List<Candidate> order = new ArrayList<>(candidates);
         order.sort((a, b) -> Float.compare(b.score, a.score)); // estável, como sorted() do Python
-        if (order.size() > MAX_CANDIDATES) { limit[0] = true; order = order.subList(0, MAX_CANDIDATES); }
+        if (order.size() > maxCandidates) { limit[0] = true; order = order.subList(0, maxCandidates); }
         List<Kept> kept = new ArrayList<>();
         for (Candidate c : order) {
             double[] props = props(c.px, c.py);
@@ -267,7 +270,7 @@ public final class NeuralPelletDetector {
                 if (intersectionArea(hull, k.hull) > nmsOverlap * Math.min(props[0], k.area)) { duplicate = true; break; }
             }
             if (duplicate) continue;
-            if (kept.size() >= MAX_OBJECTS) { limit[0] = true; break; }
+            if (kept.size() >= maxObjects) { limit[0] = true; break; }
             kept.add(new Kept(c, hull, props, box));
         }
         return kept;

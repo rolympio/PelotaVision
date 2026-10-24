@@ -45,6 +45,15 @@ final class MainFrame extends JFrame {
     private enum Click { PELLET, MEASURE }
 
     private static final String[] PROFILES = {"Pequenas", "Medias", "Grandes", "Auto"};
+    private static final String[] BELT_PROFILES = {"Finas", "Medias", "Grossas", "Auto"};
+
+    /** Troca os nomes dos perfis conforme a cena, mantendo o indice escolhido. */
+    private void updateProfileLabels() {
+        int selected = Math.max(0, profileBox.getSelectedIndex());
+        String[] names = sceneBox.getSelectedIndex() == 1 ? BELT_PROFILES : PROFILES;
+        profileBox.setModel(new javax.swing.DefaultComboBoxModel<>(names));
+        profileBox.setSelectedIndex(selected);
+    }
     private static final int[][] RESOLUTIONS = {{640, 480}, {1280, 720}, {1920, 1080}, {2560, 1440}, {3840, 2160}};
 
     private final Preferences prefs = Preferences.userNodeForPackage(MainFrame.class);
@@ -66,6 +75,7 @@ final class MainFrame extends JFrame {
     private final JButton backLiveButton = new JButton("Voltar ao vivo");
 
     private final JComboBox<String> profileBox = new JComboBox<>(PROFILES);
+    private final JComboBox<String> sceneBox = new JComboBox<>(new String[]{"Bancada", "Correia"});
     private final JComboBox<String> methodBox = new JComboBox<>(new String[]{"Bordas/gradientes", "LoG/segmentacao", "Rede neural StarDist (demonstracao)"});
     private final JSpinner sensitivity = new JSpinner(new SpinnerNumberModel(75, 0, 100, 5));
     private final JCheckBox autoSuggest = new JCheckBox("Sugerir ajuste ao abrir/capturar", true);
@@ -104,6 +114,10 @@ final class MainFrame extends JFrame {
         for (int[] r : RESOLUTIONS) resolutionBox.addItem(r[0] + " x " + r[1]);
         resolutionBox.setSelectedIndex(Math.min(RESOLUTIONS.length - 1, prefs.getInt("resolution", 2)));
         profileBox.setSelectedIndex(prefs.getInt("profile", 3));
+        sceneBox.setSelectedIndex(prefs.getBoolean("belt", false) ? 1 : 0);
+        sceneBox.setToolTipText("Correia: pelotas pequenas e numerosas (raio 0,4-1,6% da largura, ate 5000 objetos, ate 1600 px). Trincas tendem a ficar inconclusivas; modo detalhado indisponivel.");
+        sceneBox.addActionListener(e -> updateProfileLabels());
+        updateProfileLabels();
         int savedMethod = prefs.getInt("method", prefs.getBoolean("legacy", false) ? 1 : 0);
         methodBox.setSelectedIndex(savedMethod < 0 || savedMethod > 2 ? 0 : savedMethod);
         methodBox.setToolTipText(NeuralPelletDetector.status() + ". A rede so propoe objetos; as elipses sao medidas nas bordas. Sem treino em fotos da usina.");
@@ -117,7 +131,7 @@ final class MainFrame extends JFrame {
         top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
         top.add(row(new JLabel("Camera:"), cameraBox, resolutionBox, lockFocus, lockExposure, cameraButton, driverButton, liveBox,
                 Box.createHorizontalStrut(12), captureButton, openButton, backLiveButton));
-        top.add(row(new JLabel("Perfil:"), profileBox, new JLabel("Metodo:"), methodBox, new JLabel("Sensibilidade %:"), sensitivity, autoSuggest,
+        top.add(row(new JLabel("Cena:"), sceneBox, new JLabel("Perfil:"), profileBox, new JLabel("Metodo:"), methodBox, new JLabel("Sensibilidade %:"), sensitivity, autoSuggest,
                 numbers, Box.createHorizontalStrut(12), roiButton, analyzeButton, cancelButton, saveButton));
         extraToolbar = row();
         top.add(extraToolbar);
@@ -337,6 +351,7 @@ final class MainFrame extends JFrame {
     DesktopAnalysis.Config config() {
         DesktopAnalysis.Config c = new DesktopAnalysis.Config();
         c.profile = profileBox.getSelectedIndex();
+        c.belt = sceneBox.getSelectedIndex() == 1;
         c.method = methodBox.getSelectedIndex();
         c.sensitivity = (Integer) sensitivity.getValue();
         c.autoSuggest = autoSuggest.isSelected();
@@ -578,6 +593,7 @@ final class MainFrame extends JFrame {
     private void savePrefs() {
         prefs.putInt("resolution", resolutionBox.getSelectedIndex());
         prefs.putInt("profile", profileBox.getSelectedIndex());
+        prefs.putBoolean("belt", sceneBox.getSelectedIndex() == 1);
         prefs.putBoolean("legacy", methodBox.getSelectedIndex() == 1);
         prefs.putInt("method", methodBox.getSelectedIndex());
         prefs.putInt("sensitivity", (Integer) sensitivity.getValue());

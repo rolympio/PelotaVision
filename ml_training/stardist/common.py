@@ -25,6 +25,9 @@ ANGLES = 2 * np.pi * np.arange(RAYS) / RAYS
 COS, SIN = np.cos(ANGLES), np.sin(ANGLES)
 # Raios esperados (fração da largura) por perfil: 0 pequenas, 1 médias, 2 grandes, 3 auto.
 PROFILE_RADII = {0: [.022], 1: [.035], 2: [.065], 3: [.02, .042, .09]}
+# Cena de correia (fotos reais de correia: raio ~0,4%-1,6% da largura), limite de objetos maior.
+BELT_RADII = {0: [.006], 1: [.009], 2: [.013], 3: [.005, .008, .013]}
+BELT_MAX_OBJECTS = 5000
 
 def threshold(sensitivity):
     return max(.2, min(.8, .75 - .005 * sensitivity))
@@ -296,11 +299,13 @@ def intersection_area(a, b):
         s += out[i][0] * out[(i + 1) % len(out)][1] - out[(i + 1) % len(out)][0] * out[i][1]
     return abs(s) / 2
 
-def nms(cands):
+def nms(cands, max_objects=None, max_candidates=None):
     """Ordena por score (estável) e suprime polígonos com interseção/menor área > NMS_OVERLAP."""
     order = sorted(range(len(cands)), key=lambda i: -cands[i][0])
-    limit = len(order) > MAX_CANDIDATES
-    order = order[:MAX_CANDIDATES]
+    max_objects = max_objects or MAX_OBJECTS
+    max_candidates = max_candidates or MAX_CANDIDATES
+    limit = len(order) > max_candidates
+    order = order[:max_candidates]
     kept = []
     for i in order:
         score, poly, scale = cands[i]
@@ -319,7 +324,7 @@ def nms(cands):
                 break
         if dup:
             continue
-        if len(kept) >= MAX_OBJECTS:
+        if len(kept) >= max_objects:
             limit = True
             break
         kept.append(dict(score=score, poly=poly, hull=hull, area=area, cx=cx, cy=cy, per=per, box=box))
@@ -334,9 +339,9 @@ def describe(obj, w, h):
 
 REFINE_LIMITS = (.5, 2.)
 
-def _pass(run, gray, scale, thr):
+def _pass(run, gray, scale, thr, belt=False):
     cands = candidates_for_scale(run, gray, scale, thr)
-    kept, limit = nms(cands)
+    kept, limit = nms(cands, BELT_MAX_OBJECTS if belt else MAX_OBJECTS, 4 * MAX_CANDIDATES if belt else MAX_CANDIDATES)
     return cands, kept, limit
 
 def median(values):
@@ -352,7 +357,7 @@ def _scale_stats(kept, scale):
     rnet = median([math.sqrt(k['area'] / math.pi) * scale for k in kept])
     return cover, rnet
 
-def detect(run, gray, profile=3, sensitivity=75, details=None):
+def detect(run, gray, profile=3, sensitivity=75, details=None, belt=False):
     """Escala em duas etapas. 1) Uma passada por raio esperado do perfil; escolhe a escala cujo raio
     mediano (na entrada da rede) fica mais perto de NOMINAL_RADIUS, em log. A rede foi treinada com
     raios de 10 a 24 px: em escala errada ela fragmenta (objetos ~25 px) ou encolhe (~10 px) as pelotas.
@@ -361,9 +366,9 @@ def detect(run, gray, profile=3, sensitivity=75, details=None):
     h, w = gray.shape
     thr = threshold(sensitivity)
     trials = []
-    for frac in PROFILE_RADII[profile]:
+    for frac in (BELT_RADII if belt else PROFILE_RADII)[profile]:
         sc = NOMINAL_RADIUS / (frac * w)
-        cands, kept, limit = _pass(run, gray, sc, thr)
+        cands, kept, limit = _pass(run, gray, sc, thr, belt)
         cover, rnet = _scale_stats(kept, sc)
         trials.append(dict(scale=sc, cands=len(cands), kept=len(kept), cover=cover, rnet=rnet))
     ok = [t for t in trials if t['kept'] > 0]
@@ -372,7 +377,7 @@ def detect(run, gray, profile=3, sensitivity=75, details=None):
     if chosen is not None:
         factor = min(REFINE_LIMITS[1], max(REFINE_LIMITS[0], NOMINAL_RADIUS / chosen['rnet']))
         final_scale = chosen['scale'] * factor
-        cands, kept, limit = _pass(run, gray, final_scale, thr)
+        cands, kept, limit = _pass(run, gray, final_scale, thr, belt)
         ncand += len(cands)
         dets = [describe(k, w, h) for k in kept]
         dets.sort(key=lambda d: (d['y'], d['x']))

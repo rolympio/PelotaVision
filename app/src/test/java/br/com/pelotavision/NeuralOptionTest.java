@@ -48,6 +48,40 @@ public class NeuralOptionTest {
         assertEquals(10, st[0]); assertEquals(18, st[1]); assertEquals(10, st[2]);
     }
 
+    @Test public void beltSceneHasOwnSizesLimitsAndIds() {
+        DetectionTuner.Option bench = new DetectionTuner.Option(3, 75, DetectionTuner.GRADIENT), belt = new DetectionTuner.Option(3, 75, DetectionTuner.GRADIENT, true);
+        assertEquals("clahe_p3_s75", bench.id);
+        assertEquals("belt_clahe_p3_s75", belt.id);
+        assertFalse(bench.parameters.belt);
+        assertEquals(600, bench.parameters.maxObjects);
+        assertEquals(1024, bench.parameters.workSide(1024));
+        assertTrue(belt.parameters.belt);
+        assertEquals(5000, belt.parameters.maxObjects);
+        assertEquals(1600, belt.parameters.workSide(1024));
+        assertEquals(.004, belt.parameters.minRadiusFraction, 0);
+        assertEquals(.016, belt.parameters.maxRadiusFraction, 0);
+        assertEquals(.012, bench.parameters.minRadiusFraction, 0);
+        assertTrue(belt.label().startsWith("Correia"));
+        for (DetectionTuner.Option o : DetectionTuner.options(belt)) assertTrue(o.id, o.belt && o.id.startsWith("belt_"));
+        assertEquals(24, DetectionTuner.options(belt).size());
+    }
+
+    @Test public void benchSearchListIsUnchanged() {
+        List<DetectionTuner.Option> o = DetectionTuner.options(new DetectionTuner.Option(1, 75, true));
+        assertEquals("log_p1_s75", o.get(0).id);
+        assertEquals("clahe_p1_s75", o.get(1).id);
+        assertEquals("log_p1_s55", o.get(8).id);
+        assertEquals("clahe_p2_s90", o.get(23).id);
+    }
+
+    @Test public void sceneBlock() throws Exception {
+        JSONObject belt = (JSONObject) ReportJson.sceneJson(new DetectionTuner.Option(0, 75, DetectionTuner.LOG, true));
+        assertEquals("belt", belt.getString("mode"));
+        assertEquals(5000, belt.getInt("max_objects"));
+        assertFalse(belt.getBoolean("detailed_mode_available"));
+        assertEquals("bench", ((JSONObject) ReportJson.sceneJson(new DetectionTuner.Option(0, 75, false))).getString("mode"));
+    }
+
     @Test public void reportBlockOnlyForNeuralOption() throws Exception {
         assertSame(JSONObject.NULL, ReportJson.neuralModelJson(new DetectionTuner.Option(1, 75, false)));
         assertSame(JSONObject.NULL, ReportJson.neuralModelJson(null));

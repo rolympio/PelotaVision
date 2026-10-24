@@ -6,12 +6,16 @@ public final class DetectionTuner {
  public static final String METHOD="photo_setting_search_coverage_v2";
  public static final int GRADIENT=0,LOG=1,NEURAL=2;
  public static final class Option {
-  public final int profile,sensitivity,method;public final boolean legacy;public final PelletDetector.Parameters parameters;public final String id;
+  public final int profile,sensitivity,method;public final boolean legacy,belt;public final PelletDetector.Parameters parameters;public final String id;
+  /** Raios (fração da largura) por perfil. Bancada: valores da 0.11.0. Correia: pelotas de ~0,4% a 1,6% da largura. */
+  public static final double[][] BENCH_SIZES={{.013,.038},{.021,.060},{.04,.105},{.012,.15}},BELT_SIZES={{.004,.008},{.006,.012},{.009,.016},{.004,.016}};
   public Option(int profile,int sensitivity,boolean legacy){this(profile,sensitivity,legacy?LOG:GRADIENT);}
-  public Option(int profile,int sensitivity,int method){if(profile<0||profile>3||sensitivity<0||sensitivity>100||method<GRADIENT||method>NEURAL)throw new IllegalArgumentException("Ajuste inválido.");this.profile=profile;this.sensitivity=sensitivity;this.method=method;legacy=method==LOG;double[][] sizes={{.013,.038},{.021,.060},{.04,.105},{.012,.15}};parameters=new PelletDetector.Parameters(sizes[profile][0],sizes[profile][1],.12-sensitivity*.001);id=new String[]{"clahe","log","nn"}[method]+"_p"+profile+"_s"+sensitivity;}
+  public Option(int profile,int sensitivity,int method){this(profile,sensitivity,method,false);}
+  public Option(int profile,int sensitivity,int method,boolean belt){if(profile<0||profile>3||sensitivity<0||sensitivity>100||method<GRADIENT||method>NEURAL)throw new IllegalArgumentException("Ajuste inválido.");this.profile=profile;this.sensitivity=sensitivity;this.method=method;this.belt=belt;legacy=method==LOG;double[][] sizes=belt?BELT_SIZES:BENCH_SIZES;parameters=new PelletDetector.Parameters(sizes[profile][0],sizes[profile][1],.12-sensitivity*.001,belt);id=(belt?"belt_":"")+new String[]{"clahe","log","nn"}[method]+"_p"+profile+"_s"+sensitivity;}
+  public String sceneName(){return belt?"belt":"bench";}
   public boolean neural(){return method==NEURAL;}
   public String methodName(){return new String[]{"gradient","log","neural_stardist"}[method];}
-  public String label(){return new String[]{"Bordas · ","LoG · ","Rede neural · "}[method]+new String[]{"Pequenas","Médias","Grandes","Auto"}[profile]+" · sens. "+sensitivity+"%";}
+  public String label(){return (belt?"Correia · ":"")+new String[]{"Bordas · ","LoG · ","Rede neural · "}[method]+(belt?new String[]{"Finas","Médias","Grossas","Auto"}:new String[]{"Pequenas","Médias","Grandes","Auto"})[profile]+" · sens. "+sensitivity+"%";}
  }
  public static final class Trial {
   public final Option option;public final PelletDetector.Result result;public final String error;public final double stability,score;public final DetectionAssessment.Metrics metrics;public final DetectionEvidence.Map evidenceMap;public final DetectionEvidence.Coverage coverage;
@@ -38,14 +42,15 @@ public final class DetectionTuner {
   // Both localization methods are mandatory and interleaved: LoG is tested early even under a time budget.
   // A rede neural (modelo de demonstração) só entra na busca quando o usuário a escolheu: o padrão não muda.
   boolean neural=current.neural()&&NeuralPelletDetector.available();
-  for(int profile:new int[]{1,3,0,2})for(int method:new int[]{LOG,GRADIENT,NEURAL}){if(method==NEURAL&&!neural)continue;Option o=new Option(profile,75,method);options.put(o.id,o);}
-  for(int sensitivity:new int[]{55,90})for(int profile:new int[]{1,3,0,2})for(boolean legacy:new boolean[]{true,false}){Option o=new Option(profile,sensitivity,legacy);options.put(o.id,o);}
+  for(int profile:new int[]{1,3,0,2})for(int method:new int[]{LOG,GRADIENT,NEURAL}){if(method==NEURAL&&!neural)continue;Option o=new Option(profile,75,method,current.belt);options.put(o.id,o);}
+  for(int sensitivity:new int[]{55,90})for(int profile:new int[]{1,3,0,2})for(int method:new int[]{LOG,GRADIENT}){Option o=new Option(profile,sensitivity,method,current.belt);options.put(o.id,o);}
   return new ArrayList<>(options.values());
  }
- public static PelletDetector.Result detect(Mat gray,Option option){return new EllipseFitter().refine(gray,seeds(gray,option,1024,12));}
+ public static PelletDetector.Result detect(Mat gray,Option option){return new EllipseFitter().refine(gray,seeds(gray,option,option.parameters.workSide(1024),12),option.belt);}
  /** Localização sem refinamento elíptico; o método neural exige o modelo instalado. */
  public static PelletDetector.Result seeds(Mat gray,Option option,int maximumSide,int scales){
   if(option.method==NEURAL){NeuralPelletDetector nn=NeuralPelletDetector.get();if(nn==null)throw new IllegalStateException(NeuralPelletDetector.status());return nn.detect(gray,option.profile,option.sensitivity,option.parameters);}
+  maximumSide=option.parameters.workSide(maximumSide);
   return option.legacy?new PelletDetector().detect(gray,option.parameters,maximumSide,scales):new AdaptivePelletDetector().detect(gray,option.parameters,maximumSide,scales);}
  public static PelletDetector.Result detect(Mat gray,Option option,AnalysisWindow window){PelletDetector.Result result=detect(gray,option);return window==null?result:window.filterLocal(result);}
  public static Report search(Mat gray,Option current,DetectionAssessment.Context context,BooleanSupplier cancelled,Progress progress){return search(gray,current,context,cancelled,progress,30000);}
@@ -58,7 +63,7 @@ public final class DetectionTuner {
    try{trials.add(new Trial(option,context.filterScope(detect(gray,option,context.detectionWindow())),null,0,null,0));}catch(RuntimeException e){trials.add(new Trial(option,null,e.getClass().getSimpleName(),0,null,0));}
   }
   // Stability is computed once in worker context; scale changes only recalculate cheap metrics; a new ROI requires a new search.
-  List<PelletDetector.Result> results=new ArrayList<>();for(Trial t:trials)if(t.result!=null)results.add(t.result);DetectionEvidence evidence=results.isEmpty()?null:DetectionEvidence.create(gray,results);
+  List<PelletDetector.Result> results=new ArrayList<>();for(Trial t:trials)if(t.result!=null)results.add(t.result);DetectionEvidence evidence=results.isEmpty()?null:DetectionEvidence.create(gray,results,current.belt?1024:384);
   List<Trial> stable=new ArrayList<>();for(Trial t:trials){double first=0,second=0;for(Trial other:trials)if(t!=other&&t.result!=null&&other.result!=null){double agree=DetectionAssessment.agreement(t.result,other.result);if(agree>first){second=first;first=agree;}else second=Math.max(second,agree);}stable.add(new Trial(t.option,t.result,t.error,trials.size()>2?(first+second)/2:first,null,0,t.result==null||evidence==null?null:evidence.map(t.result),null));}
   return new Report(stable,options.size(),(System.nanoTime()-start)/1_000_000,stopped||cancelled.getAsBoolean(),limited,context,evidence).rank(context);
  }

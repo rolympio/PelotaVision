@@ -64,6 +64,8 @@ public final class MainActivity extends ComponentActivity {
     private final AdaptivePelletDetector detector=new AdaptivePelletDetector();
     private CrackModel crackModel;
     private volatile int detectionMethod=DetectionTuner.GRADIENT;
+    /** Cena: bancada (padrão) ou correia (pelotas pequenas e numerosas). */
+    private volatile boolean beltScene=false;
     private int method(){return detectionMethod==DetectionTuner.NEURAL&&!NeuralPelletDetector.available()?DetectionTuner.GRADIENT:detectionMethod;}
     private volatile PelletDetector.Parameters parameters=PelletDetector.Parameters.automatic();
     private volatile Mode mode=Mode.LIVE;
@@ -291,7 +293,7 @@ public final class MainActivity extends ComponentActivity {
             bitmap=ImageCodec.upright(file);
             AnalysisWindow window=new AnalysisWindow(bitmap.getWidth(),bitmap.getHeight(),replacingCurrent?interestRegion:null);window.requireDetectable();
             fullGray=ImageCodec.gray(bitmap);gray=window.region==null?fullGray:window.cropGray(fullGray);
-            DetectionTuner.Option current=replacingCurrent&&photoParameters==cfg&&photoOption!=null?photoOption:new DetectionTuner.Option(profile,sensitivity,method());
+            DetectionTuner.Option current=replacingCurrent&&photoParameters==cfg&&photoOption!=null?photoOption:new DetectionTuner.Option(profile,sensitivity,method(),beltScene);
             DetectionTuner.Report suggestions=replacingCurrent&&window.sameScope(suggestionWindow)?photoSuggestions:null;
             DetectionTuner.Option selected=current;PelletDetector.Result local;
             if(cached!=null){if(!window.sameScope(suggestionWindow))throw new IllegalArgumentException("A área mudou. Execute a busca novamente.");selected=cached.option;local=cached.result;}
@@ -361,7 +363,7 @@ public final class MainActivity extends ComponentActivity {
         Bitmap ready=null;OriginalRoi.Input input=null;Mat previewGray=null,small=null;final boolean compare=detailCompare,sr=detailSr;java.util.concurrent.atomic.AtomicBoolean cancel=new java.util.concurrent.atomic.AtomicBoolean(false);tuningCancel=cancel;
         try{
             int[] source=ImageCodec.originalUprightSize(file);ready=ImageCodec.upright(file);AnalysisWindow scope=new AnalysisWindow(ready.getWidth(),ready.getHeight(),interestRegion);scope.requireDetectable();
-            DetectionTuner.Option selected=supplied!=null?supplied:photoParameters==cfg&&photoOption!=null?photoOption:new DetectionTuner.Option(profile,sensitivity,method());DetectionTuner.Report report=null;
+            DetectionTuner.Option selected=supplied!=null?supplied:photoParameters==cfg&&photoOption!=null?photoOption:new DetectionTuner.Option(profile,sensitivity,method(),beltScene);DetectionTuner.Report report=null;
             runOnUiThread(()->{showTuneProgress(cancel);if(tuneProgress!=null){tuneProgress.setTitle("Segmentação detalhada");tuneProgress.getButton(AlertDialog.BUTTON_NEGATIVE).setText("Cancelar processamento");((TextView)tuneProgress.getWindow().getDecorView().findViewWithTag("tuning_budget_note")).setText("Original + blocos sobrepostos. Até 3 minutos nos blocos, verificados entre etapas. Cancelar mantém o resultado anterior.");}});
             input=OriginalRoi.decode(file,ready.getWidth(),ready.getHeight(),scope.region);
             if(search){final DetailGeometry map=input.geometry;java.util.List<TilePlan.Tile> nativeTiles=TilePlan.create(map.width,map.height,sr);TilePlan.Tile representative=nativeTiles.get(0);double distance=Double.POSITIVE_INFINITY;for(TilePlan.Tile tile:nativeTiles){double d=Math.hypot(tile.left+tile.width/2.-map.width/2.,tile.top+tile.height/2.-map.height/2.);if(d<distance){distance=d;representative=tile;}}
@@ -787,17 +789,21 @@ public final class MainActivity extends ComponentActivity {
     }
     private double minimumInput(EditText input){String raw=input.getText().toString().trim().replace(',','.');try{double value=Double.parseDouble(raw);if(Double.isFinite(value)&&value>=0&&value<=1000)return value;}catch(NumberFormatException ignored){}throw new IllegalArgumentException("Informe mínimo entre 0 e 1000 mm; zero desativa o critério.");}
 
-    private PelletDetector.Result detectPellets(Mat gray,PelletDetector.Parameters cfg,int size,int scales){int m=method();NeuralPelletDetector nn=NeuralPelletDetector.get();PelletDetector.Result seeds=m==DetectionTuner.NEURAL&&nn!=null?nn.detect(gray,profile,sensitivity,cfg):m==DetectionTuner.LOG?new PelletDetector().detect(gray,cfg,size,scales):detector.detect(gray,cfg,size,scales);return new EllipseFitter().refine(gray,seeds);}
+    private PelletDetector.Result detectPellets(Mat gray,PelletDetector.Parameters cfg,int size,int scales){int m=method();NeuralPelletDetector nn=NeuralPelletDetector.get();size=cfg.workSide(size);PelletDetector.Result seeds=m==DetectionTuner.NEURAL&&nn!=null?nn.detect(gray,profile,sensitivity,cfg):m==DetectionTuner.LOG?new PelletDetector().detect(gray,cfg,size,scales):detector.detect(gray,cfg,size,scales);return new EllipseFitter().refine(gray,seeds,cfg.belt);}
     private void showAdjustments() {
         if(mode==Mode.PROCESSING||mode==Mode.SAVING)return;
         LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(10),dp(20),dp(8));ScrollView scroll=new ScrollView(this);scroll.addView(content);
         CheckBox auto=new CheckBox(this);auto.setText("Sugerir ajuste ao abrir ou fotografar");auto.setTextColor(Color.WHITE);auto.setChecked(autoSuggest);auto.setTag("auto_suggest");content.addView(auto);
         content.addView(text("Diâmetro mínimo esperado (mm; 0 desativa)",13,Color.WHITE));EditText minimum=new EditText(this);minimum.setTextColor(Color.WHITE);minimum.setSingleLine();minimum.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);minimum.setText(Double.toString(minimumExpectedMm));minimum.setTag("minimum_expected_mm");content.addView(minimum);
         content.addView(text("O mínimo só pontua com calibração física independente. Não apaga detecções nem recorta o histograma. Rosin–Rammler não é normal e não é imposta à amostra.",12,Color.LTGRAY));
+        content.addView(text("Cena",14,Color.WHITE));android.widget.RadioGroup scenes=new android.widget.RadioGroup(this);int[] sceneIds={View.generateViewId(),View.generateViewId()};String[] sceneLabels={"Bancada · amostra espalhada, pelotas grandes na foto","Correia · pelotas pequenas e numerosas (até 5000 por foto)"};for(int i=0;i<2;i++){android.widget.RadioButton radio=new android.widget.RadioButton(this);radio.setId(sceneIds[i]);radio.setText(sceneLabels[i]);radio.setTextColor(Color.WHITE);radio.setTextSize(12);scenes.addView(radio);}scenes.check(sceneIds[beltScene?1:0]);content.addView(scenes);
+        content.addView(text("Na correia, a análise usa até 1600 px (sem o modo detalhado), a triagem de trincas tende a ficar inconclusiva (pelotas pequenas demais na foto) e pelotas encobertas são medidas só pela borda visível.",12,Color.LTGRAY));
         content.addView(text("Ajuste manual de tamanho aparente",14,Color.WHITE));android.widget.RadioGroup sizes=new android.widget.RadioGroup(this);
         int[] optionIds={View.generateViewId(),View.generateViewId(),View.generateViewId(),View.generateViewId()};
         String[] labels={"Pequenas · diâmetro 2,6–7,6% da largura","Médias · diâmetro 4,2–12% da largura","Grandes · diâmetro 8–21% da largura","Automático · tamanhos variados e iluminação"};
-        for(int i=0;i<labels.length;i++){android.widget.RadioButton radio=new android.widget.RadioButton(this);radio.setId(optionIds[i]);radio.setText(labels[i]);radio.setTextColor(Color.WHITE);radio.setTextSize(12);sizes.addView(radio);}sizes.check(optionIds[profile]);content.addView(sizes);
+        String[] beltLabels={"Finas · diâmetro 0,8–1,6% da largura","Médias · diâmetro 1,2–2,4% da largura","Grossas · diâmetro 1,8–3,2% da largura","Automático · diâmetro 0,8–3,2% da largura"};
+        for(int i=0;i<labels.length;i++){android.widget.RadioButton radio=new android.widget.RadioButton(this);radio.setId(optionIds[i]);radio.setText((beltScene?beltLabels:labels)[i]);radio.setTextColor(Color.WHITE);radio.setTextSize(12);sizes.addView(radio);}sizes.check(optionIds[profile]);content.addView(sizes);
+        scenes.setOnCheckedChangeListener((group,id)->{String[] l=id==sceneIds[1]?beltLabels:labels;for(int i=0;i<optionIds.length;i++)((android.widget.RadioButton)sizes.findViewById(optionIds[i])).setText(l[i]);});
         content.addView(text("Método de localização",14,Color.WHITE));android.widget.RadioGroup methods=new android.widget.RadioGroup(this);int[] methodIds={View.generateViewId(),View.generateViewId(),View.generateViewId()};String[] methodLabels={"Bordas · gradientes com CLAHE","LoG · segmentação alternativa",NeuralPelletDetector.available()?"Rede neural · StarDist (modelo de demonstração)":"Rede neural · indisponível"};for(int i=0;i<3;i++){android.widget.RadioButton radio=new android.widget.RadioButton(this);radio.setId(methodIds[i]);radio.setText(methodLabels[i]);radio.setTextColor(Color.WHITE);radio.setTextSize(12);radio.setEnabled(i!=DetectionTuner.NEURAL||NeuralPelletDetector.available());methods.addView(radio);}methods.check(methodIds[method()]);content.addView(methods);
         content.addView(text(NeuralPelletDetector.status()+". A rede só propõe objetos; as elipses continuam medidas nas bordas da foto. Treinada sem fotos da usina: compare com os outros métodos antes de usar.",12,Color.LTGRAY));
         TextView sensitivityLabel=text("Sensibilidade: "+sensitivity+"%",14,Color.WHITE);content.addView(sensitivityLabel);SeekBar slider=new SeekBar(this);slider.setMax(100);slider.setProgress(sensitivity);content.addView(slider);
@@ -808,8 +814,8 @@ public final class MainActivity extends ComponentActivity {
         dialog.setOnShowListener(d->{
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{try{minimumExpectedMm=minimumInput(minimum);getPreferences(MODE_PRIVATE).edit().putString("expected_minimum_mm",Double.toString(minimumExpectedMm)).apply();refreshSuggestionLabel();dialog.dismiss();if(mode==Mode.PHOTO)showSuggestions();else new AlertDialog.Builder(this).setTitle("Sugestão na foto").setMessage("Ao abrir ou fotografar, são comparados quatro perfis e três sensibilidades nos métodos de bordas e LoG; com a rede neural escolhida como método, ela também entra com os quatro perfis. LoG também é testado quando não era o ajuste atual. A melhor pontuação inicia a análise. Toque em Sugestão para comparar ou manter um ajuste manual. Sem escala física, a comparação é em pixels; depois de calibrar, o limite em mm pode mudar a recomendação, sem trocar os contornos automaticamente.").setPositiveButton("Entendi",null).show();}catch(IllegalArgumentException e){error.setText(e.getMessage());}});
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{
-                minimumExpectedMm=minimumInput(minimum);autoSuggest=auto.isChecked();for(int i=0;i<optionIds.length;i++)if(sizes.getCheckedRadioButtonId()==optionIds[i])profile=i;for(int i=0;i<methodIds.length;i++)if(methods.getCheckedRadioButtonId()==methodIds[i])detectionMethod=i;sensitivity=slider.getProgress();applyParameters();epoch++;
-                getPreferences(MODE_PRIVATE).edit().putInt("adaptive_profile",profile).putInt("sensitivity",sensitivity).putBoolean("legacy_detection",detectionMethod==DetectionTuner.LOG).putInt("detection_method",detectionMethod).putBoolean("auto_suggest",autoSuggest).putString("expected_minimum_mm",Double.toString(minimumExpectedMm)).apply();dialog.dismiss();
+                minimumExpectedMm=minimumInput(minimum);autoSuggest=auto.isChecked();for(int i=0;i<optionIds.length;i++)if(sizes.getCheckedRadioButtonId()==optionIds[i])profile=i;for(int i=0;i<methodIds.length;i++)if(methods.getCheckedRadioButtonId()==methodIds[i])detectionMethod=i;beltScene=scenes.getCheckedRadioButtonId()==sceneIds[1];sensitivity=slider.getProgress();applyParameters();epoch++;
+                getPreferences(MODE_PRIVATE).edit().putInt("adaptive_profile",profile).putInt("sensitivity",sensitivity).putBoolean("legacy_detection",detectionMethod==DetectionTuner.LOG).putInt("detection_method",detectionMethod).putBoolean("belt_scene",beltScene).putBoolean("auto_suggest",autoSuggest).putString("expected_minimum_mm",Double.toString(minimumExpectedMm)).apply();dialog.dismiss();
                 if(mode==Mode.PHOTO&&photoFile!=null){File file=photoFile;String mime=photoMime;PelletDetector.Parameters cfg=parameters;setBusy(Mode.PROCESSING,"Reanalisando com ajuste manual…");worker.execute(()->processPhoto(file,mime,cfg));}
             }catch(IllegalArgumentException e){error.setText(e.getMessage());}});
         });dialog.show();
@@ -817,15 +823,14 @@ public final class MainActivity extends ComponentActivity {
     private void restoreParameters() {
         autoSuggest=getPreferences(MODE_PRIVATE).getBoolean("auto_suggest",true);
         try{minimumExpectedMm=Double.parseDouble(getPreferences(MODE_PRIVATE).getString("expected_minimum_mm","5"));if(!Double.isFinite(minimumExpectedMm)||minimumExpectedMm<0||minimumExpectedMm>1000)minimumExpectedMm=5;}catch(NumberFormatException e){minimumExpectedMm=5;}
-        detectionMethod=getPreferences(MODE_PRIVATE).getInt("detection_method",getPreferences(MODE_PRIVATE).getBoolean("legacy_detection",false)?DetectionTuner.LOG:DetectionTuner.GRADIENT);if(detectionMethod<0||detectionMethod>2)detectionMethod=DetectionTuner.GRADIENT;
+        detectionMethod=getPreferences(MODE_PRIVATE).getInt("detection_method",getPreferences(MODE_PRIVATE).getBoolean("legacy_detection",false)?DetectionTuner.LOG:DetectionTuner.GRADIENT);if(detectionMethod<0||detectionMethod>2)detectionMethod=DetectionTuner.GRADIENT;beltScene=getPreferences(MODE_PRIVATE).getBoolean("belt_scene",false);
         profile=Math.max(0,Math.min(3,getPreferences(MODE_PRIVATE).getInt("adaptive_profile",3)));
         sensitivity=Math.max(0,Math.min(100,getPreferences(MODE_PRIVATE).getInt("sensitivity",75)));
         applyParameters();
     }
     private void applyParameters() {
-        double[][] sizes={{.013,.038},{.021,.060},{.04,.105},{.012,.15}};
-        parameters=new PelletDetector.Parameters(sizes[profile][0],sizes[profile][1],.12-sensitivity*.001);
-        if(profileLabel!=null)profileLabel.setText(new String[]{"","LoG · ","Rede neural · "}[method()]+new String[]{"Elipses pequenas","Elipses médias","Elipses grandes","Auto · elipses e iluminação"}[profile]);
+        parameters=new DetectionTuner.Option(profile,sensitivity,method(),beltScene).parameters;
+        if(profileLabel!=null)profileLabel.setText((beltScene?"Correia · ":"")+new String[]{"","LoG · ","Rede neural · "}[method()]+(beltScene?new String[]{"Pelotas finas","Pelotas médias","Pelotas grossas","Auto · correia"}:new String[]{"Elipses pequenas","Elipses médias","Elipses grandes","Auto · elipses e iluminação"})[profile]);
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] granted) {
         super.onRequestPermissionsResult(request,permissions,granted);
