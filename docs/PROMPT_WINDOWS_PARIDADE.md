@@ -126,6 +126,11 @@ em português do Brasil.
 
 ## O que falta implementar (em ordem de prioridade)
 
+> **Estado em 24/10/2026 (Windows 0.2.0):** itens 1 a 7 e 10 concluídos e testados no CI
+> (regras em `desktop/.../PhotoSession.java`, testes em `DesktopPipelineTest`). JSON
+> agora vem de `core/ReportJson` (comum ao Android). Faltam 8, 9, 11 e 12, e o teste
+> manual com webcam real.
+
 Itens já existentes no Windows 0.1.0: câmera ao vivo + captura, abrir imagem,
 busca automática, detecção + elipses, triagem de trincas (modelo RF), escala px/mm
 digitada ou referência por dois cliques, histograma com classe configurável,

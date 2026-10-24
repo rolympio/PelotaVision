@@ -1,4 +1,4 @@
-PelotaVision Windows 0.1.0 - prototipo
+PelotaVision Windows 0.2.0 - prototipo
 =====================================
 
 Nucleo de analise: o MESMO codigo do PelotaVision Android 0.11.0 (deteccao, elipses,
@@ -12,12 +12,28 @@ USO
 3. Webcam: escolha a camera e a resolucao, "Abrir camera". A contagem ao vivo e rapida
    (640 px); a analise completa e feita na foto ("Capturar foto").
    Ou use "Abrir imagem..." para analisar uma foto (jpg, png, webp, bmp, tif).
-4. Escala: digite px/mm da imagem original, ou "Medir referencia na foto..." e clique
-   nas duas pontas de um objeto de tamanho conhecido NO MESMO PLANO das pelotas.
+4. ROI: "ROI..." abre o editor (retangulo ou circulo, alcas, "Imagem inteira").
+   A ROI vira a imagem ativa e a entrada da analise; mudou a ROI, toque em Segmentar
+   (salvar fica bloqueado ate reanalisar). Pelotas cruzando o limite ficam fora.
+5. Escala (todas no MESMO PLANO das pelotas):
+   - clique numa pelota inteira ou esfera > "Calibrar por esta pelota": eixo maior,
+     eixo menor (paquimetro) ou esfera de diametro conhecido; marca REF; esfera fica
+     fora das estatisticas por padrao;
+   - "Calibrar pela largura da correia...": sugestao de bordas, 4 alcas/2 linhas,
+     confirmacao obrigatoria; variacao > 8% bloqueia;
+   - px/mm digitado, ou referencia de comprimento por 2 cliques;
+   - "Estimar por media conhecida...": HIPOTESE, marcada em tela, PNG e JSON.
+   Se a reanalise mudar o contorno da referencia escolhida, a calibracao e removida.
    Sem escala, os resultados ficam em pixels.
-5. "Salvar resultados..." grava: original (copia byte a byte, ou PNG sem perdas do quadro
-   da webcam), imagem marcada, CSV por pelota (32 colunas, igual ao Android), CSV do
-   histograma e JSON com camera, ajuste, escala e resultados.
+6. Trincas: clique numa pelota para classificar (trinca visivel / sem trinca /
+   inconclusiva / restaurar automatico). "Trincas..." muda a sensibilidade e
+   reanalisa (descarta revisoes, com aviso).
+7. "Comparar ajustes..." mostra todas as opcoes da busca e permite aplicar outra com
+   os mesmos contornos. "Buscar melhor ajuste" refaz a busca (ate 30 s).
+8. "Salvar foto + dados..." grava: original (copia byte a byte, ou PNG sem perdas do
+   quadro da webcam), relatorio PNG no layout do Android (original/ROI sem marcacoes,
+   marcado, resumo, histograma), CSV por pelota (32 colunas) e do histograma iguais ao
+   Android, e JSON com as mesmas chaves do Android + bloco "source" (camera/driver).
 
 WEBCAM - CUIDADOS
 - Foco e exposicao automaticos mudam a imagem entre fotos. Marque "Travar foco" e
@@ -33,8 +49,9 @@ WEBCAM - CUIDADOS
 LIMITES
 - Distribuicao por numero, nao por massa. Foto 2D nao equivale a peneiramento.
 - Sem correcao de perspectiva, altura do leito ou distorcao de lente.
-- Ainda nao implementado no Windows: ROI, calibracao por objeto/correia, revisao manual
-  de trincas por pelota, analise detalhada em blocos e super-resolucao.
+- Ainda nao implementado no Windows: analise detalhada em blocos (original) e
+  super-resolucao FSRCNN; robustez de webcam (nome da camera, reconexao).
+- A interface e a webcam nao sao testadas automaticamente (o CI nao tem tela/camera).
 - Prototipo de desenvolvimento. Nao ha validacao com amostras reais nem metrologica.
 
 Licencas: OpenCV (Apache 2.0, OpenCV_LICENSE.txt). Modelo FSRCNN em modelos\ (ver
