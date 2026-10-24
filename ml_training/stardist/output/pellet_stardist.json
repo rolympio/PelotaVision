@@ -51,6 +51,7 @@
   ]
  },
  "threshold": "max(0,2; min(0,8; 0,75 - 0,005 x sensibilidade))",
+ "scale_selection": "uma passada por raio do perfil; escolhe o raio mediano mais perto do nominal (log); passada final reescalada (fator 0,5-2)",
  "training": {
   "groups": [
    "brown40",
@@ -74,60 +75,64 @@
   ],
   "scenes": {
    "cluster": {
-    "detections": 86,
+    "detections": 34,
     "annotated": 34,
-    "matched": 19,
-    "precision": 0.2209,
-    "recall": 0.5588,
-    "f1": 0.3167,
-    "radius_abs_error_pct": 9.79,
+    "matched": 34,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "radius_abs_error_pct": 10.33,
     "role": "validacao_cena_inteira_fora",
-    "candidates": 10958,
+    "candidates": 11092,
     "candidate_limit": false,
-    "seconds": 7.46
+    "final_scale": 0.17917028755907857,
+    "seconds": 4.63
    },
    "paired40": {
-    "detections": 66,
+    "detections": 40,
     "annotated": 40,
-    "matched": 29,
-    "precision": 0.4394,
-    "recall": 0.725,
-    "f1": 0.5472,
-    "radius_abs_error_pct": 18.31,
+    "matched": 38,
+    "precision": 0.95,
+    "recall": 0.95,
+    "f1": 0.95,
+    "radius_abs_error_pct": 8.54,
     "role": "validacao_cena_inteira_fora",
-    "candidates": 4444,
+    "candidates": 4664,
     "candidate_limit": false,
-    "seconds": 3.76
+    "final_scale": 0.5177048590649319,
+    "seconds": 1.95
    }
   },
-  "protocol": "perfil Auto, sensibilidade 75, pós-processamento common.detect sobre o ONNX exportado; casamento guloso centro<0,5r e razão de raios 0,7-1,43 contra círculos PROVISÓRIOS"
+  "protocol": "perfil Auto, sensibilidade 75, pós-processamento common.detect (escolha de escala em duas etapas) sobre o ONNX exportado; casamento guloso centro<0,5r e razão de raios 0,7-1,43 contra círculos PROVISÓRIOS"
  },
  "training_fit": {
   "brown40": {
-   "detections": 42,
+   "detections": 40,
    "annotated": 40,
    "matched": 40,
-   "precision": 0.9524,
+   "precision": 1.0,
    "recall": 1.0,
-   "f1": 0.9756,
-   "radius_abs_error_pct": 2.86,
+   "f1": 1.0,
+   "radius_abs_error_pct": 2.73,
    "role": "treino",
-   "candidates": 7561,
+   "candidates": 7825,
    "candidate_limit": false,
-   "seconds": 4.92
+   "final_scale": 0.2095602030746213,
+   "seconds": 2.77
   },
   "gray42": {
-   "detections": 46,
+   "detections": 42,
    "annotated": 42,
-   "matched": 41,
-   "precision": 0.8913,
-   "recall": 0.9762,
-   "f1": 0.9318,
-   "radius_abs_error_pct": 5.31,
+   "matched": 42,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "radius_abs_error_pct": 3.3,
    "role": "treino",
-   "candidates": 11873,
+   "candidates": 12220,
    "candidate_limit": false,
-   "seconds": 7.16
+   "final_scale": 0.18765885381510458,
+   "seconds": 4.56
   },
   "gray20": {
    "detections": 20,
@@ -136,50 +141,54 @@
    "precision": 1.0,
    "recall": 1.0,
    "f1": 1.0,
-   "radius_abs_error_pct": 3.62,
+   "radius_abs_error_pct": 1.66,
    "role": "treino",
-   "candidates": 10499,
+   "candidates": 10638,
    "candidate_limit": false,
-   "seconds": 6.83
+   "final_scale": 0.13469243320288896,
+   "seconds": 4.31
   },
   "dense": {
-   "detections": 69,
+   "detections": 30,
    "annotated": 30,
-   "matched": 24,
-   "precision": 0.3478,
-   "recall": 0.8,
-   "f1": 0.4848,
-   "radius_abs_error_pct": 3.35,
+   "matched": 28,
+   "precision": 0.9333,
+   "recall": 0.9333,
+   "f1": 0.9333,
+   "radius_abs_error_pct": 2.9,
    "role": "treino",
-   "candidates": 9939,
+   "candidates": 10146,
    "candidate_limit": false,
-   "seconds": 6.5
+   "final_scale": 0.13977278650502176,
+   "seconds": 3.85
   },
   "cluster": {
-   "detections": 37,
+   "detections": 34,
    "annotated": 34,
-   "matched": 33,
-   "precision": 0.8919,
-   "recall": 0.9706,
-   "f1": 0.9296,
-   "radius_abs_error_pct": 8.13,
+   "matched": 34,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "radius_abs_error_pct": 6.68,
    "role": "treino",
-   "candidates": 8563,
+   "candidates": 8823,
    "candidate_limit": false,
-   "seconds": 5.79
+   "final_scale": 0.17459644546003406,
+   "seconds": 3.8
   },
   "spaced": {
-   "detections": 39,
+   "detections": 19,
    "annotated": 19,
-   "matched": 15,
-   "precision": 0.3846,
-   "recall": 0.7895,
-   "f1": 0.5172,
-   "radius_abs_error_pct": 2.15,
+   "matched": 19,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "radius_abs_error_pct": 1.25,
    "role": "treino",
-   "candidates": 7638,
+   "candidates": 7766,
    "candidate_limit": false,
-   "seconds": 5.1
+   "final_scale": 0.15286613391016807,
+   "seconds": 3.16
   },
   "paired40": {
    "detections": 40,
@@ -188,20 +197,21 @@
    "precision": 1.0,
    "recall": 1.0,
    "f1": 1.0,
-   "radius_abs_error_pct": 6.72,
+   "radius_abs_error_pct": 6.7,
    "role": "treino",
-   "candidates": 6777,
+   "candidates": 7068,
    "candidate_limit": false,
-   "seconds": 4.9
+   "final_scale": 0.4723751307827629,
+   "seconds": 2.52
   }
  },
  "opencv_parity": {
   "opencv": "4.12.0",
   "max_abs_output_diff": 8.392333984375e-05,
-  "detections_ort": 69,
-  "detections_opencv": 69,
-  "seconds_ort": 6.55,
-  "seconds_opencv": 6.31
+  "detections_ort": 30,
+  "detections_opencv": 30,
+  "seconds_ort": 4.01,
+  "seconds_opencv": 4.15
  },
  "license": "Código e pesos: mesmos termos do PelotaVision; método StarDist (BSD-3) reimplementado, sem código copiado."
 }
