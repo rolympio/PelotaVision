@@ -1,0 +1,33 @@
+plugins { id 'java' }
+
+version = '0.1.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+
+// OpenCV Java oficial 4.12.0 (opencv-4120.jar + x64/opencv_java4120.dll).
+// No CI vem do pacote oficial do Windows; localmente: -PopencvJava=C:/opencv/build/java
+def opencvJava = file(findProperty('opencvJava') ?: System.getenv('OPENCV_JAVA_DIR') ?: 'opencv-java')
+
+sourceSets { main { java.srcDirs += file('../core/src/main/java') } }
+
+dependencies {
+    implementation files("${opencvJava}/opencv-4120.jar")
+    testImplementation 'junit:junit:4.13.2'
+}
+
+jar {
+    archiveFileName = 'pelotavision-desktop.jar'
+    manifest { attributes('Main-Class': 'br.com.pelotavision.DesktopApp', 'Class-Path': 'opencv-4120.jar', 'Implementation-Version': project.version) }
+}
+
+test {
+    systemProperty 'java.library.path', "${opencvJava}/x64"
+    systemProperty 'pelotavision.validationDir', file('../verification').absolutePath
+    systemProperty 'pelotavision.modelDir', file('../app/src/main/assets').absolutePath
+    systemProperty 'java.awt.headless', 'true'
+    testLogging { events 'passed', 'failed'; showStandardStreams = true; exceptionFormat = 'full' }
+}

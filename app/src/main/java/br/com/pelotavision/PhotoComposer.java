@@ -8,10 +8,7 @@ final class PhotoComposer {
   final int titleHeight,originalTop,annotatedTop,summaryTop,histogramTop,height;
   Layout(int w,int h){titleHeight=Math.max(1,Math.round(w*24f/380));originalTop=titleHeight;annotatedTop=originalTop+h+titleHeight;summaryTop=annotatedTop+h;histogramTop=summaryTop+Math.round(w*152f/380);height=histogramTop+Math.round(w*216f/380);}
  }
- static Granulometry.Distribution pixelHistogram(PelletDetector.Result result){
-  List<Granulometry.Item> items=new ArrayList<>();for(PelletDetector.Detection d:result.circles)items.add(new Granulometry.Item(2*d.radius,d.partial,d.needsReview));
-  return Granulometry.compute(items,Granulometry.Settings.pixels(10),result.width,result.height,result.width,result.height);
- }
+ static Granulometry.Distribution pixelHistogram(PelletDetector.Result result){return ReportTables.pixelHistogram(result);}
  static Bitmap compose(Bitmap photo,PelletDetector.Result result,Granulometry.Distribution distribution){return compose(photo,result,null,distribution);}
  static Bitmap compose(Bitmap photo,PelletDetector.Result result,CrackAnalysis cracks,Granulometry.Distribution distribution){
   return compose(photo,result,cracks,distribution,null,0);

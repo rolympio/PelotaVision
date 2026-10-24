@@ -31,6 +31,8 @@ android {
     splits { abi { enable true; reset(); include 'arm64-v8a', 'x86_64'; universalApk false } }
     buildTypes { release { minifyEnabled false } }
     testOptions { unitTests { includeAndroidResources = true } }
+    // Nucleo de analise comum a Android e Windows (Java puro + OpenCV), em ../core.
+    sourceSets { main { java.srcDirs += rootProject.file('core/src/main/java') } }
 }
 android.testOptions.unitTests.all {
     systemProperty 'robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2'

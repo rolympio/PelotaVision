@@ -1,0 +1,41 @@
+PelotaVision Windows 0.1.0 - prototipo
+=====================================
+
+Nucleo de analise: o MESMO codigo do PelotaVision Android 0.11.0 (deteccao, elipses,
+sugestao de ajuste, triagem de trincas Random Forest, granulometria por numero).
+OpenCV oficial 4.12.0 para Windows x64.
+
+USO
+1. Extraia o .zip para uma pasta sua (ex.: Documentos\PelotaVision). Nao precisa instalar
+   nem de direitos de administrador.
+2. Abra PelotaVision.exe.
+3. Webcam: escolha a camera e a resolucao, "Abrir camera". A contagem ao vivo e rapida
+   (640 px); a analise completa e feita na foto ("Capturar foto").
+   Ou use "Abrir imagem..." para analisar uma foto (jpg, png, webp, bmp, tif).
+4. Escala: digite px/mm da imagem original, ou "Medir referencia na foto..." e clique
+   nas duas pontas de um objeto de tamanho conhecido NO MESMO PLANO das pelotas.
+   Sem escala, os resultados ficam em pixels.
+5. "Salvar resultados..." grava: original (copia byte a byte, ou PNG sem perdas do quadro
+   da webcam), imagem marcada, CSV por pelota (32 colunas, igual ao Android), CSV do
+   histograma e JSON com camera, ajuste, escala e resultados.
+
+WEBCAM - CUIDADOS
+- Foco e exposicao automaticos mudam a imagem entre fotos. Marque "Travar foco" e
+  "Travar exposicao" e use "Ajustes do driver..." para fixar manualmente. Nem toda
+  webcam aceita; o JSON registra o que o driver informou.
+- A escala px/mm so vale para a mesma camera, altura, zoom e resolucao. Mudou qualquer
+  um, recalibre.
+- Resolucao: uma webcam 1080p cobrindo 300 mm da cerca de 6,4 px/mm (~77 px numa pelota
+  de 12 mm). Serve para contar e medir; para trincas e fraco.
+- O modelo de trincas foi treinado com poucas fotos de celular, com rotulos provisorios.
+  Em webcam nao tem nenhuma validacao.
+
+LIMITES
+- Distribuicao por numero, nao por massa. Foto 2D nao equivale a peneiramento.
+- Sem correcao de perspectiva, altura do leito ou distorcao de lente.
+- Ainda nao implementado no Windows: ROI, calibracao por objeto/correia, revisao manual
+  de trincas por pelota, analise detalhada em blocos e super-resolucao.
+- Prototipo de desenvolvimento. Nao ha validacao com amostras reais nem metrologica.
+
+Licencas: OpenCV (Apache 2.0, OpenCV_LICENSE.txt). Modelo FSRCNN em modelos\ (ver
+FSRCNN_LICENSE.txt / FSRCNN_NOTICE.txt). Runtime Java: Eclipse Temurin (GPLv2 + CPE).

@@ -1,0 +1,142 @@
+name: Windows - compilar, testar e empacotar
+
+on:
+  push:
+    branches: [main]
+    tags: ['windows-v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publicar:
+        description: 'Publicar o pacote portatil como Release'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write   # necessario para criar a Release
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  OPENCV_VERSION: 4.12.0
+  OPENCV_ROOT: C:\opencv-4.12.0
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache do OpenCV oficial
+        id: ocv
+        uses: actions/cache@v5
+        with:
+          path: C:\opencv-4.12.0
+          key: opencv-${{ env.OPENCV_VERSION }}-windows-official
+
+      - name: Baixar OpenCV oficial ${{ env.OPENCV_VERSION }} (Windows)
+        if: steps.ocv.outputs.cache-hit != 'true'
+        run: |
+          curl -sSL -o ocv.exe "https://github.com/opencv/opencv/releases/download/${OPENCV_VERSION}/opencv-${OPENCV_VERSION}-windows.exe"
+          sha256sum ocv.exe
+          7z x ocv.exe -o"C:/opencv-4.12.0" -y > /dev/null
+          rm ocv.exe
+
+      - name: Preparar OpenCV Java para o build
+        run: |
+          J="C:/opencv-4.12.0/opencv/build/java"
+          ls -la "$J" "$J/x64"
+          mkdir -p desktop/opencv-java/x64
+          cp "$J/opencv-4120.jar" desktop/opencv-java/
+          cp "$J/x64/opencv_java4120.dll" desktop/opencv-java/x64/
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Compilar e testar (OpenCV nativo 4.12)
+        shell: cmd
+        run: gradlew.bat -p desktop test jar --stacktrace
+
+      - name: Paridade com registros historicos
+        if: always()
+        run: |
+          f=desktop/build/parity/summary.txt
+          if [ -f "$f" ]; then while IFS= read -r line; do echo "::notice title=Execucao real do nucleo::$line"; done < "$f"; else echo "::warning::Sem resumo de paridade"; fi
+
+      - name: Empacotar versao portatil (sem instalador, sem admin)
+        run: |
+          JH=$(cygpath -u "$JAVA_HOME")
+          VN=$(grep -oP "^version = '\K[^']+" desktop/build.gradle)
+          echo "PV_DESKTOP_VERSION=$VN" >> "$GITHUB_ENV"
+          IN=pkg/input; rm -rf pkg; mkdir -p "$IN/modelos" pkg/dist
+          cp desktop/build/libs/pelotavision-desktop.jar "$IN/"
+          cp desktop/opencv-java/opencv-4120.jar "$IN/"
+          cp desktop/opencv-java/x64/opencv_java4120.dll "$IN/"
+          # Runtime do Visual C++ ao lado da DLL do OpenCV (maquinas corporativas podem nao ter).
+          for d in vcruntime140.dll vcruntime140_1.dll msvcp140.dll; do [ -f "$JH/bin/$d" ] && cp "$JH/bin/$d" "$IN/" || echo "sem $d no JDK"; done
+          cp app/src/main/assets/crack_forest.pvrf app/src/main/assets/metadata.json "$IN/modelos/"
+          cp app/src/main/assets/FSRCNN_* "$IN/modelos/"
+          cp "C:/opencv-4.12.0/opencv/LICENSE" "$IN/OpenCV_LICENSE.txt"
+          "$JH/bin/jpackage" --type app-image --name PelotaVision --app-version "$VN" \
+            --input "$IN" --main-jar pelotavision-desktop.jar --main-class br.com.pelotavision.DesktopApp \
+            --java-options "-Xmx3g" --vendor "PelotaVision" --description "PelotaVision Windows $VN (nucleo Android 0.11.0)" \
+            --dest pkg/dist
+          cp desktop/LEIA-ME.txt pkg/dist/PelotaVision/
+          ls -R pkg/dist/PelotaVision | head -40
+
+      - name: Autoteste do pacote montado
+        run: |
+          rm -rf pkg/autoteste
+          ./pkg/dist/PelotaVision/PelotaVision.exe --autoteste "verification/fixtures/1000411645.jpg" "pkg/autoteste" || echo "exit=$?"
+          cat pkg/autoteste/autoteste.txt
+          grep -q '^exit=0$' pkg/autoteste/autoteste.txt
+          echo "::notice title=Autoteste do pacote::$(tr '\n' ' ' < pkg/autoteste/autoteste.txt)"
+
+      - name: Compactar
+        run: |
+          Z="PelotaVision_Windows_${PV_DESKTOP_VERSION}_portatil.zip"
+          (cd pkg/dist && 7z a -tzip "../../$Z" PelotaVision > /dev/null)
+          sha256sum "$Z" | tee SHA256_windows.txt
+          echo "PV_ZIP=$Z" >> "$GITHUB_ENV"
+          echo "::notice title=Pacote Windows::$(cat SHA256_windows.txt) ($(du -h "$Z" | cut -f1))"
+
+      - name: Publicar artefato
+        uses: actions/upload-artifact@v6
+        with:
+          name: PelotaVision-Windows-${{ github.sha }}
+          path: |
+            ${{ env.PV_ZIP }}
+            SHA256_windows.txt
+            desktop/build/parity/
+          retention-days: 30
+
+      - name: Publicar Release
+        if: success() && ((github.event_name == 'workflow_dispatch' && inputs.publicar) || startsWith(github.ref, 'refs/tags/windows-v'))
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="windows-v${PV_DESKTOP_VERSION}-build${GITHUB_RUN_NUMBER}"
+          SHORT=$(echo "$GITHUB_SHA" | cut -c1-7)
+          {
+            echo "PelotaVision Windows ${PV_DESKTOP_VERSION} - nucleo de analise do Android 0.11.0 - commit ${SHORT}."
+            echo
+            echo "**Como usar:** baixe \`${PV_ZIP}\`, extraia para uma pasta (ex.: Documentos\\PelotaVision) e abra \`PelotaVision.exe\`. Nao precisa instalar nem de administrador."
+            echo
+            echo "Execucao real do nucleo com OpenCV 4.12 nativo (imagens de verificacao do repositorio):"
+            echo
+            sed 's/^/- /' desktop/build/parity/summary.txt
+            echo
+            echo "Prototipo de desenvolvimento. Nao representa validacao com amostras reais nem metrologica."
+          } > notas.md
+          gh release create "$TAG" "$PV_ZIP" SHA256_windows.txt --target "$GITHUB_SHA" --title "PelotaVision Windows ${PV_DESKTOP_VERSION} (build ${GITHUB_RUN_NUMBER})" --notes-file notas.md --prerelease
+          echo "::notice title=Release::${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"

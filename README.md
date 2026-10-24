@@ -56,6 +56,16 @@ A sugestão usa os mesmos métodos de bordas e LoG, com correção de iluminaç�
 
 **Limites mantidos:** referência no mesmo plano, trecho plano e câmera aproximadamente perpendicular. Não há retificação de perspectiva nem compensação de altura do leito, lente ou abaulamento. Variação de largura marcada superior a 8% bloqueia a calibração pela correia; esse limite não é incerteza metrológica validada. Pelotas pequenas/desfocadas podem ficar inconclusivas, e trinca não indicada não comprova ausência de defeito. O relatório é uma medida projetada por número, não um ensaio de peneiramento. Não houve teste desta versão em telefone físico nem validação industrial.
 
+## Estrutura multiplataforma (a partir de 24/10/2026)
+
+| Pasta | Conteúdo |
+|---|---|
+| `core/` | Núcleo de análise comum (Java puro + OpenCV): detecção, elipses, sugestão de ajuste, trincas, calibração, granulometria e tabelas CSV (`ReportTables`). Sem dependência de Android. |
+| `app/` | Android. Compila `core/` junto (`sourceSets`), mantendo pacote, versão e assinatura. |
+| `desktop/` | Windows 11 (Java Swing + OpenCV oficial 4.12.0 x64), webcam e arquivos. Build independente: `gradlew -p desktop test jar -PopencvJava=C:/opencv/build/java`. |
+
+Workflows: `android.yml` (APK assinado) e `windows.yml` (pacote portátil .zip, testes do núcleo com OpenCV nativo e autoteste do pacote montado). Releases publicadas por *Run workflow* com "publicar" marcado.
+
 ## Projeto e compilação
 
 Java 17, Gradle 8.9, Android Gradle Plugin 8.7.3, SDK/build-tools 35. As dependências continuam em `app/build.gradle`. Configure o SDK em `local.properties` ou no Android Studio. Execute:

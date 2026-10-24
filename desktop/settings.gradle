@@ -1,0 +1,3 @@
+// Build independente do Android: nao exige Android SDK.
+dependencyResolutionManagement { repositories { mavenCentral() } }
+rootProject.name = 'PelotaVisionDesktop'

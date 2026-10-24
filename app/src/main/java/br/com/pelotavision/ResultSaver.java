@@ -109,18 +109,17 @@ final class ResultSaver {
                 histogram.put("d10"+suffix,Double.isFinite(distribution.d10)?distribution.d10:JSONObject.NULL);
                 histogram.put("d50"+suffix,Double.isFinite(distribution.d50)?distribution.d50:JSONObject.NULL);
                 histogram.put("d90"+suffix,Double.isFinite(distribution.d90)?distribution.d90:JSONObject.NULL);
-                JSONArray bins=new JSONArray();StringBuilder grainCsv=new StringBuilder("\uFEFFlower"+suffix+";upper"+suffix+";count;percent_by_number\n");
+                JSONArray bins=new JSONArray();String grainCsv=ReportTables.histogramCsv(distribution);
                 for(int i=0;i<distribution.binCount();i++) {
                     JSONObject bin=new JSONObject();bin.put("lower"+suffix,distribution.lower(i));bin.put("upper"+suffix,distribution.upper(i));
                     bin.put("count",distribution.count(i));bin.put("percent_by_number",distribution.percent(i));bins.put(bin);
-                    grainCsv.append(String.format(Locale.ROOT,"%.6f;%.6f;%d;%.6f\n",distribution.lower(i),distribution.upper(i),distribution.count(i),distribution.percent(i)));
                 }
                 histogram.put("bins",bins);json.put("histogram",histogram);
                 Uri grainUri=create(resolver,MediaStore.Downloads.EXTERNAL_CONTENT_URI,base+"_granulometria.csv","text/csv","Download/PelotaVision");pending.add(grainUri);
-                try(OutputStream output=stream(resolver,grainUri)){output.write(grainCsv.toString().getBytes(StandardCharsets.UTF_8));}
+                try(OutputStream output=stream(resolver,grainUri)){output.write(grainCsv.getBytes(StandardCharsets.UTF_8));}
             }
             JSONObject cfg=new JSONObject();cfg.put("min_radius_fraction",parameters.minRadiusFraction);cfg.put("max_radius_fraction",parameters.maxRadiusFraction);cfg.put("log_threshold",parameters.threshold);json.put("parameters",cfg);
-            JSONArray detections=new JSONArray();StringBuilder csv=new StringBuilder("\uFEFFid;x_px;y_px;radius_px;equivalent_diameter_px;area_px2;roundness;partial_edge;needs_review;equivalent_diameter_mm;area_mm2;included_in_histogram;crack_status;crack_manually_reviewed;crack_score;crack_method;ellipse_major_axis_px;ellipse_minor_axis_px;ellipse_angle_deg;apparent_sphericity_2d;ellipse_fitted;included_in_shape_mean;ellipse_major_axis_mm;ellipse_minor_axis_mm;ellipse_fit_support;ellipse_fit_rms;calibration_reference_id;calibration_measure;calibration_real_mm;calibration_reference_excluded;calibration_original_px_per_mm;calibration_full_image_id\n");
+            JSONArray detections=new JSONArray();String csv=ReportTables.pelletCsv(result,cracks,distribution);
             int id=0;for(PelletDetector.Detection d:result.circles) {
                 id++;JSONObject item=new JSONObject();item.put("id",id);item.put("x_px",d.x);item.put("y_px",d.y);item.put("radius_px",d.radius);
                 item.put("equivalent_diameter_px",d.radius*2);item.put("area_px2",d.area);item.put("roundness",d.roundness);item.put("partial_edge",d.partial);item.put("needs_review",d.needsReview);detections.put(item);
@@ -136,16 +135,12 @@ final class ResultSaver {
                 boolean included=distribution!=null&&distribution.includes(new Granulometry.Item(2*d.radius,d.partial,d.needsReview));
                 item.put("equivalent_diameter_mm",Double.isFinite(diameter)?diameter:JSONObject.NULL);
                 item.put("area_mm2",Double.isFinite(area)?area:JSONObject.NULL);item.put("included_in_histogram",included);
-                csv.append(String.format(Locale.ROOT,"%d;%.3f;%.3f;%.3f;%.3f;%.3f;%.4f;%s;%s;%s;%s;%s;%s;%s;%s;%s",id,d.x,d.y,d.radius,2*d.radius,d.area,d.roundness,d.partial,d.needsReview,
-                    Double.isFinite(diameter)?String.format(Locale.ROOT,"%.6f",diameter):"",Double.isFinite(area)?String.format(Locale.ROOT,"%.6f",area):"",included,crack==null?"not_analyzed":crack.status.name(),crack!=null&&crack.manuallyReviewed,crack!=null&&Double.isFinite(crack.modelScore)?String.format(Locale.ROOT,"%.6f",crack.modelScore):"",crack==null?"not_analyzed":crack.method));
-                csv.append(String.format(Locale.ROOT,";%s;%s;%s;%s;%s;%s;%s;%s;%s;%s",number(d.ellipseFitted?2*d.semiMajor:Double.NaN),number(d.ellipseFitted?2*d.semiMinor:Double.NaN),number(d.ellipseFitted?d.angleDeg:Double.NaN),number(d.aspectRatio()),d.ellipseFitted,ShapeStatistics.includes(d),number(originalAxes!=null?originalAxes.major/distribution.settings.originalPixelsPerMm:Double.NaN),number(originalAxes!=null?originalAxes.minor/distribution.settings.originalPixelsPerMm:Double.NaN),number(d.fitSupport),number(d.fitRms)));
-                ObjectCalibration.Reference ref=distribution.settings.selectedObject;csv.append(String.format(Locale.ROOT,";%s;%s;%s;%s;%s;%s\n",ref==null?"":ref.id,ref==null?"":ref.measure.name(),number(ref==null?Double.NaN:ref.realMm),ref==null?"":Boolean.toString(ref.excludeFromStatistics),number(physical?distribution.settings.originalPixelsPerMm:Double.NaN),ref==null?"":Integer.toString(ref.fullImageId)));
             }
             json.put("detections",detections);
             Uri jsonUri=create(resolver,MediaStore.Downloads.EXTERNAL_CONTENT_URI,base+".json","application/json","Download/PelotaVision");pending.add(jsonUri);
             try(OutputStream output=stream(resolver,jsonUri)){output.write(json.toString(2).getBytes(StandardCharsets.UTF_8));}
             Uri csvUri=create(resolver,MediaStore.Downloads.EXTERNAL_CONTENT_URI,base+".csv","text/csv","Download/PelotaVision");pending.add(csvUri);
-            try(OutputStream output=stream(resolver,csvUri)){output.write(csv.toString().getBytes(StandardCharsets.UTF_8));}
+            try(OutputStream output=stream(resolver,csvUri)){output.write(csv.getBytes(StandardCharsets.UTF_8));}
             ContentValues visible=new ContentValues();visible.put(MediaStore.MediaColumns.IS_PENDING,0);
             for(Uri uri:pending)if(resolver.update(uri,visible,null,null)!=1)throw new IOException("Não foi possível concluir a gravação.");
             return new SavedResult(base,image);
