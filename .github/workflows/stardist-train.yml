@@ -1,0 +1,68 @@
+name: StarDist - treinar modelo de pelotas
+
+# Treino reproduzivel em CPU do runner. O resultado (ONNX, metadados, metricas e log)
+# e gravado de volta no proprio branch, porque logs e artefatos do Actions nao sao
+# legiveis pela sessao de desenvolvimento.
+on:
+  workflow_dispatch:
+    inputs:
+      iteracoes:
+        description: 'Iteracoes de treino (lote 8, recortes 192 px)'
+        default: '3000'
+  push:
+    branches-ignore: [main]
+    paths: ['ml_training/stardist/*.py', 'ml_training/stardist/requirements.txt', '.github/workflows/stardist-train.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stardist-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  train:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      ITER: ${{ github.event.inputs.iteracoes || '3000' }}
+      OUT: ml_training/stardist/output
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Dependencias
+        run: |
+          pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+          pip install -r ml_training/stardist/requirements.txt
+      - name: Treinar (validacao com cenas fora) e treinar final (todas as cenas)
+        id: train
+        working-directory: ml_training/stardist
+        run: |
+          set +e
+          mkdir -p output
+          { echo "commit $(git rev-parse --short HEAD) iteracoes $ITER nproc $(nproc)"
+            python -u train.py --exclude cluster,paired40 --iterations "$ITER" --out output/holdout.onnx --metrics output/holdout_metrics.json &&
+            python -u train.py --iterations "$ITER" --out output/final.onnx --metrics output/final_metrics.json &&
+            python -u check_onnx.py --model output/final.onnx --final-metrics output/final_metrics.json \
+              --holdout-metrics output/holdout_metrics.json --metadata output/pellet_stardist.json --reference output/reference_dense.json
+          } > output/training_log.txt 2>&1
+          s=$?; tail -n 40 output/training_log.txt
+          echo "status=$s" >> "$GITHUB_OUTPUT"
+          grep -E "^(paridade|brown40|gray42|gray20|dense|cluster|spaced|paired40) " output/training_log.txt | while IFS= read -r l; do echo "::notice title=StarDist::$l"; done
+          [ $s -eq 0 ] || echo "::error title=StarDist::falhou (status $s): $(tail -n 3 output/training_log.txt | tr '\n' ' ')"
+      - name: Instalar nos assets e gravar no branch
+        if: always()
+        run: |
+          if [ "${{ steps.train.outputs.status }}" = "0" ]; then
+            cp $OUT/final.onnx app/src/main/assets/pellet_stardist.onnx
+            cp $OUT/pellet_stardist.json app/src/main/assets/pellet_stardist.json
+            rm -f $OUT/final.onnx
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A $OUT app/src/main/assets/pellet_stardist.onnx app/src/main/assets/pellet_stardist.json 2>/dev/null || git add -A $OUT
+          git commit -m "StarDist: modelo treinado no CI ($ITER iteracoes, status ${{ steps.train.outputs.status }})" || exit 0
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          [ "${{ steps.train.outputs.status }}" = "0" ]
