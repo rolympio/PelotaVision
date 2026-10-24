@@ -19,7 +19,7 @@ final class RoiZoomView extends View {
     float scale(){return (float)Math.min(getWidth()/roi.width(),getHeight()/roi.height())*zoom;}
     float left(){return (getWidth()-(float)roi.width()*scale())/2-(float)roi.left*scale()+panX;}
     float top(){return (getHeight()-(float)roi.height()*scale())/2-(float)roi.top*scale()+panY;}
-    @Override protected void onDraw(Canvas c){super.onDraw(c);float s=scale();if(s<=0)return;c.save();c.translate(left(),top());c.scale(s,s);new ReportViewport(photo.getWidth(),photo.getHeight(),roi,true).clip(c,roi);c.drawBitmap(photo,0,0,null);Paint a=new Paint(3),b=new Paint(3),o=new Paint(3);a.setStrokeWidth(Math.max(1.2f,2/s));CircleOverlay.draw(c,result,0,0,1,true,a,b,o);CrackOverlay.draw(c,result,cracks,0,0,1);ReferenceOverlay.draw(c,reference,0,0,1);c.restore();}
+    @Override protected void onDraw(Canvas c){super.onDraw(c);float s=scale();if(s<=0)return;c.save();c.translate(left(),top());c.scale(s,s);ReportClip.clip(c,new ReportViewport(photo.getWidth(),photo.getHeight(),roi,true),roi);c.drawBitmap(photo,0,0,null);Paint a=new Paint(3),b=new Paint(3),o=new Paint(3);a.setStrokeWidth(Math.max(1.2f,2/s));CircleOverlay.draw(c,result,0,0,1,true,a,b,o);CrackOverlay.draw(c,result,cracks,0,0,1);ReferenceOverlay.draw(c,reference,0,0,1);c.restore();}
     @Override public boolean onTouchEvent(MotionEvent e){pinch.onTouchEvent(e);switch(e.getActionMasked()){
         case MotionEvent.ACTION_DOWN:multi=false;lastX=e.getX();lastY=e.getY();if(getParent()!=null)getParent().requestDisallowInterceptTouchEvent(true);break;
         case MotionEvent.ACTION_POINTER_DOWN:multi=true;break;

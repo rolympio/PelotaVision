@@ -59,7 +59,7 @@ final class PhotoComposer {
   }catch(RuntimeException|OutOfMemoryError e){output.recycle();throw e;}
  }
  private static void drawPanel(Canvas canvas,Bitmap photo,PelletDetector.Result result,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,ReportViewport viewport,int panelTop,boolean marked){
-  canvas.save();canvas.clipRect(0,panelTop,viewport.width,panelTop+viewport.height);canvas.translate(-viewport.left*viewport.scale,panelTop-viewport.top*viewport.scale);canvas.scale(viewport.scale,viewport.scale);viewport.clip(canvas,region);canvas.drawBitmap(photo,0,0,null);
+  canvas.save();canvas.clipRect(0,panelTop,viewport.width,panelTop+viewport.height);canvas.translate(-viewport.left*viewport.scale,panelTop-viewport.top*viewport.scale);canvas.scale(viewport.scale,viewport.scale);ReportClip.clip(canvas,viewport,region);canvas.drawBitmap(photo,0,0,null);
   if(marked){
    Paint stroke=new Paint(Paint.ANTI_ALIAS_FLAG),text=new Paint(Paint.ANTI_ALIAS_FLAG),outline=new Paint(Paint.ANTI_ALIAS_FLAG);stroke.setStrokeWidth(Math.max(2,photo.getWidth()/600f));
    CircleOverlay.draw(canvas,result,0,0,1,true,stroke,text,outline);CrackOverlay.draw(canvas,result,cracks,0,0,1);
