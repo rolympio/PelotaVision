@@ -23,7 +23,7 @@ public final class ReportTables {
 
     public static String histogramCsv(Granulometry.Distribution distribution) {
         String suffix = distribution.settings.pixelsOnly() ? "_px" : "_mm";
-        StringBuilder grainCsv = new StringBuilder("﻿lower" + suffix + ";upper" + suffix + ";count;percent_by_number\n");
+        StringBuilder grainCsv = new StringBuilder("\uFEFFlower" + suffix + ";upper" + suffix + ";count;percent_by_number\n");
         for (int i = 0; i < distribution.binCount(); i++)
             grainCsv.append(String.format(Locale.ROOT, "%.6f;%.6f;%d;%.6f\n", distribution.lower(i), distribution.upper(i), distribution.count(i), distribution.percent(i)));
         return grainCsv.toString();
@@ -32,7 +32,7 @@ public final class ReportTables {
     public static String pelletCsv(PelletDetector.Result result, CrackAnalysis cracks, Granulometry.Distribution distribution) {
         if (distribution == null) distribution = pixelHistogram(result);
         boolean physical = !distribution.settings.pixelsOnly();
-        StringBuilder csv = new StringBuilder("﻿" + PELLET_HEADER + "\n");
+        StringBuilder csv = new StringBuilder("\uFEFF" + PELLET_HEADER + "\n");
         int id = 0;
         for (PelletDetector.Detection d : result.circles) {
             id++;
