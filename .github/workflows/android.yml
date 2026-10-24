@@ -3,11 +3,17 @@ name: Android - compilar, testar e empacotar
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      publicar:
+        description: 'Publicar o APK como Release (download direto)'
+        type: boolean
+        default: true
 
 permissions:
-  contents: read
+  contents: write   # necessario para criar a Release com o APK
 
 concurrency:
   group: android-${{ github.ref }}
@@ -111,3 +117,29 @@ jobs:
             app/build/reports/
             app/build/test-results/
           retention-days: 30
+
+      - name: Publicar Release (APK para download direto)
+        if: success() && env.PV_SIGNED == '1' && ((github.event_name == 'workflow_dispatch' && inputs.publicar) || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VN=$(grep -oP "versionName '\K[^']+" app/build.gradle)
+          VC=$(grep -oP "versionCode \K[0-9]+" app/build.gradle)
+          SHORT=$(echo "$GITHUB_SHA" | cut -c1-7)
+          TAG="v${VN}-build${GITHUB_RUN_NUMBER}"
+          mkdir -p release
+          cp app/build/outputs/apk/debug/app-arm64-v8a-debug.apk "release/PelotaVision_${VN}_arm64.apk"
+          cp app/build/outputs/apk/debug/app-x86_64-debug.apk "release/PelotaVision_${VN}_x86_64_teste.apk"
+          ( cd release && sha256sum *.apk > SHA256.txt )
+          cat > notas.md <<NOTAS
+          PelotaVision ${VN} (versionCode ${VC}) - commit ${SHORT}, execucao ${GITHUB_RUN_NUMBER}.
+
+          **Para o celular:** baixe \`PelotaVision_${VN}_arm64.apk\`. O arquivo x86_64 e so para emulador.
+
+          Assinatura conferida: certificado SHA-256 \`${PV_EXPECTED_CERT_SHA256}\` (mesma chave da 0.11.0).
+          Testes e lint: ver a execucao ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          Compilacao de desenvolvimento. Nao representa validacao com amostras reais.
+          NOTAS
+          gh release create "$TAG" release/* --target "$GITHUB_SHA" --title "PelotaVision ${VN} (build ${GITHUB_RUN_NUMBER})" --notes-file notas.md --prerelease
+          echo "::notice title=Release::${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
