@@ -4,10 +4,14 @@ import org.opencv.core.Mat;import java.util.*;import java.util.function.BooleanS
 public final class DetectionTuner {
  private DetectionTuner(){}
  public static final String METHOD="photo_setting_search_coverage_v2";
+ public static final int GRADIENT=0,LOG=1,NEURAL=2;
  public static final class Option {
-  public final int profile,sensitivity;public final boolean legacy;public final PelletDetector.Parameters parameters;public final String id;
-  public Option(int profile,int sensitivity,boolean legacy){if(profile<0||profile>3||sensitivity<0||sensitivity>100)throw new IllegalArgumentException("Ajuste inválido.");this.profile=profile;this.sensitivity=sensitivity;this.legacy=legacy;double[][] sizes={{.013,.038},{.021,.060},{.04,.105},{.012,.15}};parameters=new PelletDetector.Parameters(sizes[profile][0],sizes[profile][1],.12-sensitivity*.001);id=(legacy?"log":"clahe")+"_p"+profile+"_s"+sensitivity;}
-  public String label(){return (legacy?"LoG · ":"Bordas · ")+new String[]{"Pequenas","Médias","Grandes","Auto"}[profile]+" · sens. "+sensitivity+"%";}
+  public final int profile,sensitivity,method;public final boolean legacy;public final PelletDetector.Parameters parameters;public final String id;
+  public Option(int profile,int sensitivity,boolean legacy){this(profile,sensitivity,legacy?LOG:GRADIENT);}
+  public Option(int profile,int sensitivity,int method){if(profile<0||profile>3||sensitivity<0||sensitivity>100||method<GRADIENT||method>NEURAL)throw new IllegalArgumentException("Ajuste inválido.");this.profile=profile;this.sensitivity=sensitivity;this.method=method;legacy=method==LOG;double[][] sizes={{.013,.038},{.021,.060},{.04,.105},{.012,.15}};parameters=new PelletDetector.Parameters(sizes[profile][0],sizes[profile][1],.12-sensitivity*.001);id=new String[]{"clahe","log","nn"}[method]+"_p"+profile+"_s"+sensitivity;}
+  public boolean neural(){return method==NEURAL;}
+  public String methodName(){return new String[]{"gradient","log","neural_stardist"}[method];}
+  public String label(){return new String[]{"Bordas · ","LoG · ","Rede neural · "}[method]+new String[]{"Pequenas","Médias","Grandes","Auto"}[profile]+" · sens. "+sensitivity+"%";}
  }
  public static final class Trial {
   public final Option option;public final PelletDetector.Result result;public final String error;public final double stability,score;public final DetectionAssessment.Metrics metrics;public final DetectionEvidence.Map evidenceMap;public final DetectionEvidence.Coverage coverage;
@@ -32,11 +36,17 @@ public final class DetectionTuner {
  public static List<Option> options(Option current){
   LinkedHashMap<String,Option> options=new LinkedHashMap<>();options.put(current.id,current);
   // Both localization methods are mandatory and interleaved: LoG is tested early even under a time budget.
-  for(int profile:new int[]{1,3,0,2})for(boolean legacy:new boolean[]{true,false}){Option o=new Option(profile,75,legacy);options.put(o.id,o);}
+  // A rede neural (modelo de demonstração) só entra na busca quando o usuário a escolheu: o padrão não muda.
+  boolean neural=current.neural()&&NeuralPelletDetector.available();
+  for(int profile:new int[]{1,3,0,2})for(int method:new int[]{LOG,GRADIENT,NEURAL}){if(method==NEURAL&&!neural)continue;Option o=new Option(profile,75,method);options.put(o.id,o);}
   for(int sensitivity:new int[]{55,90})for(int profile:new int[]{1,3,0,2})for(boolean legacy:new boolean[]{true,false}){Option o=new Option(profile,sensitivity,legacy);options.put(o.id,o);}
   return new ArrayList<>(options.values());
  }
- public static PelletDetector.Result detect(Mat gray,Option option){PelletDetector.Result seeds=option.legacy?new PelletDetector().detect(gray,option.parameters,1024,12):new AdaptivePelletDetector().detect(gray,option.parameters,1024,12);return new EllipseFitter().refine(gray,seeds);}
+ public static PelletDetector.Result detect(Mat gray,Option option){return new EllipseFitter().refine(gray,seeds(gray,option,1024,12));}
+ /** Localização sem refinamento elíptico; o método neural exige o modelo instalado. */
+ public static PelletDetector.Result seeds(Mat gray,Option option,int maximumSide,int scales){
+  if(option.method==NEURAL){NeuralPelletDetector nn=NeuralPelletDetector.get();if(nn==null)throw new IllegalStateException(NeuralPelletDetector.status());return nn.detect(gray,option.profile,option.sensitivity,option.parameters);}
+  return option.legacy?new PelletDetector().detect(gray,option.parameters,maximumSide,scales):new AdaptivePelletDetector().detect(gray,option.parameters,maximumSide,scales);}
  public static PelletDetector.Result detect(Mat gray,Option option,AnalysisWindow window){PelletDetector.Result result=detect(gray,option);return window==null?result:window.filterLocal(result);}
  public static Report search(Mat gray,Option current,DetectionAssessment.Context context,BooleanSupplier cancelled,Progress progress){return search(gray,current,context,cancelled,progress,30000);}
  public static Report search(Mat gray,Option current,DetectionAssessment.Context context,BooleanSupplier cancelled,Progress progress,long budgetMs){

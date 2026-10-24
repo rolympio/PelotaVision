@@ -43,6 +43,7 @@ public final class DesktopApp {
             log.append("opencv=").append(Core.VERSION).append('\n');
             log.append("appDir=").append(appDir()).append('\n');
             log.append("crackModel=").append(model("crack_forest.pvrf")).append(' ').append(model("crack_forest.pvrf").isFile()).append('\n');
+            log.append("neuralModel=").append(NeuralPelletDetector.status()).append('\n');
             org.opencv.core.Mat bgr = Mats.readUpright(image);
             PhotoSession session = new PhotoSession(image, null, null, bgr);
             bgr.release();
@@ -91,6 +92,7 @@ public final class DesktopApp {
         if (dll.isFile()) System.load(dll.getAbsolutePath());
         else System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
         loaded = true;
+        DesktopAnalysis.installNeuralModel();
     }
 
     /** Pasta do .jar da aplicacao. */

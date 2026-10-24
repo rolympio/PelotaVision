@@ -49,7 +49,7 @@ public class DesktopPipelineTest {
 
     static DesktopAnalysis.Config manual(DetectionTuner.Option o) {
         DesktopAnalysis.Config c = new DesktopAnalysis.Config();
-        c.autoSuggest = false; c.profile = o.profile; c.sensitivity = o.sensitivity; c.legacy = o.legacy;
+        c.autoSuggest = false; c.profile = o.profile; c.sensitivity = o.sensitivity; c.method = o.method;
         return c;
     }
 

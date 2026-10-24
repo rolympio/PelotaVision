@@ -66,7 +66,7 @@ final class MainFrame extends JFrame {
     private final JButton backLiveButton = new JButton("Voltar ao vivo");
 
     private final JComboBox<String> profileBox = new JComboBox<>(PROFILES);
-    private final JComboBox<String> methodBox = new JComboBox<>(new String[]{"Bordas/gradientes", "LoG/segmentacao"});
+    private final JComboBox<String> methodBox = new JComboBox<>(new String[]{"Bordas/gradientes", "LoG/segmentacao", "Rede neural StarDist (demonstracao)"});
     private final JSpinner sensitivity = new JSpinner(new SpinnerNumberModel(75, 0, 100, 5));
     private final JCheckBox autoSuggest = new JCheckBox("Sugerir ajuste ao abrir/capturar", true);
     private final JCheckBox numbers = new JCheckBox("Numeros");
@@ -104,7 +104,9 @@ final class MainFrame extends JFrame {
         for (int[] r : RESOLUTIONS) resolutionBox.addItem(r[0] + " x " + r[1]);
         resolutionBox.setSelectedIndex(Math.min(RESOLUTIONS.length - 1, prefs.getInt("resolution", 2)));
         profileBox.setSelectedIndex(prefs.getInt("profile", 3));
-        methodBox.setSelectedIndex(prefs.getBoolean("legacy", false) ? 1 : 0);
+        int savedMethod = prefs.getInt("method", prefs.getBoolean("legacy", false) ? 1 : 0);
+        methodBox.setSelectedIndex(savedMethod < 0 || savedMethod > 2 ? 0 : savedMethod);
+        methodBox.setToolTipText(NeuralPelletDetector.status() + ". A rede so propoe objetos; as elipses sao medidas nas bordas. Sem treino em fotos da usina.");
         sensitivity.setValue(prefs.getInt("sensitivity", 75));
         autoSuggest.setSelected(prefs.getBoolean("auto", true));
         lockFocus.setSelected(prefs.getBoolean("lockFocus", true));
@@ -335,7 +337,7 @@ final class MainFrame extends JFrame {
     DesktopAnalysis.Config config() {
         DesktopAnalysis.Config c = new DesktopAnalysis.Config();
         c.profile = profileBox.getSelectedIndex();
-        c.legacy = methodBox.getSelectedIndex() == 1;
+        c.method = methodBox.getSelectedIndex();
         c.sensitivity = (Integer) sensitivity.getValue();
         c.autoSuggest = autoSuggest.isSelected();
         c.crackSensitivity = crackSensitivity;
@@ -577,6 +579,7 @@ final class MainFrame extends JFrame {
         prefs.putInt("resolution", resolutionBox.getSelectedIndex());
         prefs.putInt("profile", profileBox.getSelectedIndex());
         prefs.putBoolean("legacy", methodBox.getSelectedIndex() == 1);
+        prefs.putInt("method", methodBox.getSelectedIndex());
         prefs.putInt("sensitivity", (Integer) sensitivity.getValue());
         prefs.putBoolean("auto", autoSuggest.isSelected());
         prefs.putBoolean("lockFocus", lockFocus.isSelected());

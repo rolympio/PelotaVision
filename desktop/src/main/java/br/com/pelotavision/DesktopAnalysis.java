@@ -18,13 +18,15 @@ final class DesktopAnalysis {
     static final class Config {
         int profile = 3;            // 0 pequenas, 1 medias, 2 grandes, 3 auto (padrao Android)
         int sensitivity = 75;       // padrao Android
-        boolean legacy = false;     // false = bordas/gradientes; true = LoG/segmentacao
+        int method = DetectionTuner.GRADIENT; // GRADIENT bordas, LOG segmentacao, NEURAL StarDist
         boolean autoSuggest = true; // padrao Android
         int crackSensitivity = 50;  // padrao Android
         double minimumExpectedMm = 5;
         Granulometry.Settings scale; // escala vigente (entra no contexto da busca, como no Android)
 
-        DetectionTuner.Option option() { return new DetectionTuner.Option(profile, sensitivity, legacy); }
+        /** O metodo neural so vale com o modelo instalado; sem ele, volta para bordas. */
+        int effectiveMethod() { return method == DetectionTuner.NEURAL && !NeuralPelletDetector.available() ? DetectionTuner.GRADIENT : method; }
+        DetectionTuner.Option option() { return new DetectionTuner.Option(profile, sensitivity, effectiveMethod()); }
     }
 
     static final class Output {
@@ -60,6 +62,17 @@ final class DesktopAnalysis {
             crackNote = "Modelo de trincas indisponivel (" + file + "): triagem heuristica.";
         }
         return crackModel;
+    }
+
+    /** Instala a rede StarDist da pasta modelos (pacote) ou pelotavision.modelDir (testes). */
+    static synchronized void installNeuralModel() {
+        if (NeuralPelletDetector.available()) return;
+        File onnx = DesktopApp.model(NeuralPelletDetector.MODEL), meta = DesktopApp.model(NeuralPelletDetector.METADATA);
+        try {
+            NeuralPelletDetector.install(onnx, new String(java.nio.file.Files.readAllBytes(meta.toPath()), java.nio.charset.StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            NeuralPelletDetector.install(onnx, "{}");
+        }
     }
 
     static String crackModelNote() {
@@ -139,8 +152,7 @@ final class DesktopAnalysis {
     /** Analise ao vivo, igual ao Android: lado maior 640 px, 8 escalas, sem busca e sem trincas. */
     static PelletDetector.Result live(Mat gray, Config cfg) {
         DetectionTuner.Option option = cfg.option();
-        PelletDetector.Result seeds = option.legacy ? new PelletDetector().detect(gray, option.parameters, 640, 8)
-                : new AdaptivePelletDetector().detect(gray, option.parameters, 640, 8);
+        PelletDetector.Result seeds = DetectionTuner.seeds(gray, option, 640, 8);
         return new EllipseFitter().refine(gray, seeds);
     }
 }

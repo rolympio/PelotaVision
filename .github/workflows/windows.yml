@@ -73,6 +73,8 @@ jobs:
         run: |
           f=desktop/build/parity/summary.txt
           if [ -f "$f" ]; then while IFS= read -r line; do echo "::notice title=Execucao real do nucleo::$line"; done < "$f"; else echo "::warning::Sem resumo de paridade"; fi
+          f=desktop/build/parity/neural.txt
+          if [ -f "$f" ]; then while IFS= read -r line; do echo "::notice title=Rede neural StarDist::$line"; done < "$f"; else echo "::warning::Sem resumo da rede neural"; fi
 
       - name: Empacotar versao portatil (sem instalador, sem admin)
         run: |
@@ -87,7 +89,7 @@ jobs:
           cp desktop/opencv-java/x64/opencv_java4120.dll "$IN/"
           # Runtime do Visual C++ ao lado da DLL do OpenCV (maquinas corporativas podem nao ter).
           for d in vcruntime140.dll vcruntime140_1.dll msvcp140.dll; do [ -f "$JH/bin/$d" ] && cp "$JH/bin/$d" "$IN/" || echo "sem $d no JDK"; done
-          cp app/src/main/assets/crack_forest.pvrf app/src/main/assets/metadata.json "$IN/modelos/"
+          cp app/src/main/assets/crack_forest.pvrf app/src/main/assets/metadata.json app/src/main/assets/pellet_stardist.onnx app/src/main/assets/pellet_stardist.json "$IN/modelos/"
           cp app/src/main/assets/FSRCNN_* "$IN/modelos/"
           LIC=$(find "C:/opencv-4.12.0/opencv" -maxdepth 3 -iname "LICENSE*" -type f | head -1 || true)
           if [ -n "$LIC" ]; then cp "$LIC" "$IN/OpenCV_LICENSE.txt"; else echo "::warning::LICENSE do OpenCV nao encontrado no pacote oficial"; fi
