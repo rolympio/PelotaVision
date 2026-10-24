@@ -87,6 +87,10 @@ jobs:
           for p in glob.glob('app/build/test-results/testDebugUnitTest/*.xml'):
               r=ET.parse(p).getroot()
               t+=int(r.get('tests',0)); f+=int(r.get('failures',0)); e+=int(r.get('errors',0)); s+=int(r.get('skipped',0))
+              for tc in r.iter('testcase'):
+                  for bad in list(tc.findall('failure'))+list(tc.findall('error')):
+                      msg=(bad.get('message') or bad.text or '').replace('\n',' ')[:600]
+                      print(f"::error title=Teste {tc.get('classname','').split('.')[-1]}.{tc.get('name')}::{msg}", file=sys.stderr)
           print(f"## Testes unitarios\n\nTotal {t} | falhas {f} | erros {e} | ignorados {s}\n")
           print(f"::notice title=Testes::total={t} falhas={f} erros={e} ignorados={s}", file=sys.stderr)
           for p in glob.glob('app/build/reports/lint-results-debug.xml'):
