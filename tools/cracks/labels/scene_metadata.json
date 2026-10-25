@@ -1,0 +1,49 @@
+{
+ "_doc": "Metadados das 7 cenas do RF 0.5.0 (ml_training/data). Material não declarado na origem -> unknown. 'unverified' = procedência não comprovada (aparência de imagem gerada); paired40 é declaradamente sintética e por isso só entra no treino.",
+ "verified_on": "2026-10-25",
+ "scenes": {
+  "brown40": {
+   "origin": "unverified",
+   "material_type": "unknown",
+   "split_role": "dev",
+   "license_status": "internal_unverified"
+  },
+  "gray42": {
+   "origin": "unverified",
+   "material_type": "unknown",
+   "split_role": "dev",
+   "license_status": "internal_unverified"
+  },
+  "gray20": {
+   "origin": "unverified",
+   "material_type": "unknown",
+   "split_role": "dev",
+   "license_status": "internal_unverified"
+  },
+  "dense": {
+   "origin": "unverified",
+   "material_type": "unknown",
+   "split_role": "dev",
+   "license_status": "internal_unverified"
+  },
+  "cluster": {
+   "origin": "unverified",
+   "material_type": "unknown",
+   "split_role": "dev",
+   "license_status": "internal_unverified"
+  },
+  "spaced": {
+   "origin": "unverified",
+   "material_type": "unknown",
+   "split_role": "dev",
+   "license_status": "internal_unverified"
+  },
+  "paired40": {
+   "origin": "synthetic",
+   "material_type": "unknown",
+   "split_role": "train_only",
+   "license_status": "internal_unverified",
+   "note": "declarada sintética em verification/baseline-0.5.0-VALIDACAO.md"
+  }
+ }
+}

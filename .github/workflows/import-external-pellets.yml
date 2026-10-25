@@ -1,0 +1,75 @@
+# Bloqueado por auditoria (2026-10-25): Pellet_Size_Distribution não tem licença.
+# O importador recusa fontes sem status "verified" em docs/datasets/fontes.json,
+# mesmo com a caixa abaixo marcada. Mudar o status exige autorização escrita do autor.
+name: External pellet dataset import (review required)
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Source to import (only reviewed public repository)"
+        required: true
+        type: choice
+        options:
+          - pellet_size_distribution
+      license_reviewed:
+        description: "I reviewed the original image licenses and confirm import is permitted"
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  import:
+    if: ${{ inputs.license_reviewed == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check Pillow
+      - name: Download external repository (public GitHub source)
+        run: |
+          mkdir -p external-source
+          curl --fail --location --retry 3 --max-time 180 \
+            https://github.com/aryadeo/Pellet_Size_Distribution/archive/refs/heads/main.zip \
+            -o /tmp/pellets.zip
+          python - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('/tmp/pellets.zip') as z:
+              for m in z.infolist():
+                  if m.is_dir():
+                      continue
+                  if m.file_size > 100_000_000:
+                      raise ValueError('Oversized archive member')
+                  parts = m.filename.split('/')
+                  if len(parts) < 2 or any(p in ('..', '') for p in parts):
+                      continue
+                  from pathlib import Path
+                  target = Path('external-source').joinpath(*parts[1:])
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  with z.open(m) as src, target.open('wb') as dst:
+                      import shutil
+                      shutil.copyfileobj(src, dst)
+          PY
+      - name: Import images with provenance manifest
+        run: |
+          python tools/import_external_pellets.py \
+            --source pellet_size_distribution \
+            --input external-source \
+            --output processed-external \
+            --license-verified
+      - name: Report counts
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('processed-external/pellet_size_distribution/manifest.jsonl')
+          print('Imported:', sum(1 for _ in p.open()) if p.exists() else 0)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pellet-size-distribution-import
+          path: processed-external/
+          retention-days: 7
