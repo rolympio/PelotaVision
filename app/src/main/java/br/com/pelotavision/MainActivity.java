@@ -88,6 +88,8 @@ public final class MainActivity extends ComponentActivity {
     private Button calibration;
     private TextView scaleLabel;
     private HistogramView histogram;
+    private GranulometricColorMap colorMap;
+    private boolean colorMapVisible=false;
     private int originalWidth,originalHeight;
     private Granulometry.Settings scaleSettings;
     private Granulometry.Distribution distribution;
@@ -172,6 +174,7 @@ public final class MainActivity extends ComponentActivity {
         frame.addView(preview,new FrameLayout.LayoutParams(-1,-1));
         frozen=new ImageView(this);frozen.setScaleType(ImageView.ScaleType.FIT_CENTER);frozen.setBackgroundColor(Color.BLACK);frozen.setVisibility(View.GONE);frame.addView(frozen,new FrameLayout.LayoutParams(-1,-1));
         overlay=new CircleOverlay(this);frame.addView(overlay,new FrameLayout.LayoutParams(-1,-1));
+        colorMap=new GranulometricColorMap(this);colorMap.setVisibility(View.GONE);frame.addView(colorMap,new FrameLayout.LayoutParams(-1,-1));
         preview.setOnTouchListener((v,event)-> {
             if(event.getAction()==MotionEvent.ACTION_UP&&camera!=null&&mode==Mode.LIVE) {
                 try {camera.getCameraControl().startFocusAndMetering(new FocusMeteringAction.Builder(preview.getMeteringPointFactory().createPoint(event.getX(),event.getY())).setAutoCancelDuration(3,TimeUnit.SECONDS).build());}
@@ -199,6 +202,7 @@ public final class MainActivity extends ComponentActivity {
         profileLabel=text("Pelotas médias",11,Color.rgb(151,174,187));profileLabel.setTag("suggestion_label");profileLabel.setOnClickListener(v->{if(photoDetailReport!=null&&!roiNeedsAnalysis)showDetailSummary();else showSuggestions();});tools.addView(profileLabel,new LinearLayout.LayoutParams(0,-2,1));
         CheckBox numberBox=new CheckBox(this);numberBox.setText("Números");numberBox.setTextSize(11);numberBox.setTextColor(Color.WHITE);numberBox.setChecked(true);
         numberBox.setOnCheckedChangeListener((button,checked)-> {numbers=checked;if(mode==Mode.PHOTO&&photoResult!=null)overlay.display(photoResult,numbers);else if(mode==Mode.LIVE&&lastLiveResult!=null)overlay.display(lastLiveResult,numbers);});tools.addView(numberBox);
+        Button mapBtn=button("Mapa",false);mapBtn.setTextSize(11);mapBtn.setOnClickListener(v->toggleColorMap());tools.addView(mapBtn,new LinearLayout.LayoutParams(dp(64),dp(40)));
         torch=button("Luz",false);torch.setTextSize(11);torch.setOnClickListener(v->toggleTorch());tools.addView(torch,new LinearLayout.LayoutParams(dp(58),dp(40)));
         adjust=button("Ajustes",false);adjust.setTextSize(11);adjust.setOnClickListener(v->showAdjustments());tools.addView(adjust,new LinearLayout.LayoutParams(dp(77),dp(40)));
         LinearLayout actions=row();actions.setPadding(0,dp(7),0,0);root.addView(actions);
@@ -409,7 +413,7 @@ public final class MainActivity extends ComponentActivity {
         try{startActivity(intent);}catch(android.content.ActivityNotFoundException e){toast("Abra o arquivo _resultado.png na Galeria / PelotaVision.");}
     }
     private void returnToCamera() {
-        epoch++;mode=Mode.LIVE;lastResult=0;lastLiveResult=null;releasePreviousPhoto();
+        epoch++;mode=Mode.LIVE;lastResult=0;lastLiveResult=null;releasePreviousPhoto();hideColorMap(true);
         frozen.setVisibility(View.GONE);overlay.clear();badge.setText("AO VIVO");count.setText("—");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");detail.setText("Aguardando análise");
         hint.setText("Mantenha a câmera parada. Toque na imagem para focar.");updateControls();
     }
@@ -463,15 +467,16 @@ public final class MainActivity extends ComponentActivity {
         return items;
     }
     private void refreshDistribution() {
-        distribution=null;histogram.display(null);histogram.setVisibility(View.GONE);
+        distribution=null;histogram.display(null);histogram.setVisibility(View.GONE);hideColorMap(false);
         if(roiNeedsAnalysis){scaleLabel.setText(scaleSettings==null?"ROI sem escala física":"Escala preservada · aguardando segmentação");updateControls();return;}
         if(photoResult==null){scaleLabel.setText("Sem escala · toque em Escala / mm");updateControls();return;}
-        if(scaleSettings==null){distribution=PhotoComposer.pixelHistogram(photoResult);histogram.display(distribution);histogram.setVisibility(View.VISIBLE);scaleLabel.setText("Sem escala física · histograma em px");hint.setText("Toque numa pelota para revisar ou calibrar pela medida real. Escala / mm mantém as opções manuais.");updateControls();return;}
+        if(scaleSettings==null){distribution=PhotoComposer.pixelHistogram(photoResult);histogram.display(distribution);histogram.setVisibility(View.VISIBLE);if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.viewport(displayWindow);if(colorMapVisible){colorMap.setVisibility(View.VISIBLE);overlay.setVisibility(View.GONE);}}scaleLabel.setText("Sem escala física · histograma em px");hint.setText("Toque numa pelota para revisar ou calibrar pela medida real. Escala / mm mantém as opções manuais.");updateControls();return;}
         try {
             distribution=Granulometry.compute(measurementItems(),scaleSettings,originalWidth,originalHeight,photoResult.width,photoResult.height);
             scaleSettings=distribution.settings;
             scaleLabel.setText((scaleSettings.beltReference!=null?"Correia · ":scaleSettings.selectedObject!=null?"REF · ":scaleSettings.estimated()?"Estimativa · ":"")+HistogramView.number(scaleSettings.originalPixelsPerMm)+" px/mm · classe "+HistogramView.number(distribution.settings.binWidthMm)+" mm");
             histogram.display(distribution);histogram.setVisibility(View.VISIBLE);
+            if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.viewport(displayWindow);if(colorMapVisible){colorMap.setVisibility(View.VISIBLE);overlay.setVisibility(View.GONE);}}
             hint.setText(scaleSettings.selectedObject!=null?"Escala pela referência escolhida. Toque em REF para editar a medida.":scaleSettings.estimated()?"Escala estimada pela média informada. Use uma referência para medir em mm.":
                 "Escala aplicada. Confira a faixa em mm antes de salvar; largura da classe não é calibração.");
         } catch(IllegalArgumentException e){scaleLabel.setText("Ajuste a escala ou a classe");hint.setText(e.getMessage());}
@@ -856,5 +861,29 @@ public final class MainActivity extends ComponentActivity {
     private Button button(String label,boolean primary){Button v=new Button(this);v.setText(label);v.setAllCaps(false);v.setTextSize(14);v.setTextColor(primary?Color.rgb(16,26,35):Color.WHITE);v.setBackground(shape(primary?Color.rgb(82,216,190):Color.rgb(32,48,61),12));v.setMinWidth(0);v.setMinimumWidth(0);v.setPadding(dp(8),0,dp(8),0);return v;}
     private GradientDrawable shape(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
     private int dp(float value){return Math.round(value*getResources().getDisplayMetrics().density);}
+    
+    private void toggleColorMap() {
+        colorMapVisible=!colorMapVisible;
+        if(colorMap==null)return;
+        if(colorMapVisible && photoResult!=null && distribution!=null) {
+            colorMap.display(photoResult,distribution);colorMap.viewport(displayWindow);colorMap.setVisibility(View.VISIBLE);
+            overlay.setVisibility(View.GONE);
+            toast("Mapa granulométrico ativo · toque novamente para voltar");
+        } else {
+            boolean requested=colorMapVisible;
+            hideColorMap(true);
+            toast(requested?"Analise uma foto para ver o mapa granulométrico":"Visualização original restaurada");
+        }
+    }
+
+    /** Oculta o mapa e devolve o overlay (marcações, toque para revisar trincas e calibrar). */
+    private void hideColorMap(boolean resetToggle) {
+        if(resetToggle)colorMapVisible=false;
+        if(colorMap==null)return;
+        colorMap.setVisibility(View.GONE);
+        overlay.setVisibility(View.VISIBLE);
+    }
+
     private void toast(String message){Toast.makeText(this,message,Toast.LENGTH_LONG).show();}
 }
+
