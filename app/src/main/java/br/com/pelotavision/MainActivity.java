@@ -363,6 +363,13 @@ public final class MainActivity extends ComponentActivity {
                 DetectionTuner.Trial chosen=suggestions.cancelled?suggestions.find(current.id):suggestions.best();
                 if(chosen!=null&&chosen.result!=null){selected=chosen.option;local=chosen.result;}else local=DetectionTuner.detect(gray,current,window);
             }else local=DetectionTuner.detect(gray,current,window);
+            // Adaptive low-light proposals only on a user-selected ROI; original pixels remain
+            // the sole source for final ellipse fitting and crack classification.
+            if(cached==null&&window.region!=null&&LowLightPreprocessor.assess(gray).needsCorrection()){
+                DetectionAssessment.Context lowContext=new DetectionAssessment.Context(replacingCurrent?scaleSettings:null,sourceSize[0],sourceSize[1],null,minimumExpectedMm,window);
+                LowLightRecovery.Result recovered=LowLightRecovery.analyze(gray,selected,window,lowContext);
+                local=recovered.pellets;
+            }
             CrackAnalysis cracks=window.toGlobal(crackDetector().detect(gray,local,crackSensitivity));
             PelletDetector.Result result=window.toGlobal(local);Bitmap ready=bitmap;
             final DetectionTuner.Report searchReport=suggestions;final DetectionTuner.Option selectedOption=selected;
