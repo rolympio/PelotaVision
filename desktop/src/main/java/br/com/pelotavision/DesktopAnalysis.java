@@ -136,6 +136,10 @@ final class DesktopAnalysis {
             } else {
                 local = DetectionTuner.detect(gray, current, window);
             }
+            if (region != null && LowLightPreprocessor.assess(gray).needsCorrection()) {
+                DetectionAssessment.Context lowContext = new DetectionAssessment.Context(cfg.scale, ow, oh, null, cfg.minimumExpectedMm, window);
+                local = LowLightRecovery.analyze(gray, selected, window, lowContext).pellets;
+            }
             CrackAnalysis cracks = window.toGlobal(crackDetector(cfg.crackChoice).detect(gray, local, cfg.crackSensitivity));
             PelletDetector.Result result = window.toGlobal(local);
             return new Output(result, cracks, selected, suggestions, window, ow, oh, sample, System.currentTimeMillis() - start, crackModelNote());
