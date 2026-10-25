@@ -12,6 +12,10 @@ public final class DetailedAnalysis {
  }
  public static final class Output {public final PelletDetector.Result result;public final CrackAnalysis cracks;public final Report report;Output(PelletDetector.Result r,CrackAnalysis c,Report d){result=r;cracks=c;report=d;}}
  public static Output run(Mat original,DetailGeometry map,DetectionTuner.Option option,boolean compare,FsrcnnUpscaler sr,Granulometry.Settings scale,int ow,int oh,double minimum,CrackModel model,int crackSensitivity,BooleanSupplier cancel,DetectionTuner.Progress progress){
+  return run(original,map,option,compare,sr,scale,ow,oh,minimum,new CrackDetector(model),crackSensitivity,cancel,progress);
+ }
+ /** Same, with the crack classifier chosen in Modelos de análise (cracks always on ORIGINAL pixels, never on SR). */
+ public static Output run(Mat original,DetailGeometry map,DetectionTuner.Option option,boolean compare,FsrcnnUpscaler sr,Granulometry.Settings scale,int ow,int oh,double minimum,CrackDetector crackDetector,int crackSensitivity,BooleanSupplier cancel,DetectionTuner.Progress progress){
   if(option.belt)throw new IllegalArgumentException("Na correia use a análise rápida: ela já trabalha na resolução nativa (até 1600 px) e o modo detalhado mede os perfis pelo bloco, não pela foto.");
   long start=System.nanoTime();List<TilePlan.Tile> tiles=TilePlan.create(original.cols(),original.rows(),sr!=null);if(tiles.size()>(sr==null?80:240))throw new IllegalArgumentException("ROI muito grande para este modo. Reduza a área selecionada.");
   List<PelletDetector.Detection> all=new ArrayList<>(),baselineAll=new ArrayList<>();int[] treatments=new int[4];List<Double> scores=new ArrayList<>();int candidates=0;boolean limit=false;
@@ -26,7 +30,7 @@ public final class DetailedAnalysis {
    }finally{gray.release();}
   }
   check(cancel,start);List<PelletDetector.Detection> merged=TilePlan.merge(all);String method="detail_original_tiles_v1+ellipse_boundary_v1"+(map.region==null?"":"+active_roi_crop_v1")+(sr==null?"":"+fsrcnn_x2_proposals_original_refine");PelletDetector.Result nativeResult=new PelletDetector.Result(merged,map.width,map.height,candidates,(System.nanoTime()-start)/1000000,limit,method);
-  progress.update(tiles.size(),tiles.size(),"Trincas nos pixels originais…");CrackAnalysis cracks=new CrackDetector(model).detect(original,nativeResult,crackSensitivity);check(cancel,start);
+  progress.update(tiles.size(),tiles.size(),"Trincas nos pixels originais…");CrackAnalysis cracks=crackDetector.detect(original,nativeResult,crackSensitivity);check(cancel,start);
   List<PelletDetector.Detection> projected=new ArrayList<>();for(PelletDetector.Detection d:merged)projected.add(map.toPreview(d));PelletDetector.Result mapped=new PelletDetector.Result(projected,map.previewWidth,map.previewHeight,candidates,(System.nanoTime()-start)/1000000,limit,method);
   Report report=new Report(map,tiles.size(),TilePlan.merge(baselineAll).size(),merged.size(),treatments,compare,sr!=null,mapped.durationMs,option.id,scores);return new Output(mapped,map.toPreview(cracks),report);
  }

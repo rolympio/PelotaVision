@@ -17,6 +17,10 @@ final class PhotoComposer {
   return compose(photo,result,cracks,distribution,region,excludedByRegion,false);
  }
  static Bitmap compose(Bitmap photo,PelletDetector.Result result,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,boolean cropRoi){
+  return compose(photo,result,cracks,distribution,region,excludedByRegion,cropRoi,null,null);
+ }
+ /** With the comparative histogram (all × cracked) when crackHistogram is not null. Layout unchanged. */
+ static Bitmap compose(Bitmap photo,PelletDetector.Result result,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,boolean cropRoi,CrackHistogram crackHistogram,ReportVisuals visuals){
   if(photo.getWidth()!=result.width||photo.getHeight()!=result.height)throw new IllegalArgumentException("Foto e detecções incompatíveis.");
   if(cracks!=null&&(cracks.width!=result.width||cracks.height!=result.height||cracks.entries.size()!=result.circles.size()))throw new IllegalArgumentException("Trincas e pelotas incompatíveis.");
   if(distribution==null)distribution=pixelHistogram(result);
@@ -54,7 +58,7 @@ final class PhotoComposer {
     canvas.drawText(distribution.settings.pixelsOnly()?"Calibre em Escala / mm: correia ou referência.":"Escala informada: "+HistogramView.number(distribution.settings.originalPixelsPerMm)+" px/mm (original)",12*s,layout.summaryTop+123*s,label);
     canvas.drawText(distribution.settings.pixelsOnly()?"Sem referência física; histograma em pixels.":distribution.settings.estimated()?"Estimativa pela média informada; não é referência independente.":"Sem referência de objeto selecionada nesta foto.",12*s,layout.summaryTop+138*s,label);
    }
-   HistogramView.draw(canvas,new RectF(0,layout.histogramTop,viewport.width,output.getHeight()),distribution);
+   HistogramView.draw(canvas,new RectF(0,layout.histogramTop,viewport.width,output.getHeight()),distribution,crackHistogram,visuals);
    return output;
   }catch(RuntimeException|OutOfMemoryError e){output.recycle();throw e;}
  }

@@ -50,7 +50,14 @@ final class ResultSaver {
                        PelletDetector.Result result,PelletDetector.Parameters parameters,CrackAnalysis cracks,
                        Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,DetectionTuner.Report suggestions,DetectionTuner.Option applied,boolean cropRoi) throws Exception {return save(context,photo,original,originalMime,result,parameters,cracks,distribution,region,excludedByRegion,suggestions,applied,cropRoi,null);}
     static SavedResult save(Context context,Bitmap photo,File original,String originalMime,PelletDetector.Result result,PelletDetector.Parameters parameters,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,DetectionTuner.Report suggestions,DetectionTuner.Option applied,boolean cropRoi,DetailedAnalysis.Report detailed) throws Exception {
+        return save(context,photo,original,originalMime,result,parameters,cracks,distribution,region,excludedByRegion,suggestions,applied,cropRoi,detailed,ReportVisuals.defaults(),null,null);
+    }
+    /** 0.14.0: also the comparative histogram, the granulometric map PNG and the analysis models (JSON schema 2). */
+    static SavedResult save(Context context,Bitmap photo,File original,String originalMime,PelletDetector.Result result,PelletDetector.Parameters parameters,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,DetectionTuner.Report suggestions,DetectionTuner.Option applied,boolean cropRoi,DetailedAnalysis.Report detailed,ReportVisuals visuals,CrackClassifierChoice.Resolution crackChoice,String networkId) throws Exception {
         if(distribution==null)distribution=PhotoComposer.pixelHistogram(result);
+        if(visuals==null)visuals=ReportVisuals.defaults();
+        java.util.List<Granulometry.Item> histogramItems=new ArrayList<>();for(PelletDetector.Detection d:result.circles)histogramItems.add(new Granulometry.Item(2*d.radius,d.partial,d.needsReview));
+        CrackHistogram crackHistogram=CrackHistogram.compute(distribution,histogramItems,cracks);
         boolean physical=!distribution.settings.pixelsOnly();
         ContentResolver resolver=context.getContentResolver();List<Uri> pending=new ArrayList<>();
         String base="PelotaVision_"+new SimpleDateFormat("yyyyMMdd_HHmmss_SSS",Locale.ROOT).format(new Date());
@@ -62,11 +69,20 @@ final class ResultSaver {
             try(InputStream input=new FileInputStream(original);OutputStream output=stream(resolver,source)) {
                 byte[] bytes=new byte[65536];int count;while((count=input.read(bytes))!=-1)output.write(bytes,0,count);
             }
-            annotated=PhotoComposer.compose(photo,result,cracks,distribution,region,excludedByRegion,cropRoi);
+            annotated=PhotoComposer.compose(photo,result,cracks,distribution,region,excludedByRegion,cropRoi,crackHistogram,visuals);
             Uri image=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                     base+"_resultado.png","image/png","Pictures/PelotaVision");pending.add(image);
             try(OutputStream output=stream(resolver,image)) {if(!annotated.compress(Bitmap.CompressFormat.PNG,100,output))throw new IOException("Falha ao gravar a imagem.");}
-            JSONObject json=new JSONObject();json.put("app","PelotaVision 0.13.0");json.put("created_at_epoch_ms",System.currentTimeMillis());
+            String mapFile=null;
+            try{Bitmap map=MapComposer.compose(photo,result,distribution,visuals,region,cropRoi);
+                if(map!=null){try{Uri mapUri=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,base+"_mapa.png","image/png","Pictures/PelotaVision");pending.add(mapUri);
+                    try(OutputStream output=stream(resolver,mapUri)){if(!map.compress(Bitmap.CompressFormat.PNG,100,output))throw new IOException("Falha ao gravar o mapa.");}mapFile=base+"_mapa.png";}finally{map.recycle();}}
+            }catch(OutOfMemoryError e){mapFile=null;}
+            JSONObject json=new JSONObject();json.put("app","PelotaVision 0.14.0");json.put("report_schema_version",ReportJson.SCHEMA_VERSION);json.put("created_at_epoch_ms",System.currentTimeMillis());
+            json.put("analysis_models",ReportJson.analysisModelsJson(applied,crackChoice,networkId));
+            json.put("crack_histogram",ReportJson.crackHistogramJson(crackHistogram,visuals));
+            Object mapJson=ReportJson.mapJson(distribution,visuals);if(mapJson instanceof JSONObject)((JSONObject)mapJson).put("file",mapFile==null?JSONObject.NULL:mapFile);json.put("granulometric_map",mapJson);
+            JSONObject display=new JSONObject();display.put("histogram_show_all",visuals.showAll);display.put("histogram_show_cracked",visuals.showCracked);display.put("histogram_values_on_bars",visuals.showValues);display.put("histogram_normalization",visuals.normalization.name());display.put("all_color","#268CAB alpha 0.55");display.put("cracked_color","#FF8C1A alpha 0.65");json.put("visualization",display);
             json.put("region_of_interest",ReportJson.regionJson(region,excludedByRegion));json.put("detection_suggestion",ReportJson.suggestionJson(suggestions,applied));json.put("neural_model",ReportJson.neuralModelJson(applied));json.put("scene",ReportJson.sceneJson(applied));
             JSONObject processing=ReportJson.processingScopeJson(new AnalysisWindow(result.width,result.height,result.method.contains("active_roi_crop_v1")?region:null));
             if(detailed!=null){processing.put("input_width",detailed.geometry.width);processing.put("input_height",detailed.geometry.height);processing.put("crop_resizes_input",detailed.geometry.sample>1);processing.put("coordinate_mapping","detailed_analysis.local_to_preview; detections retain preview coordinates");processing.put("outside_roi_original_pixels_analyzed",region==null);}
@@ -109,7 +125,7 @@ final class ResultSaver {
                 histogram.put("d10"+suffix,Double.isFinite(distribution.d10)?distribution.d10:JSONObject.NULL);
                 histogram.put("d50"+suffix,Double.isFinite(distribution.d50)?distribution.d50:JSONObject.NULL);
                 histogram.put("d90"+suffix,Double.isFinite(distribution.d90)?distribution.d90:JSONObject.NULL);
-                JSONArray bins=new JSONArray();String grainCsv=ReportTables.histogramCsv(distribution);
+                JSONArray bins=new JSONArray();String grainCsv=ReportTables.histogramCsv(crackHistogram);
                 for(int i=0;i<distribution.binCount();i++) {
                     JSONObject bin=new JSONObject();bin.put("lower"+suffix,distribution.lower(i));bin.put("upper"+suffix,distribution.upper(i));
                     bin.put("count",distribution.count(i));bin.put("percent_by_number",distribution.percent(i));bins.put(bin);

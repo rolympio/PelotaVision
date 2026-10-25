@@ -1,0 +1,65 @@
+name: Capturas das telas (Robolectric) e testes do nucleo
+
+# Renderiza as telas e exportacoes novas pela propria Activity (Robolectric, graficos nativos) com fotos
+# reais do repositorio e grava as imagens no branch (verification/visuals-0.14.0), porque artefatos do
+# Actions nao sao legiveis pela sessao de desenvolvimento. Tambem grava o resumo dos testes unitarios.
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore: [main]
+    paths: ['app/src/test/java/br/com/pelotavision/VisualsDemoTest.java', '.github/workflows/visual-captures.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: captures-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  captures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK 35
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "platform-tools" > /dev/null
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Testes unitarios do app (inclui as capturas)
+        id: tests
+        run: |
+          set +e
+          ./gradlew testDebugUnitTest --stacktrace > /tmp/tests.txt 2>&1
+          s=$?; tail -n 60 /tmp/tests.txt
+          echo "status=$s" >> "$GITHUB_OUTPUT"
+          mkdir -p verification/visuals-0.14.0
+          python3 - <<'E' > verification/visuals-0.14.0/testes_unitarios_app.txt
+          import glob, xml.etree.ElementTree as ET
+          t = f = e = s = 0; lines = []
+          for p in sorted(glob.glob('app/build/test-results/testDebugUnitTest/*.xml')):
+              r = ET.parse(p).getroot()
+              t += int(r.get('tests', 0)); f += int(r.get('failures', 0)); e += int(r.get('errors', 0)); s += int(r.get('skipped', 0))
+              for tc in r.iter('testcase'):
+                  bad = tc.find('failure') if tc.find('failure') is not None else tc.find('error')
+                  lines.append(('FALHOU ' if bad is not None else 'ok     ') + tc.get('classname').split('.')[-1] + '.' + tc.get('name') + ('' if bad is None else ' :: ' + (bad.get('message') or '')[:300]))
+          print(f'testes={t} falhas={f} erros={e} ignorados={s}')
+          print('\n'.join(lines))
+          E
+          head -n 1 verification/visuals-0.14.0/testes_unitarios_app.txt
+          grep FALHOU verification/visuals-0.14.0/testes_unitarios_app.txt | head -n 20 | while IFS= read -r l; do echo "::error title=Teste::$(echo "$l" | cut -c1-600)"; done
+      - name: Gravar capturas no branch
+        if: ${{ !cancelled() }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A verification/visuals-0.14.0
+          git commit -m "Capturas 0.14.0: telas e exportacoes renderizadas pela Activity (status ${{ steps.tests.outputs.status }}) [skip ci]" || exit 0
+          git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}"
+          [ "${{ steps.tests.outputs.status }}" = "0" ]

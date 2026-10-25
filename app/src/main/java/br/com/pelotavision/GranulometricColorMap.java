@@ -3,38 +3,41 @@ package br.com.pelotavision;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.view.View;
 import java.util.Locale;
 
 /**
- * Mapa granulométrico: coloração contínua das pelotas por diâmetro equivalente.
- * Azul (menores) → ciano → verde → amarelo → vermelho (maiores).
- * A cor é aplicada somente dentro do contorno/elipse, com transparência ajustável.
- * A fotografia original permanece visível por baixo.
+ * Mapa granulométrico: cor contínua por diâmetro equivalente (azul → ciano → verde → amarelo → vermelho),
+ * aplicada somente dentro da elipse ajustada de cada pelota INCLUÍDA no histograma (mesma regra, mesma
+ * escala), com transparência ajustável (padrão 25% de cor sobre 75% da foto). A fotografia continua
+ * visível; fora das pelotas, fora da ROI e no fundo da correia nada é colorido.
+ * A escala e a cor vêm de {@link GranulometryColorScale} (núcleo comum Android/Windows).
  */
 final class GranulometricColorMap extends View {
     private PelletDetector.Result result;
     private Granulometry.Distribution distribution;
-    private float opacity = 0.25f; // 0.0–0.70
-    private boolean showLabels = false;
-    private boolean relativeScale = true;
-    private double fixedMinMm = 8, fixedMaxMm = 16;
+    private ReportVisuals visuals = ReportVisuals.defaults();
     private AnalysisWindow viewport;
 
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint legend = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint halo = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     GranulometricColorMap(Context context) {
         super(context);
         setWillNotDraw(false);
+        setContentDescription("Mapa granulométrico por cores");
         fill.setStyle(Paint.Style.FILL);
-        legend.setStyle(Paint.Style.FILL);
         text.setColor(Color.WHITE);
         text.setTextAlign(Paint.Align.CENTER);
-        text.setTextSize(28);
+        halo.setColor(Color.argb(200, 0, 0, 0));
+        halo.setTextAlign(Paint.Align.CENTER);
+        halo.setStyle(Paint.Style.STROKE);
     }
 
     void display(PelletDetector.Result result, Granulometry.Distribution distribution) {
@@ -43,28 +46,9 @@ final class GranulometricColorMap extends View {
         invalidate();
     }
 
-    void setOpacity(float value) {
-        opacity = Math.max(0f, Math.min(0.70f, value));
+    void visuals(ReportVisuals value) {
+        if (value != null) visuals = value;
         invalidate();
-    }
-
-    void setShowLabels(boolean value) {
-        showLabels = value;
-        invalidate();
-    }
-
-    void setRelativeScale(boolean relative) {
-        relativeScale = relative;
-        invalidate();
-    }
-
-    void setFixedRange(double minMm, double maxMm) {
-        if (minMm < maxMm) {
-            fixedMinMm = minMm;
-            fixedMaxMm = maxMm;
-            relativeScale = false;
-            invalidate();
-        }
     }
 
     void viewport(AnalysisWindow value) {
@@ -76,112 +60,83 @@ final class GranulometricColorMap extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         if (result == null || distribution == null || distribution.included == 0) return;
-
-        float scale = viewScale();
-        if (scale <= 0) return;
-
+        GranulometryColorScale scale = visuals.scale(distribution);
+        if (scale == null) return;
         int w = viewport == null ? result.width : viewport.width;
         int h = viewport == null ? result.height : viewport.height;
-        float left = (getWidth() - w * scale) / 2f - (viewport == null ? 0 : viewport.left * scale);
-        float top = (getHeight() - h * scale) / 2f - (viewport == null ? 0 : viewport.top * scale);
+        float k = Math.min(getWidth() / (float) w, getHeight() / (float) h);
+        if (!(k > 0)) return;
+        float ox = (getWidth() - w * k) / 2f, oy = (getHeight() - h * k) / 2f;
+        float left = ox - (viewport == null ? 0 : viewport.left * k), top = oy - (viewport == null ? 0 : viewport.top * k);
 
         canvas.save();
-        canvas.clipRect((getWidth() - w * scale) / 2f, (getHeight() - h * scale) / 2f,
-                        (getWidth() + w * scale) / 2f, (getHeight() + h * scale) / 2f);
-
-        double min = relativeScale ? distribution.minMm : fixedMinMm;
-        double max = relativeScale ? distribution.maxMm : fixedMaxMm;
-        if (min >= max) {
-            min = distribution.minMm;
-            max = distribution.maxMm;
+        canvas.clipRect(ox, oy, ox + w * k, oy + h * k);
+        int alpha = GranulometryColorScale.alpha(visuals.mapOpacity);
+        for (PelletDetector.Detection d : result.circles) {
+            Granulometry.Item item = new Granulometry.Item(d.radius * 2, d.partial, d.needsReview);
+            if (!GranulometryColorScale.colored(distribution, item)) continue;
+            int c = scale.rgb(distribution.diameterMm(item.diameterPx));
+            fill.setColor(Color.argb(alpha, (c >> 16) & 255, (c >> 8) & 255, c & 255));
+            float x = left + (float) d.x * k, y = top + (float) d.y * k;
+            float a = (float) (d.semiMajor > 0 ? d.semiMajor : d.radius) * k, b = (float) (d.semiMinor > 0 ? d.semiMinor : d.radius) * k;
+            canvas.save();
+            canvas.rotate((float) d.angleDeg, x, y);
+            canvas.drawOval(new RectF(x - a, y - b, x + a, y + b), fill);
+            canvas.restore();
         }
-        if (min >= max) {
-            // todos iguais: cor intermediária
-            int mid = colorFor(0.5);
-            fill.setColor(Color.argb((int) (opacity * 255), Color.red(mid), Color.green(mid), Color.blue(mid)));
-            for (PelletDetector.Detection d : result.circles) {
-                if (!isIncluded(d)) continue;
-                drawFilledEllipse(canvas, d, left, top, scale, fill);
-            }
-        } else {
-            for (PelletDetector.Detection d : result.circles) {
-                if (!isIncluded(d)) continue;
-                double mm = distribution.diameterMm(d.radius * 2); // diâmetro = 2*raio equal-area
-                double t = Math.max(0, Math.min(1, (mm - min) / (max - min)));
-                int c = colorFor(t);
-                fill.setColor(Color.argb((int) (opacity * 255), Color.red(c), Color.green(c), Color.blue(c)));
-                drawFilledEllipse(canvas, d, left, top, scale, fill);
-                if (showLabels) {
-                    float x = left + (float) d.x * scale;
-                    float y = top + (float) d.y * scale;
-                    float size = Math.max(10, Math.min(22, (float) d.radius * scale * 0.4f));
-                    text.setTextSize(size);
-                    canvas.drawText(String.format(Locale.getDefault(), "%.1f", mm), x, y, text);
-                }
-            }
+        if (visuals.mapLabels) drawLabels(canvas, left, top, k);
+        canvas.restore();
+        drawLegend(canvas, scale);
+    }
+
+    /** Diameter on each pellet, skipping those too small on screen or that would overlap a previous label. */
+    private void drawLabels(Canvas canvas, float left, float top, float k) {
+        float density = getResources().getDisplayMetrics().density;
+        float size = 10 * density;
+        text.setTextSize(size);
+        halo.setTextSize(size);
+        halo.setStrokeWidth(3 * density);
+        java.util.List<RectF> used = new java.util.ArrayList<>();
+        for (PelletDetector.Detection d : result.circles) {
+            Granulometry.Item item = new Granulometry.Item(d.radius * 2, d.partial, d.needsReview);
+            if (!GranulometryColorScale.colored(distribution, item)) continue;
+            if (d.radius * k < 9 * density) continue;
+            String label = HistogramView.number(distribution.diameterMm(item.diameterPx));
+            float x = left + (float) d.x * k, y = top + (float) d.y * k + size / 3;
+            float half = text.measureText(label) / 2 + 2;
+            RectF r = new RectF(x - half, y - size, x + half, y + 3);
+            boolean free = true;
+            for (RectF u : used) if (RectF.intersects(u, r)) { free = false; break; }
+            if (!free) continue;
+            used.add(r);
+            canvas.drawText(label, x, y, halo);
+            canvas.drawText(label, x, y, text);
         }
-
-        drawLegend(canvas, min, max, relativeScale);
-        canvas.restore();
     }
 
-    private boolean isIncluded(PelletDetector.Detection d) {
-        // Aproximação: usa o mesmo critério básico de inclusão da granulometria
-        return Double.isFinite(d.radius) && d.radius > 0 && !d.partial;
-    }
-
-    private float viewScale() {
-        if (result == null) return 0;
-        int w = viewport == null ? result.width : viewport.width;
-        int h = viewport == null ? result.height : viewport.height;
-        return Math.min(getWidth() / (float) w, getHeight() / (float) h);
-    }
-
-    private static void drawFilledEllipse(Canvas canvas, PelletDetector.Detection d,
-                                          float left, float top, float scale, Paint p) {
-        float x = left + (float) d.x * scale;
-        float y = top + (float) d.y * scale;
-        float a = (float) d.semiMajor * scale;
-        float b = (float) d.semiMinor * scale;
-        canvas.save();
-        canvas.rotate((float) d.angleDeg, x, y);
-        canvas.drawOval(new RectF(x - a, y - b, x + a, y + b), p);
-        canvas.restore();
-    }
-
-    /** Interpolação HSV: 240° (azul) → 0° (vermelho) passando por ciano/verde/amarelo. */
-    static int colorFor(double t) {
-        float hue = (float) (240 * (1 - Math.max(0, Math.min(1, t))));
-        float[] hsv = {hue, 0.85f, 0.95f};
-        return Color.HSVToColor(hsv);
-    }
-
-    private void drawLegend(Canvas canvas, double min, double max, boolean relative) {
-        float barW = Math.min(getWidth() * 0.7f, 420);
-        float barH = 18;
-        float x0 = (getWidth() - barW) / 2f;
-        float y0 = getHeight() - 70;
-
+    private void drawLegend(Canvas canvas, GranulometryColorScale scale) {
+        float density = getResources().getDisplayMetrics().density;
+        float barW = Math.min(getWidth() * 0.78f, 340 * density), barH = 10 * density;
+        float x0 = (getWidth() - barW) / 2f, y0 = getHeight() - 30 * density;
         legend.setShader(null);
-        // Barra de cores
-        for (int i = 0; i < 40; i++) {
-            float xx = x0 + i * barW / 40f;
-            int c = colorFor(i / 39.0);
-            legend.setColor(c);
-            canvas.drawRect(xx, y0, xx + barW / 40f + 1, y0 + barH, legend);
-        }
-
-        text.setTextSize(13);
-        text.setColor(Color.WHITE);
+        legend.setColor(Color.argb(170, 16, 26, 35));
+        canvas.drawRoundRect(new RectF(x0 - 8 * density, y0 - 20 * density, x0 + barW + 8 * density, y0 + barH + 18 * density), 8 * density, 8 * density, legend);
+        int[] colors = new int[9];
+        for (int i = 0; i < colors.length; i++) colors[i] = 0xFF000000 | GranulometryColorScale.colorAt(i / (colors.length - 1.0));
+        legend.setShader(new LinearGradient(x0, 0, x0 + barW, 0, colors, null, Shader.TileMode.CLAMP));
+        canvas.drawRect(x0, y0, x0 + barW, y0 + barH, legend);
+        legend.setShader(null);
+        text.setTextSize(10 * density);
         text.setTextAlign(Paint.Align.CENTER);
-        String unit = distribution.settings.unit();
-        String mode = relative ? "relativa" : "fixa";
-        canvas.drawText(String.format(Locale.getDefault(), "Mapa granulométrico (%s)  %.1f – %.1f %s",
-                mode, min, max, unit), getWidth() / 2f, y0 - 8, text);
-
-        text.setTextAlign(Paint.Align.LEFT);
-        canvas.drawText(String.format(Locale.getDefault(), "%.1f", min), x0, y0 + barH + 16, text);
-        text.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText(String.format(Locale.getDefault(), "%.1f", max), x0 + barW, y0 + barH + 16, text);
+        String title = String.format(Locale.getDefault(), "Mapa granulométrico · escala %s · %s · opacidade %d%%",
+                scale.mode(), scale.unit, Math.round(visuals.mapOpacity * 100));
+        canvas.drawText(title, getWidth() / 2f, y0 - 6 * density, text);
+        double[] ticks = scale.ticks(scale.equalRange() ? 2 : 5);
+        for (int i = 0; i < ticks.length; i++) {
+            float x = x0 + barW * i / (ticks.length - 1f);
+            text.setTextAlign(i == 0 ? Paint.Align.LEFT : i == ticks.length - 1 ? Paint.Align.RIGHT : Paint.Align.CENTER);
+            canvas.drawText(HistogramView.number(ticks[i]), x, y0 + barH + 12 * density, text);
+        }
+        text.setTextAlign(Paint.Align.CENTER);
     }
 }
