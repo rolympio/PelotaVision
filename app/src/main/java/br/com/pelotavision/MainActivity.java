@@ -17,6 +17,10 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.Size;
+import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.params.StreamConfigurationMap;
+import android.graphics.ImageFormat;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.Surface;
@@ -103,6 +107,10 @@ public final class MainActivity extends ComponentActivity {
     private ProcessCameraProvider provider;
     private Camera camera;
     private ImageCapture imageCapture;
+    private Size requestedPhotoSize=new Size(1920,1440);
+    private Size effectivePhotoSize;
+    private TextView cameraResolutionLabel;
+    private static final int PHOTO_JPEG_QUALITY=95;
     private ImageAnalysis analysis;
     private Bitmap photoBitmap,displayBitmap,displaySource;
     private AnalysisWindow displayWindow,photoAnalysisWindow,suggestionWindow;
@@ -213,6 +221,8 @@ public final class MainActivity extends ComponentActivity {
         Button mapBtn=button("Seg.",false);mapBtn.setTag("view_mode");mapBtn.setTextSize(11);mapBtn.setOnClickListener(v->toggleColorMap());mapBtn.setOnLongClickListener(v->{showMapOptions();return true;});mapButton=mapBtn;tools.addView(mapBtn,new LinearLayout.LayoutParams(dp(64),dp(40)));
         torch=button("Luz",false);torch.setTextSize(11);torch.setOnClickListener(v->toggleTorch());tools.addView(torch,new LinearLayout.LayoutParams(dp(58),dp(40)));
         adjust=button("Ajustes",false);adjust.setTextSize(11);adjust.setOnClickListener(v->showAdjustments());tools.addView(adjust,new LinearLayout.LayoutParams(dp(77),dp(40)));
+        cameraResolutionLabel=text("Câmera: verificando resolução…",11,Color.rgb(151,174,187));
+        cameraResolutionLabel.setOnClickListener(v->showCameraSettings());root.addView(cameraResolutionLabel);
         LinearLayout actions=row();actions.setPadding(0,dp(7),0,0);root.addView(actions);
         capture=button("Fotografar",true);capture.setEnabled(false);capture.setOnClickListener(v->capturePhoto());actions.addView(capture,new LinearLayout.LayoutParams(0,dp(49),1));
         save=button("Salvar foto + dados",true);save.setOnClickListener(v->savePhoto());save.setVisibility(View.GONE);actions.addView(save,new LinearLayout.LayoutParams(0,dp(49),1));
@@ -246,14 +256,45 @@ public final class MainActivity extends ComponentActivity {
                     } catch(Exception e) {runOnUiThread(()-> {if(!isDestroyed()&&mode==Mode.LIVE)hint.setText("Falha na análise. Tente fotografar ou abrir uma imagem.");});}
                     finally {if(gray!=null)gray.release();image.close();}
                 });
-                imageCapture=new ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                        .setTargetResolution(new Size(1920,1440)).setTargetRotation(Surface.ROTATION_0).build();
+                requestedPhotoSize=maximumJpegResolution();
+                imageCapture=new ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                        .setJpegQuality(PHOTO_JPEG_QUALITY)
+                        .setTargetResolution(requestedPhotoSize).setTargetRotation(Surface.ROTATION_0).build();
                 UseCaseGroup.Builder group=new UseCaseGroup.Builder().addUseCase(usePreview).addUseCase(analysis).addUseCase(imageCapture);
                 if(preview.getViewPort()!=null)group.setViewPort(preview.getViewPort());
                 camera=provider.bindToLifecycle(this,CameraSelector.DEFAULT_BACK_CAMERA,group.build());
                 capture.setEnabled(true);torch.setEnabled(camera.getCameraInfo().hasFlashUnit());
-            } catch(Exception e) {capture.setEnabled(false);hint.setText("Câmera indisponível. Você pode abrir uma foto.");}
+                cameraResolutionLabel.setText("Foto: máxima solicitada "+requestedPhotoSize.getWidth()+"×"+requestedPhotoSize.getHeight()+" · JPEG 95% · toque para detalhes");
+            } catch(Exception e) {capture.setEnabled(false);hint.setText("Câmera indisponível. Você pode abrir uma foto.");cameraResolutionLabel.setText("Câmera: configuração não suportada neste dispositivo");}
         },ContextCompat.getMainExecutor(this));
+    }
+    /** Enumerates actual JPEG stream sizes; CameraX can negotiate a smaller size when combined with preview/analysis. */
+    private Size maximumJpegResolution() {
+        Size fallback=new Size(1920,1440);
+        try {
+            CameraManager manager=(CameraManager)getSystemService(CAMERA_SERVICE);
+            for(String id:manager.getCameraIdList()) {
+                CameraCharacteristics c=manager.getCameraCharacteristics(id);
+                Integer facing=c.get(CameraCharacteristics.LENS_FACING);
+                if(facing==null||facing!=CameraCharacteristics.LENS_FACING_BACK)continue;
+                StreamConfigurationMap map=c.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                if(map==null)continue;
+                Size[] sizes=map.getOutputSizes(ImageFormat.JPEG);
+                if(sizes==null)continue;
+                for(Size candidate:sizes)
+                    if((long)candidate.getWidth()*candidate.getHeight()>(long)fallback.getWidth()*fallback.getHeight())fallback=candidate;
+                break;
+            }
+        }catch(Exception ignored) { /* CameraX will still attempt the safe default. */ }
+        return fallback;
+    }
+    private void showCameraSettings() {
+        String actual=effectivePhotoSize==null?"Ainda não medida; fotografe para verificar":effectivePhotoSize.getWidth()+"×"+effectivePhotoSize.getHeight();
+        new AlertDialog.Builder(this).setTitle("Configurações da câmera")
+                .setMessage("Modo: fotografia (qualidade máxima)\nJPEG: 95%\nResolução solicitada: "+requestedPhotoSize.getWidth()+"×"+requestedPhotoSize.getHeight()+
+                        "\nResolução efetiva da última captura: "+actual+
+                        "\n\nA prévia e a análise ao vivo usam 640×480 como alvo independente. A análise da foto pode reduzir a imagem para proteger memória; a original é preservada. A resolução máxima anunciada pelo sensor pode não estar disponível para uso simultâneo com a prévia e análise.")
+                .setPositiveButton("Fechar",null).show();
     }
     private void showCount(PelletDetector.Result result,boolean photo) {
         count.setText(Integer.toString(result.circles.size()));
@@ -267,7 +308,12 @@ public final class MainActivity extends ComponentActivity {
         setBusy(Mode.PROCESSING,"Fotografando…");epoch++;
         File output=new File(getCacheDir(),"captura_"+System.currentTimeMillis()+".jpg");
         imageCapture.takePicture(new ImageCapture.OutputFileOptions.Builder(output).build(),worker,new ImageCapture.OnImageSavedCallback() {
-            @Override public void onImageSaved(ImageCapture.OutputFileResults ignored){processPhoto(output,"image/jpeg",parameters);}
+            @Override public void onImageSaved(ImageCapture.OutputFileResults ignored){
+                try {int[] size=ImageCodec.originalUprightSize(output);effectivePhotoSize=new Size(size[0],size[1]);
+                    runOnUiThread(()->cameraResolutionLabel.setText("Foto capturada: "+size[0]+"×"+size[1]+" · análise independente · JPEG 95%"));
+                } catch(Exception ignoredSize) {effectivePhotoSize=null;}
+                processPhoto(output,"image/jpeg",parameters);
+            }
             @Override public void onError(ImageCaptureException error){output.delete();runOnUiThread(()-> {if(!isDestroyed()){returnToCamera();toast("Não foi possível fotografar. Tente novamente.");}});}
         });
     }
