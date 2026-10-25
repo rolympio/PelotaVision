@@ -401,7 +401,7 @@ public final class MainActivity extends ComponentActivity {
         try{startActivity(intent);}catch(android.content.ActivityNotFoundException e){toast("Abra o arquivo _resultado.png na Galeria / PelotaVision.");}
     }
     private void returnToCamera() {
-        epoch++;mode=Mode.LIVE;lastResult=0;lastLiveResult=null;releasePreviousPhoto();
+        epoch++;mode=Mode.LIVE;lastResult=0;lastLiveResult=null;releasePreviousPhoto();hideColorMap(true);
         frozen.setVisibility(View.GONE);overlay.clear();badge.setText("AO VIVO");count.setText("—");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");detail.setText("Aguardando análise");
         hint.setText("Mantenha a câmera parada. Toque na imagem para focar.");updateControls();
     }
@@ -455,16 +455,16 @@ public final class MainActivity extends ComponentActivity {
         return items;
     }
     private void refreshDistribution() {
-        distribution=null;histogram.display(null);histogram.setVisibility(View.GONE);
+        distribution=null;histogram.display(null);histogram.setVisibility(View.GONE);hideColorMap(false);
         if(roiNeedsAnalysis){scaleLabel.setText(scaleSettings==null?"ROI sem escala física":"Escala preservada · aguardando segmentação");updateControls();return;}
         if(photoResult==null){scaleLabel.setText("Sem escala · toque em Escala / mm");updateControls();return;}
-        if(scaleSettings==null){distribution=PhotoComposer.pixelHistogram(photoResult);histogram.display(distribution);histogram.setVisibility(View.VISIBLE);if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.viewport(displayWindow);if(colorMapVisible)colorMap.setVisibility(View.VISIBLE);}scaleLabel.setText("Sem escala física · histograma em px");hint.setText("Toque numa pelota para revisar ou calibrar pela medida real. Escala / mm mantém as opções manuais.");updateControls();return;}
+        if(scaleSettings==null){distribution=PhotoComposer.pixelHistogram(photoResult);histogram.display(distribution);histogram.setVisibility(View.VISIBLE);if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.viewport(displayWindow);if(colorMapVisible){colorMap.setVisibility(View.VISIBLE);overlay.setVisibility(View.GONE);}}scaleLabel.setText("Sem escala física · histograma em px");hint.setText("Toque numa pelota para revisar ou calibrar pela medida real. Escala / mm mantém as opções manuais.");updateControls();return;}
         try {
             distribution=Granulometry.compute(measurementItems(),scaleSettings,originalWidth,originalHeight,photoResult.width,photoResult.height);
             scaleSettings=distribution.settings;
             scaleLabel.setText((scaleSettings.beltReference!=null?"Correia · ":scaleSettings.selectedObject!=null?"REF · ":scaleSettings.estimated()?"Estimativa · ":"")+HistogramView.number(scaleSettings.originalPixelsPerMm)+" px/mm · classe "+HistogramView.number(distribution.settings.binWidthMm)+" mm");
             histogram.display(distribution);histogram.setVisibility(View.VISIBLE);
-            if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.viewport(displayWindow);if(colorMapVisible)colorMap.setVisibility(View.VISIBLE);}
+            if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.viewport(displayWindow);if(colorMapVisible){colorMap.setVisibility(View.VISIBLE);overlay.setVisibility(View.GONE);}}
             hint.setText(scaleSettings.selectedObject!=null?"Escala pela referência escolhida. Toque em REF para editar a medida.":scaleSettings.estimated()?"Escala estimada pela média informada. Use uma referência para medir em mm.":
                 "Escala aplicada. Confira a faixa em mm antes de salvar; largura da classe não é calibração.");
         } catch(IllegalArgumentException e){scaleLabel.setText("Ajuste a escala ou a classe");hint.setText(e.getMessage());}
@@ -854,10 +854,18 @@ public final class MainActivity extends ComponentActivity {
             overlay.setVisibility(View.GONE);
             toast("Mapa granulométrico ativo · toque novamente para voltar");
         } else {
-            colorMap.setVisibility(View.GONE);
-            overlay.setVisibility(View.VISIBLE);
-            toast("Visualização original restaurada");
+            boolean requested=colorMapVisible;
+            hideColorMap(true);
+            toast(requested?"Analise uma foto para ver o mapa granulométrico":"Visualização original restaurada");
         }
+    }
+
+    /** Oculta o mapa e devolve o overlay (marcações, toque para revisar trincas e calibrar). */
+    private void hideColorMap(boolean resetToggle) {
+        if(resetToggle)colorMapVisible=false;
+        if(colorMap==null)return;
+        colorMap.setVisibility(View.GONE);
+        overlay.setVisibility(View.VISIBLE);
     }
 
     private void toast(String message){Toast.makeText(this,message,Toast.LENGTH_LONG).show();}
