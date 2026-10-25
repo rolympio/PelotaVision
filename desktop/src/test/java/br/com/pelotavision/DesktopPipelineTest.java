@@ -61,6 +61,18 @@ public class DesktopPipelineTest {
         Files.write(out.toPath(), (String.join("\n", summary) + "\n").getBytes(StandardCharsets.UTF_8));
     }
 
+    /** A transformação anisotrópica deve atualizar a circularidade geométrica. */
+    @Test public void affineRecomputesEllipseRoundness() {
+        PelletDetector.Detection seed = new PelletDetector.Detection(50, 50, 10, Math.PI * 100, 1, false, false);
+        PelletDetector.Detection circle = new PelletDetector.Detection(seed, 10, 10, 0, true, 1, 0, false, false);
+        PelletDetector.Detection stretched = circle.affine(2, 1, 0, 0);
+        assertEquals(20, stretched.semiMajor, 1e-8);
+        assertEquals(10, stretched.semiMinor, 1e-8);
+        assertTrue("circularidade deve diminuir após alongamento", stretched.roundness < circle.roundness);
+        assertEquals(2 * circle.area, stretched.area, 1e-8);
+        assertEquals(circle.roundness, circle.affine(2, 2, 0, 0).roundness, 1e-8);
+    }
+
     /** Foto real da 0.8.1 (1536x865): historico OpenCV 4.9 desktop = 125 no automatico (log_p1_s90) e 122 no LoG medio/74%. */
     @Test public void referencePhotoMatchesHistoricalOrder() throws IOException {
         File img = new File(verification, "coverage-0.8.1/reference_input.webp");
