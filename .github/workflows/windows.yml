@@ -119,7 +119,7 @@ jobs:
       - name: Autoteste do pacote montado
         run: |
           rm -rf pkg/autoteste
-          ./pkg/dist/PelotaVision/PelotaVision.exe --autoteste "verification/fixtures/1000411645.jpg" "pkg/autoteste" || echo "exit=$?"
+          ./pkg/dist/PelotaVision/PelotaVision.exe --autoteste "verification/fixtures/1000411645.jpg" "pkg/autoteste"
           cat pkg/autoteste/autoteste.txt
           grep -q '^exit=0$' pkg/autoteste/autoteste.txt
           echo "::notice title=Autoteste do pacote::$(tr '\n' ' ' < pkg/autoteste/autoteste.txt)"

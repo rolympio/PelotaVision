@@ -67,7 +67,7 @@ public final class PelletDetector {
             x=d.x*sx+tx;y=d.y*sy+ty;double t=Math.toRadians(d.angleDeg),c=Math.cos(t),s=Math.sin(t),aa=d.semiMajor*d.semiMajor,bb=d.semiMinor*d.semiMinor;
             double xx=(aa*c*c+bb*s*s)*sx*sx,yy=(aa*s*s+bb*c*c)*sy*sy,xy=(aa-bb)*c*s*sx*sy,z=Math.hypot(xx-yy,2*xy);
             semiMajor=Math.sqrt(Math.max(0,(xx+yy+z)/2));semiMinor=Math.sqrt(Math.max(0,(xx+yy-z)/2));angleDeg=((Math.toDegrees(.5*Math.atan2(2*xy,xx-yy))%180)+180)%180;
-            radius=d.radius*Math.sqrt(sx*sy);area=d.area*sx*sy;roundness=d.roundness;ellipseFitted=d.ellipseFitted;fitSupport=d.fitSupport;fitRms=d.fitRms;partial=d.partial;needsReview=d.needsReview||review;
+            radius=d.radius*Math.sqrt(Math.abs(sx*sy));area=d.area*Math.abs(sx*sy);double h=Math.pow((semiMajor-semiMinor)/(semiMajor+semiMinor),2);double perimeter=Math.PI*(semiMajor+semiMinor)*(1+3*h/(10+Math.sqrt(4-3*h)));roundness=d.ellipseFitted?4*Math.PI*area/(perimeter*perimeter):d.roundness;ellipseFitted=d.ellipseFitted;fitSupport=d.fitSupport;fitRms=d.fitRms;partial=d.partial;needsReview=d.needsReview||review;
             crackX=d.crackX*sx+tx;crackY=d.crackY*sy+ty;crackRadius=d.crackRadius*Math.sqrt(sx*sy);crackNeedsReview=d.crackNeedsReview||review;
         }
         public double aspectRatio(){return ellipseFitted?semiMinor/semiMajor:Double.NaN;}
