@@ -1,0 +1,130 @@
+commit 7fa47b6 conjunto correia modo treinar iteracoes 8000 nproc 2
+alvos: 538 pares recorte/escala de 269 recortes (24 negativos), cameras ['Disco 01', 'Disco 02', 'Disco 03', 'Disco 04', 'Disco 05', 'Disco 06', 'Disco 07', 'Disco 08', 'Disco 09', 'Disco 10', 'Serie 2017-06-19'], em 173s
+it     1  bce 0.6897  dist_mae_pond 9.783  1s
+it   100  bce 0.5392  dist_mae_pond 7.851  61s
+it   200  bce 0.4842  dist_mae_pond 7.153  123s
+it   300  bce 0.4656  dist_mae_pond 5.631  183s
+it   400  bce 0.4582  dist_mae_pond 4.643  243s
+it   500  bce 0.4672  dist_mae_pond 3.675  303s
+it   600  bce 0.4471  dist_mae_pond 3.291  364s
+it   700  bce 0.4558  dist_mae_pond 3.074  424s
+it   800  bce 0.4608  dist_mae_pond 2.794  484s
+it   900  bce 0.4488  dist_mae_pond 2.819  545s
+it  1000  bce 0.4540  dist_mae_pond 2.687  605s
+it  1100  bce 0.4297  dist_mae_pond 2.722  666s
+it  1200  bce 0.4397  dist_mae_pond 2.627  727s
+it  1300  bce 0.4438  dist_mae_pond 2.589  787s
+it  1400  bce 0.4472  dist_mae_pond 2.555  847s
+it  1500  bce 0.4372  dist_mae_pond 2.452  908s
+it  1600  bce 0.4467  dist_mae_pond 2.416  968s
+it  1700  bce 0.4328  dist_mae_pond 2.342  1029s
+it  1800  bce 0.4359  dist_mae_pond 2.450  1089s
+it  1900  bce 0.4346  dist_mae_pond 2.306  1150s
+it  2000  bce 0.4405  dist_mae_pond 2.353  1210s
+it  2100  bce 0.4540  dist_mae_pond 2.320  1271s
+it  2200  bce 0.4438  dist_mae_pond 2.358  1332s
+it  2300  bce 0.4329  dist_mae_pond 2.306  1393s
+it  2400  bce 0.4392  dist_mae_pond 2.281  1454s
+it  2500  bce 0.4305  dist_mae_pond 2.226  1516s
+it  2600  bce 0.4373  dist_mae_pond 2.188  1577s
+it  2700  bce 0.4300  dist_mae_pond 2.173  1638s
+it  2800  bce 0.4484  dist_mae_pond 2.215  1700s
+it  2900  bce 0.4355  dist_mae_pond 2.174  1761s
+it  3000  bce 0.4426  dist_mae_pond 2.206  1821s
+it  3100  bce 0.4432  dist_mae_pond 2.157  1881s
+it  3200  bce 0.4460  dist_mae_pond 2.161  1942s
+it  3300  bce 0.4338  dist_mae_pond 2.112  2002s
+it  3400  bce 0.4279  dist_mae_pond 2.133  2062s
+it  3500  bce 0.4236  dist_mae_pond 2.150  2123s
+it  3600  bce 0.4174  dist_mae_pond 2.090  2183s
+it  3700  bce 0.4288  dist_mae_pond 2.115  2244s
+it  3800  bce 0.4239  dist_mae_pond 2.167  2304s
+it  3900  bce 0.4277  dist_mae_pond 2.063  2365s
+it  4000  bce 0.4302  dist_mae_pond 2.037  2425s
+it  4100  bce 0.4117  dist_mae_pond 2.075  2485s
+it  4200  bce 0.4451  dist_mae_pond 2.059  2546s
+it  4300  bce 0.4110  dist_mae_pond 2.026  2607s
+it  4400  bce 0.4232  dist_mae_pond 2.048  2668s
+it  4500  bce 0.4220  dist_mae_pond 2.074  2728s
+it  4600  bce 0.4286  dist_mae_pond 2.032  2789s
+it  4700  bce 0.4252  dist_mae_pond 1.961  2849s
+it  4800  bce 0.4203  dist_mae_pond 2.030  2909s
+it  4900  bce 0.4422  dist_mae_pond 2.038  2970s
+it  5000  bce 0.4281  dist_mae_pond 1.990  3030s
+it  5100  bce 0.4571  dist_mae_pond 2.025  3091s
+it  5200  bce 0.4302  dist_mae_pond 1.972  3151s
+it  5300  bce 0.4336  dist_mae_pond 2.016  3211s
+it  5400  bce 0.4163  dist_mae_pond 1.958  3272s
+it  5500  bce 0.4384  dist_mae_pond 1.956  3332s
+it  5600  bce 0.4252  dist_mae_pond 1.964  3392s
+it  5700  bce 0.4086  dist_mae_pond 2.002  3453s
+it  5800  bce 0.4460  dist_mae_pond 1.928  3514s
+it  5900  bce 0.4303  dist_mae_pond 1.942  3574s
+it  6000  bce 0.4260  dist_mae_pond 1.953  3634s
+it  6100  bce 0.4196  dist_mae_pond 1.947  3695s
+it  6200  bce 0.4200  dist_mae_pond 1.943  3756s
+it  6300  bce 0.4228  dist_mae_pond 1.872  3816s
+it  6400  bce 0.4317  dist_mae_pond 1.901  3876s
+it  6500  bce 0.4185  dist_mae_pond 1.973  3937s
+it  6600  bce 0.4051  dist_mae_pond 1.912  3997s
+it  6700  bce 0.4350  dist_mae_pond 1.981  4058s
+it  6800  bce 0.4179  dist_mae_pond 1.980  4119s
+it  6900  bce 0.4390  dist_mae_pond 1.895  4180s
+it  7000  bce 0.4505  dist_mae_pond 1.967  4240s
+it  7100  bce 0.4336  dist_mae_pond 1.968  4300s
+it  7200  bce 0.4313  dist_mae_pond 1.970  4360s
+it  7300  bce 0.4212  dist_mae_pond 1.956  4420s
+it  7400  bce 0.4311  dist_mae_pond 1.914  4481s
+it  7500  bce 0.4198  dist_mae_pond 1.901  4542s
+it  7600  bce 0.4262  dist_mae_pond 1.954  4603s
+it  7700  bce 0.4220  dist_mae_pond 1.923  4664s
+it  7800  bce 0.4206  dist_mae_pond 1.848  4725s
+it  7900  bce 0.4280  dist_mae_pond 1.881  4786s
+it  8000  bce 0.4183  dist_mae_pond 1.926  4847s
+/home/runner/work/PelotaVision/PelotaVision/ml_training/stardist/train.py:53: TracerWarning: Converting a tensor to a Python boolean might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  return torch.cat([p if logits else torch.sigmoid(p), self.dist(f)], 1)
+20171227_11-41-36.jpg 4P10F {'belt_app': (0.9652, 1140, 6.41), 'demo_app': (0.8758, 1119, 15.49), 'demo_scale': (0.8621, 1048, None), 'log_scale': (0.9789, 891, None), 'hough_scale': (0.731, 408, None)}
+20171227_11-41-37.jpg 4P10F {'belt_app': (0.9758, 1127, 6.18), 'demo_app': (0.8362, 1230, 14.79), 'demo_scale': (0.8837, 1044, None), 'log_scale': (0.9835, 843, None), 'hough_scale': (0.7524, 379, None)}
+20171227_11-41-38.jpg 4P10F {'belt_app': (0.9782, 1132, 5.44), 'demo_app': (0.8702, 1183, 14.86), 'demo_scale': (0.888, 1055, None), 'log_scale': (0.9821, 887, None), 'hough_scale': (0.738, 404, None)}
+20171227_11-41-40.jpg 4P10F {'belt_app': (0.9729, 1250, 6.34), 'demo_app': (0.8964, 1252, 16.13), 'demo_scale': (0.8698, 1115, None), 'log_scale': (0.9797, 905, None), 'hough_scale': (0.733, 407, None)}
+20171227_11-41-41.jpg 4P10F {'belt_app': (0.9699, 1076, 5.54), 'demo_app': (0.8975, 1050, 12.91), 'demo_scale': (0.9043, 941, None), 'log_scale': (0.9861, 780, None), 'hough_scale': (0.6856, 318, None)}
+20171227_11-41-43.jpg 4P10F {'belt_app': (0.9728, 1046, 6.35), 'demo_app': (0.8614, 1101, 15.5), 'demo_scale': (0.872, 963, None), 'log_scale': (0.9814, 844, None), 'hough_scale': (0.7938, 434, None)}
+20171227_11-41-44.jpg 4P10F {'belt_app': (0.9793, 1138, 6.43), 'demo_app': (0.8904, 1152, 14.76), 'demo_scale': (0.8998, 1037, None), 'log_scale': (0.9801, 842, None), 'hough_scale': (0.7227, 382, None)}
+20171227_11-41-46.jpg 4P10F {'belt_app': (0.9607, 1109, 6.49), 'demo_app': (0.8239, 1188, 17.95), 'demo_scale': (0.87, 1003, None), 'log_scale': (0.977, 840, None), 'hough_scale': (0.7776, 426, None)}
+20171227_11-41-49.jpg 4P10F {'belt_app': (0.9775, 1070, 5.65), 'demo_app': (0.884, 1074, 13.63), 'demo_scale': (0.887, 1001, None), 'log_scale': (0.9813, 878, None), 'hough_scale': (0.7688, 441, None)}
+img712.jpg Disco 11 {'belt_app': (0.9786, 1927, 6.96), 'demo_app': (0.871, 1820, 20.54), 'demo_scale': (0.8733, 1739, None), 'log_scale': (0.9678, 1445, None), 'hough_scale': (0.8023, 759, None)}
+img713.jpg Disco 11 {'belt_app': (0.9847, 1827, 6.86), 'demo_app': (0.8989, 1700, 18.43), 'demo_scale': (0.8773, 1624, None), 'log_scale': (0.9732, 1416, None), 'hough_scale': (0.7844, 715, None)}
+img714.jpg Disco 11 {'belt_app': (0.9866, 1907, 6.82), 'demo_app': (0.8967, 1769, 22.2), 'demo_scale': (0.8959, 1683, None), 'log_scale': (0.9809, 1453, None), 'hough_scale': (0.7766, 727, None)}
+img715.jpg Disco 11 {'belt_app': (0.9811, 1981, 9.73), 'demo_app': (0.9086, 1740, 20.02), 'demo_scale': (0.8893, 1647, None), 'log_scale': (0.9819, 1433, None), 'hough_scale': (0.7596, 686, None)}
+img751.jpg Disco 11 {'belt_app': (0.9854, 1620, 6.02), 'demo_app': (0.9209, 1504, 17.47), 'demo_scale': (0.9173, 1430, None), 'log_scale': (0.9864, 1367, None), 'hough_scale': (0.8352, 810, None)}
+img778.jpg Disco 11 {'belt_app': (0.9765, 2207, 6.81), 'demo_app': (0.8749, 2065, 23.81), 'demo_scale': (0.8584, 1902, None), 'log_scale': (0.9759, 1532, None), 'hough_scale': (0.8019, 779, None)}
+img779.jpg Disco 11 {'belt_app': (0.9838, 2332, 7.36), 'demo_app': (0.8751, 2269, 27.59), 'demo_scale': (0.8713, 2096, None), 'log_scale': (0.9812, 1661, None), 'hough_scale': (0.8046, 828, None)}
+img780.jpg Disco 11 {'belt_app': (0.9796, 2457, 10.84), 'demo_app': (0.8914, 2194, 26.6), 'demo_scale': (0.8683, 2081, None), 'log_scale': (0.9867, 1662, None), 'hough_scale': (0.7994, 850, None)}
+img781.jpg Disco 11 {'belt_app': (0.9822, 2068, 6.99), 'demo_app': (0.8901, 1948, 20.99), 'demo_scale': (0.8938, 1822, None), 'log_scale': (0.9693, 1465, None), 'hough_scale': (0.7333, 676, None)}
+img782.jpg Disco 11 {'belt_app': (0.9776, 1617, 5.88), 'demo_app': (0.9019, 1542, 17.32), 'demo_scale': (0.906, 1473, None), 'log_scale': (0.9582, 1183, None), 'hough_scale': (0.7713, 595, None)}
+img783.jpg Disco 11 {'belt_app': (0.9786, 1780, 6.85), 'demo_app': (0.8823, 1693, 17.69), 'demo_scale': (0.8719, 1604, None), 'log_scale': (0.972, 1292, None), 'hough_scale': (0.7283, 591, None)}
+img508.jpg Disco 12 {'belt_app': (0.9876, 2621, 8.77), 'demo_app': (0.9124, 2378, 22.06), 'demo_scale': (0.9109, 2288, None), 'log_scale': (0.9879, 1895, None), 'hough_scale': (0.6468, 696, None)}
+img509.jpg Disco 12 {'belt_app': (0.9817, 2564, 8.98), 'demo_app': (0.8883, 2270, 25.1), 'demo_scale': (0.8944, 2165, None), 'log_scale': (0.9809, 1918, None), 'hough_scale': (0.7429, 837, None)}
+img510.jpg Disco 12 {'belt_app': (0.9883, 2717, 10.53), 'demo_app': (0.8868, 2392, 26.47), 'demo_scale': (0.8854, 2303, None), 'log_scale': (0.9883, 1951, None), 'hough_scale': (0.7229, 864, None)}
+img511.jpg Disco 12 {'belt_app': (0.9885, 2787, 10.19), 'demo_app': (0.9002, 2503, 28.37), 'demo_scale': (0.8927, 2383, None), 'log_scale': (0.9885, 1952, None), 'hough_scale': (0.7146, 840, None)}
+img549.jpg Disco 12 {'belt_app': (0.9792, 2731, 10.19), 'demo_app': (0.9156, 2511, 27.59), 'demo_scale': (0.9203, 2317, None), 'log_scale': (0.9771, 1996, None), 'hough_scale': (0.783, 1004, None)}
+img553.jpg Disco 12 {'belt_app': (0.9923, 2837, 9.01), 'demo_app': (0.9163, 2648, 24.2), 'demo_scale': (0.9217, 2563, None), 'log_scale': (0.9919, 2118, None), 'hough_scale': (0.6941, 908, None)}
+img554.jpg Disco 12 {'belt_app': (0.9332, 1084, 8.19), 'demo_app': (0.8957, 855, 9.72), 'demo_scale': (0.9091, 838, None), 'log_scale': (0.8519, 1233, None), 'hough_scale': (0.8485, 571, None)}
+img555.jpg Disco 12 {'belt_app': (0.9843, 2397, 7.5), 'demo_app': (0.8936, 2202, 24.29), 'demo_scale': (0.8896, 2094, None), 'log_scale': (0.9838, 1756, None), 'hough_scale': (0.7145, 731, None)}
+img556.jpg Disco 12 {'belt_app': (0.9843, 2440, 8.63), 'demo_app': (0.8709, 2253, 23.11), 'demo_scale': (0.8823, 2185, None), 'log_scale': (0.9873, 1740, None), 'hough_scale': (0.7468, 817, None)}
+img581.jpg Disco 12 {'belt_app': (0.9835, 2561, 7.64), 'demo_app': (0.8973, 2255, 20.35), 'demo_scale': (0.8955, 2236, None), 'log_scale': (0.9823, 1887, None), 'hough_scale': (0.7222, 788, None)}
+img582.jpg Disco 12 {'belt_app': (0.9811, 2778, 10.93), 'demo_app': (0.8865, 2428, 28.1), 'demo_scale': (0.8915, 2284, None), 'log_scale': (0.9809, 1893, None), 'hough_scale': (0.7083, 762, None)}
+img583.jpg Disco 12 {'belt_app': (0.9844, 2595, 8.82), 'demo_app': (0.8933, 2382, 23.02), 'demo_scale': (0.8849, 2282, None), 'log_scale': (0.984, 1895, None), 'hough_scale': (0.7444, 887, None)}
+vazio {'file': 'img571.jpg', 'belt_app': 811, 'belt_app_seconds': 14.86, 'demo_app': 1022, 'demo_app_seconds': 23.47}
+vazio {'file': 'img574.jpg', 'belt_app': 774, 'belt_app_seconds': 14.87, 'demo_app': 1465, 'demo_app_seconds': 7.79}
+vazio {'file': 'img577.jpg', 'belt_app': 785, 'belt_app_seconds': 14.88, 'demo_app': 865, 'demo_app_seconds': 21.03}
+vazio {'file': 'img580.jpg', 'belt_app': 467, 'belt_app_seconds': 11.52, 'demo_app': 1206, 'demo_app_seconds': 7.18}
+vazio {'file': 'img588.jpg', 'belt_app': 288, 'belt_app_seconds': 10.12, 'demo_app': 1062, 'demo_app_seconds': 6.48}
+vazio {'file': 'img591.jpg', 'belt_app': 534, 'belt_app_seconds': 13.25, 'demo_app': 1380, 'demo_app_seconds': 7.82}
+VALIDACAO belt_app {'frames': 32, 'detections': 61923, 'consensus': 33260, 'matched': 32787, 'scored_detections': 33591, 'precision': 0.9761, 'recall': 0.9858, 'f1': 0.9809, 'precision_raw': 0.5295, 'seconds_per_frame': 7.67}
+VALIDACAO demo_app {'frames': 32, 'detections': 57670, 'consensus': 33260, 'matched': 30372, 'scored_detections': 34942, 'precision': 0.8692, 'recall': 0.9132, 'f1': 0.8906, 'precision_raw': 0.5267, 'seconds_per_frame': 20.35}
+VALIDACAO demo_scale {'frames': 32, 'detections': 54246, 'consensus': 33260, 'matched': 30327, 'scored_detections': 34877, 'precision': 0.8695, 'recall': 0.9118, 'f1': 0.8902, 'precision_raw': 0.5591, 'seconds_per_frame': None}
+VALIDACAO log_scale {'frames': 32, 'detections': 45853, 'consensus': 33260, 'matched': 32537, 'scored_detections': 33202, 'precision': 0.98, 'recall': 0.9783, 'f1': 0.9791, 'precision_raw': 0.7096, 'seconds_per_frame': None}
+VALIDACAO hough_scale {'frames': 32, 'detections': 21320, 'consensus': 33260, 'matched': 20092, 'scored_detections': 20282, 'precision': 0.9906, 'recall': 0.6041, 'f1': 0.7505, 'precision_raw': 0.9424, 'seconds_per_frame': None}
+VAZIA {'belt_app': 609.8, 'demo_app': 1166.7}
+paridade {'opencv': '4.12.0', 'max_abs_output_diff': 0.0001354217529296875, 'detections_ort': 1650, 'detections_opencv': 1650, 'seconds_ort': 6.52, 'seconds_opencv': 5.93, 'frame': 'img765.jpg'}

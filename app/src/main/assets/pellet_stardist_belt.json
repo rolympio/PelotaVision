@@ -1,0 +1,361 @@
+{
+ "id": "stardist_belt_pseudo_20261025_v1",
+ "file": "pellet_stardist_belt.onnx",
+ "sha256": "35e71a9dd717331acad59f34fe47a5846aa7bdf7bd4bbfc074c3dadccaff0acd",
+ "demonstration": true,
+ "scene": "belt",
+ "label_origin": "pseudo_consensus_v1",
+ "ground_truth": false,
+ "architecture": "StarDist 2D (Schmidt et al. 2018) reimplementado em PyTorch: U-Net 3 níveis (16-32-64-128) + cabeça 32; 488161 parâmetros",
+ "input": {
+  "name": "input",
+  "shape": [
+   1,
+   1,
+   384,
+   384
+  ],
+  "gray": "BGR2GRAY",
+  "normalization": "(v-p1)/(p99.8-p1) do histograma da imagem reduzida"
+ },
+ "output": {
+  "name": "output",
+  "shape": [
+   1,
+   33,
+   384,
+   384
+  ],
+  "channel0": "probabilidade",
+  "channels": "distâncias em px da rede"
+ },
+ "rays": 32,
+ "tile": 384,
+ "overlap": 64,
+ "nominal_radius_px": 16.0,
+ "norm_low": 0.01,
+ "norm_high": 0.998,
+ "nms_overlap": 0.5,
+ "min_radius_net_px": 3.0,
+ "profile_radius_fraction_of_width": {
+  "0": [
+   0.006
+  ],
+  "1": [
+   0.009
+  ],
+  "2": [
+   0.013
+  ],
+  "3": [
+   0.005,
+   0.008,
+   0.013
+  ]
+ },
+ "threshold": "max(0,2; min(0,8; 0,75 - 0,005 x sensibilidade))",
+ "scale_selection": "cena Correia: uma passada por raio do perfil num recorte central de um bloco; escolhe o raio mediano mais perto do nominal (log); passada final reescalada (fator 0,5-2)",
+ "training": {
+  "conjunto": "correia",
+  "label_origin": "pseudo_consensus_v1",
+  "cameras": [
+   "Disco 01",
+   "Disco 02",
+   "Disco 03",
+   "Disco 04",
+   "Disco 05",
+   "Disco 06",
+   "Disco 07",
+   "Disco 08",
+   "Disco 09",
+   "Disco 10",
+   "Serie 2017-06-19"
+  ],
+  "crops": 269,
+  "negative_crops": 24,
+  "objects": 126291,
+  "source_frames": 93,
+  "iterations": 8000,
+  "seed": 20261024,
+  "torch": "2.5.1+cpu",
+  "split": "treino = Discos 01-10 e série 2017-06-19; validação = Disco 11, Disco 12, 4P10F (câmera conferida visualmente)",
+  "subsample": "por câmera, em ordem de captura: 1 a cada 3 quadros no treino (todos na validação); descarta correlação >= 0,9 com quadro já escolhido",
+  "negatives": "Disco 03 (correia vazia): até 15:30 -> treino (1 a cada 3, 6 recortes cada); de 15:40 em diante -> só avaliação",
+  "labelers": "LoG multiescala + raio radial; Hough GRADIENT_ALT + CLAHE; ONNX de demonstração na escala do espaçamento; consenso >= 2",
+  "note": "Pseudo-rótulos de consenso, SEM revisão humana. Não usar para granulometria registrada sem validação com rótulos revisados/peneiramento."
+ },
+ "validation_holdout": {
+  "cameras": [
+   "4P10F",
+   "Disco 11",
+   "Disco 12"
+  ],
+  "frames": 32,
+  "against": "pseudo-rótulos de consenso (NÃO é verdade-terreno)",
+  "overall": {
+   "belt_app": {
+    "frames": 32,
+    "detections": 61923,
+    "consensus": 33260,
+    "matched": 32787,
+    "scored_detections": 33591,
+    "precision": 0.9761,
+    "recall": 0.9858,
+    "f1": 0.9809,
+    "precision_raw": 0.5295,
+    "seconds_per_frame": 7.67
+   },
+   "demo_app": {
+    "frames": 32,
+    "detections": 57670,
+    "consensus": 33260,
+    "matched": 30372,
+    "scored_detections": 34942,
+    "precision": 0.8692,
+    "recall": 0.9132,
+    "f1": 0.8906,
+    "precision_raw": 0.5267,
+    "seconds_per_frame": 20.35
+   },
+   "demo_scale": {
+    "frames": 32,
+    "detections": 54246,
+    "consensus": 33260,
+    "matched": 30327,
+    "scored_detections": 34877,
+    "precision": 0.8695,
+    "recall": 0.9118,
+    "f1": 0.8902,
+    "precision_raw": 0.5591,
+    "seconds_per_frame": null
+   },
+   "log_scale": {
+    "frames": 32,
+    "detections": 45853,
+    "consensus": 33260,
+    "matched": 32537,
+    "scored_detections": 33202,
+    "precision": 0.98,
+    "recall": 0.9783,
+    "f1": 0.9791,
+    "precision_raw": 0.7096,
+    "seconds_per_frame": null
+   },
+   "hough_scale": {
+    "frames": 32,
+    "detections": 21320,
+    "consensus": 33260,
+    "matched": 20092,
+    "scored_detections": 20282,
+    "precision": 0.9906,
+    "recall": 0.6041,
+    "f1": 0.7505,
+    "precision_raw": 0.9424,
+    "seconds_per_frame": null
+   }
+  },
+  "by_camera": {
+   "belt_app|4P10F": {
+    "frames": 9,
+    "detections": 10088,
+    "consensus": 5564,
+    "matched": 5449,
+    "scored_detections": 5642,
+    "precision": 0.9658,
+    "recall": 0.9793,
+    "f1": 0.9725,
+    "precision_raw": 0.5401,
+    "seconds_per_frame": 6.09
+   },
+   "demo_app|4P10F": {
+    "frames": 9,
+    "detections": 10349,
+    "consensus": 5564,
+    "matched": 5043,
+    "scored_detections": 6021,
+    "precision": 0.8376,
+    "recall": 0.9064,
+    "f1": 0.8706,
+    "precision_raw": 0.4873,
+    "seconds_per_frame": 15.11
+   },
+   "demo_scale|4P10F": {
+    "frames": 9,
+    "detections": 9207,
+    "consensus": 5564,
+    "matched": 5054,
+    "scored_detections": 5901,
+    "precision": 0.8565,
+    "recall": 0.9083,
+    "f1": 0.8816,
+    "precision_raw": 0.5489,
+    "seconds_per_frame": null
+   },
+   "log_scale|4P10F": {
+    "frames": 9,
+    "detections": 7710,
+    "consensus": 5564,
+    "matched": 5468,
+    "scored_detections": 5583,
+    "precision": 0.9794,
+    "recall": 0.9827,
+    "f1": 0.9811,
+    "precision_raw": 0.7092,
+    "seconds_per_frame": null
+   },
+   "hough_scale|4P10F": {
+    "frames": 9,
+    "detections": 3599,
+    "consensus": 5564,
+    "matched": 3328,
+    "scored_detections": 3361,
+    "precision": 0.9902,
+    "recall": 0.5981,
+    "f1": 0.7458,
+    "precision_raw": 0.9247,
+    "seconds_per_frame": null
+   },
+   "belt_app|Disco 11": {
+    "frames": 11,
+    "detections": 21723,
+    "consensus": 11610,
+    "matched": 11452,
+    "scored_detections": 11728,
+    "precision": 0.9765,
+    "recall": 0.9864,
+    "f1": 0.9814,
+    "precision_raw": 0.5272,
+    "seconds_per_frame": 7.37
+   },
+   "demo_app|Disco 11": {
+    "frames": 11,
+    "detections": 20244,
+    "consensus": 11610,
+    "matched": 10613,
+    "scored_detections": 12201,
+    "precision": 0.8698,
+    "recall": 0.9141,
+    "f1": 0.8914,
+    "precision_raw": 0.5243,
+    "seconds_per_frame": 21.15
+   },
+   "demo_scale|Disco 11": {
+    "frames": 11,
+    "detections": 19101,
+    "consensus": 11610,
+    "matched": 10514,
+    "scored_detections": 12202,
+    "precision": 0.8617,
+    "recall": 0.9056,
+    "f1": 0.8831,
+    "precision_raw": 0.5504,
+    "seconds_per_frame": null
+   },
+   "log_scale|Disco 11": {
+    "frames": 11,
+    "detections": 15909,
+    "consensus": 11610,
+    "matched": 11315,
+    "scored_detections": 11569,
+    "precision": 0.978,
+    "recall": 0.9746,
+    "f1": 0.9763,
+    "precision_raw": 0.7112,
+    "seconds_per_frame": null
+   },
+   "hough_scale|Disco 11": {
+    "frames": 11,
+    "detections": 8016,
+    "consensus": 11610,
+    "matched": 7520,
+    "scored_detections": 7588,
+    "precision": 0.991,
+    "recall": 0.6477,
+    "f1": 0.7834,
+    "precision_raw": 0.9381,
+    "seconds_per_frame": null
+   },
+   "belt_app|Disco 12": {
+    "frames": 12,
+    "detections": 30112,
+    "consensus": 16086,
+    "matched": 15886,
+    "scored_detections": 16221,
+    "precision": 0.9793,
+    "recall": 0.9876,
+    "f1": 0.9834,
+    "precision_raw": 0.5276,
+    "seconds_per_frame": 9.12
+   },
+   "demo_app|Disco 12": {
+    "frames": 12,
+    "detections": 27077,
+    "consensus": 16086,
+    "matched": 14716,
+    "scored_detections": 16720,
+    "precision": 0.8801,
+    "recall": 0.9148,
+    "f1": 0.8972,
+    "precision_raw": 0.5435,
+    "seconds_per_frame": 23.53
+   },
+   "demo_scale|Disco 12": {
+    "frames": 12,
+    "detections": 25938,
+    "consensus": 16086,
+    "matched": 14759,
+    "scored_detections": 16774,
+    "precision": 0.8799,
+    "recall": 0.9175,
+    "f1": 0.8983,
+    "precision_raw": 0.569,
+    "seconds_per_frame": null
+   },
+   "log_scale|Disco 12": {
+    "frames": 12,
+    "detections": 22234,
+    "consensus": 16086,
+    "matched": 15754,
+    "scored_detections": 16050,
+    "precision": 0.9816,
+    "recall": 0.9794,
+    "f1": 0.9805,
+    "precision_raw": 0.7086,
+    "seconds_per_frame": null
+   },
+   "hough_scale|Disco 12": {
+    "frames": 12,
+    "detections": 9705,
+    "consensus": 16086,
+    "matched": 9244,
+    "scored_detections": 9333,
+    "precision": 0.9905,
+    "recall": 0.5747,
+    "f1": 0.7273,
+    "precision_raw": 0.9525,
+    "seconds_per_frame": null
+   }
+  },
+  "empty_belt": {
+   "frames": 6,
+   "mean_detections": {
+    "belt_app": 609.8,
+    "demo_app": 1166.7
+   },
+   "max_detections": {
+    "belt_app": 811,
+    "demo_app": 1465
+   }
+  }
+ },
+ "opencv_parity": {
+  "opencv": "4.12.0",
+  "max_abs_output_diff": 0.0001354217529296875,
+  "detections_ort": 1650,
+  "detections_opencv": 1650,
+  "seconds_ort": 6.52,
+  "seconds_opencv": 5.93,
+  "frame": "img765.jpg"
+ },
+ "license": "Código e pesos: mesmos termos do PelotaVision; método StarDist (BSD-3) reimplementado, sem código copiado."
+}
