@@ -79,7 +79,20 @@ Destrava: ~200 fotos com contornos revisados por especialista + decisão de lice
 
 Campos novos, todos aditivos (leitores antigos continuam funcionando): `report_schema_version` (ausente = 1), `analysis_models`, `crack_histogram`, `granulometric_map` (inclui `file`), `visualization`; em `cracks`: `classifier`, `crack_crop_pixels`, `comparison` e, por pelota, `comparison_score`/`comparison_method`. CSV de granulometria: colunas `count_cracked;percent_cracked_of_all` **acrescentadas no fim** (vazias se indisponível). Novo arquivo `_mapa.png`. Ordem dos arquivos anteriores inalterada.
 
-## 7. Limitações conhecidas
+## 7. Verificação executada (CI do PR #9)
+
+| Item | Resultado |
+|---|---|
+| Android: build + 103 testes unitários (Robolectric) + lint | aprovado; APK assinado com a chave oficial (atualiza a 0.11.0+) |
+| Windows: build + 31 testes (OpenCV nativo 4.12), incl. paridade MobileNetV3 Java × Python | aprovado |
+| Windows: autoteste do EXE empacotado (6 arquivos, JSON v2, MobileNetV3 no pacote) | aprovado |
+| Pipeline Python de trincas | aprovado |
+| Núcleo, 12 testes do item 9 (local) | 12/12 |
+| Capturas reais das telas | `verification/visuals-0.14.0/` (Activity renderizada pelo Robolectric e componentes Swing) |
+
+Observação da captura da correia (404 pelotas): o RF marcou 76 de 81 pelotas avaliáveis como possível trinca (94%). É o mesmo padrão de falso positivo visto no benchmark, agora visível no histograma laranja.
+
+## 8. Limitações conhecidas
 
 - MobileNetV3 não validada em fotos independentes nem em pelotas verdes; escore não calibrado. Pesos de partida treinados no ImageNet (termos de uso de pesquisa): revisar antes de distribuição comercial.
 - Mapa colore a elipse ajustada, não uma máscara de pixels; oclusões na correia continuam medidas pela borda visível.
