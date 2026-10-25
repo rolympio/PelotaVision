@@ -227,13 +227,16 @@ public class DesktopPipelineTest {
                     s.activeCracks().count(CrackAnalysis.Status.POSSIBLE), s.activeCracks().count(CrackAnalysis.Status.INCONCLUSIVE), out.applied.id, out.durationMs / 1000.0));
             s.setScale(new Granulometry.Settings(10, 1, true, false));
             List<File> files = DesktopExport.save(outDir, s, new DesktopAnalysis.Config());
-            assertEquals(5, files.size());
+            // 0.5.0: original, resultado, csv, granulometria, json (mesmos indices) + _mapa.png no fim
+            assertEquals(6, files.size());
+            assertTrue(files.get(5).getName().endsWith("_mapa.png"));
             assertTrue("original deve ser copia byte a byte", java.util.Arrays.equals(Files.readAllBytes(img.toPath()), Files.readAllBytes(files.get(0).toPath())));
             List<String> lines = Files.readAllLines(files.get(2).toPath(), StandardCharsets.UTF_8);
             assertEquals(s.active().circles.size() + 1, lines.size());
             for (String line : lines) assertEquals("CSV deve ter 32 colunas: " + line, 32, line.split(";", -1).length);
             String json = new String(Files.readAllBytes(files.get(4).toPath()), StandardCharsets.UTF_8);
-            for (String key : new String[]{"region_of_interest", "detection_suggestion", "processing_scope", "report_viewport", "shape_analysis", "cracks", "physical_scale", "histogram", "detections", "source"})
+            for (String key : new String[]{"region_of_interest", "detection_suggestion", "processing_scope", "report_viewport", "shape_analysis", "cracks", "physical_scale", "histogram", "detections", "source",
+                    "report_schema_version", "analysis_models", "crack_histogram", "granulometric_map", "visualization"})
                 assertTrue("JSON sem chave Android " + key, json.contains("\"" + key + "\""));
             java.awt.image.BufferedImage png = javax.imageio.ImageIO.read(files.get(1));
             DesktopExport.Layout layout = new DesktopExport.Layout(s.width, s.height);
