@@ -38,7 +38,7 @@ final class HistogramView extends View {
         float width=box.width(),height=box.height(),s=Math.min(width/380f,height/216f);
         String unit=d.settings.unit();
         Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);p.setColor(Color.rgb(16,26,35));c.drawRect(0,0,width,height,p);
-        float left=44*s,right=width-14*s,top=(second?104:90)*s,bottom=height-46*s;
+        float left=44*s,right=width-14*s,top=((second?104:90)+(v.showValues?10:0))*s,bottom=height-46*s;
         p.setColor(Color.WHITE);p.setTextSize(14*s);p.setFakeBoldText(true);
         c.drawText(second?"Distribuição: todas × trincadas":"Distribuição por número de pelotas",12*s,21*s,p);p.setFakeBoldText(false);
         p.setTextSize(11*s);p.setColor(Color.rgb(181,198,208));

@@ -90,6 +90,13 @@ final class ImageView extends JPanel {
     }
 
     void setOverlay(PelletDetector.Result result, CrackAnalysis cracks) { this.result = result; this.cracks = cracks; repaint(); }
+    /** 0 original (so a foto), 1 segmentacao (marcacoes), 2 mapa granulometrico. */
+    private int viewMode = 1;
+    private Granulometry.Distribution mapDistribution;
+    private ReportVisuals mapVisuals = ReportVisuals.defaults();
+    void setViewMode(int mode) { viewMode = mode; repaint(); }
+    int viewMode() { return viewMode; }
+    void setMap(Granulometry.Distribution d, ReportVisuals v) { mapDistribution = d; if (v != null) mapVisuals = v; repaint(); }
     void setReference(ObjectCalibration.Reference ref) { reference = ref; repaint(); }
     void setNumbers(boolean on) { numbers = on; repaint(); }
     void setBanner(String text) { banner = text; repaint(); }
@@ -144,7 +151,9 @@ final class ImageView extends JPanel {
             gi.fill(outside);
         }
         float w = (float) (2 / zoom);
-        if (result != null) drawDetections(gi, result, cracks, w, numbers);
+        GranulometryColorScale mapScale = viewMode == 2 && result != null ? mapVisuals.scale(mapDistribution) : null;
+        if (mapScale != null) drawMap(gi, result, mapDistribution, mapScale, mapVisuals.mapOpacity);
+        else if (result != null && viewMode == 1) drawDetections(gi, result, cracks, w, numbers);
         if (reference != null) drawReference(gi, reference, w);
         gi.dispose();
         if (measureA != null) {
@@ -158,6 +167,13 @@ final class ImageView extends JPanel {
                 g.draw(new Line2D.Double(a, b));
             }
         }
+        if (mapScale != null) {
+            if (mapVisuals.mapLabels) drawMapLabels(g, at, result, mapDistribution);
+            int lw = Math.min(420, getWidth() - 40), lx = (getWidth() - lw) / 2, ly = getHeight() - 34;
+            g.setColor(new Color(16, 26, 35, 180));
+            g.fillRoundRect(lx - 10, ly - 22, lw + 20, 52, 10, 10);
+            HistogramView.legend(g, mapScale, mapVisuals, lx, ly, lw, Color.WHITE);
+        }
         if (banner != null) {
             g.setFont(getFont().deriveFont(Font.BOLD, 14f));
             int tw = g.getFontMetrics().stringWidth(banner);
@@ -167,6 +183,45 @@ final class ImageView extends JPanel {
             g.drawString(banner, 16, 26);
         }
         g.dispose();
+    }
+
+    /** Cor por diametro dentro da elipse de cada pelota incluida no histograma (mesma regra e escala). */
+    static void drawMap(Graphics2D o, PelletDetector.Result result, Granulometry.Distribution d, GranulometryColorScale scale, double opacity) {
+        int a = GranulometryColorScale.alpha(opacity);
+        for (PelletDetector.Detection p : result.circles) {
+            Granulometry.Item item = new Granulometry.Item(2 * p.radius, p.partial, p.needsReview);
+            if (!GranulometryColorScale.colored(d, item)) continue;
+            int c = scale.rgb(d.diameterMm(item.diameterPx));
+            o.setColor(new Color((c >> 16) & 255, (c >> 8) & 255, c & 255, a));
+            double sa = p.semiMajor > 0 ? p.semiMajor : p.radius, sb = p.semiMinor > 0 ? p.semiMinor : p.radius;
+            Shape e = new Ellipse2D.Double(-sa, -sb, 2 * sa, 2 * sb);
+            AffineTransform t = AffineTransform.getTranslateInstance(p.x, p.y);
+            t.rotate(Math.toRadians(p.angleDeg));
+            o.fill(t.createTransformedShape(e));
+        }
+    }
+
+    /** Diametro sobre cada pelota (coordenadas de tela), omitindo pequenas na tela ou sobrepostas. */
+    private static void drawMapLabels(Graphics2D g, AffineTransform at, PelletDetector.Result result, Granulometry.Distribution d) {
+        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
+        java.util.List<java.awt.Rectangle> used = new java.util.ArrayList<>();
+        double k = Math.sqrt(Math.abs(at.getDeterminant()));
+        for (PelletDetector.Detection p : result.circles) {
+            Granulometry.Item item = new Granulometry.Item(2 * p.radius, p.partial, p.needsReview);
+            if (!GranulometryColorScale.colored(d, item) || p.radius * k < 9) continue;
+            Point2D c = at.transform(new Point2D.Double(p.x, p.y), null);
+            String s = HistogramView.fmt2(d.diameterMm(item.diameterPx));
+            int sw = g.getFontMetrics().stringWidth(s);
+            java.awt.Rectangle r = new java.awt.Rectangle((int) c.getX() - sw / 2 - 2, (int) c.getY() - 10, sw + 4, 14);
+            boolean free = true;
+            for (java.awt.Rectangle u : used) if (u.intersects(r)) { free = false; break; }
+            if (!free) continue;
+            used.add(r);
+            g.setColor(new Color(0, 0, 0, 170));
+            g.drawString(s, r.x + 3, r.y + 12);
+            g.setColor(Color.WHITE);
+            g.drawString(s, r.x + 2, r.y + 11);
+        }
     }
 
     /** Desenho comum a tela e ao PNG exportado (coordenadas da imagem analisada). */

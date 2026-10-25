@@ -56,7 +56,8 @@ final class DesktopExport {
 
         boolean cropRoi = s.region() != null;
         ReportViewport viewport = new ReportViewport(s.width, s.height, s.region(), cropRoi);
-        BufferedImage composite = compose(s, viewport);
+        ReportVisuals visuals = cfg.visuals == null ? HistogramView.DEFAULTS : cfg.visuals;
+        BufferedImage composite = compose(s, viewport, visuals);
         File marked = new File(folder, base + "_resultado.png");
         if (!ImageIO.write(composite, "png", marked)) throw new IOException("Falha ao gravar a imagem do relatorio.");
         written.add(marked);
@@ -68,13 +69,64 @@ final class DesktopExport {
         Files.write(csv.toPath(), ReportTables.pelletCsv(result, cracks, d).getBytes(StandardCharsets.UTF_8));
         written.add(csv);
         File grain = new File(folder, base + "_granulometria.csv");
-        Files.write(grain.toPath(), ReportTables.histogramCsv(d).getBytes(StandardCharsets.UTF_8));
+        CrackHistogram ch = s.crackHistogram();
+        Files.write(grain.toPath(), (ch != null ? ReportTables.histogramCsv(ch) : ReportTables.histogramCsv(d)).getBytes(StandardCharsets.UTF_8));
         written.add(grain);
 
+        BufferedImage map = mapImage(s, viewport, visuals);
+        String mapName = map == null ? null : base + "_mapa.png";
         File json = new File(folder, base + ".json");
-        Files.write(json.toPath(), report(s, cfg, viewport, composite, base, extension).toString(2).getBytes(StandardCharsets.UTF_8));
+        JSONObject report = report(s, cfg, viewport, composite, base, extension);
+        report.put("report_schema_version", ReportJson.SCHEMA_VERSION);
+        report.put("analysis_models", ReportJson.analysisModelsJson(s.output() == null ? null : s.output().applied, DesktopAnalysis.lastResolution, DesktopAnalysis.networkId()));
+        if (ch != null) report.put("crack_histogram", ReportJson.crackHistogramJson(ch, visuals));
+        Object mapJson = ReportJson.mapJson(d, visuals);
+        if (mapJson instanceof JSONObject) ((JSONObject) mapJson).put("file", mapName == null ? JSONObject.NULL : mapName);
+        report.put("granulometric_map", mapJson);
+        JSONObject display = new JSONObject();
+        display.put("histogram_show_all", visuals.showAll); display.put("histogram_show_cracked", visuals.showCracked); display.put("histogram_values_on_bars", visuals.showValues);
+        display.put("histogram_normalization", visuals.normalization.name()); display.put("all_color", "#268CAB alpha 0.55"); display.put("cracked_color", "#FF8C1A alpha 0.65");
+        report.put("visualization", display);
+        Files.write(json.toPath(), report.toString(2).getBytes(StandardCharsets.UTF_8));
         written.add(json);
+        if (map != null) {
+            File mapFile = new File(folder, mapName);
+            if (!ImageIO.write(map, "png", mapFile)) throw new IOException("Falha ao gravar o mapa granulometrico.");
+            written.add(mapFile);
+        }
         return written;
+    }
+
+    /** Mapa exportado: pixels mesclados por GranulometryColorScale.paintMap (identico ao Android), recorte do relatorio e legenda. */
+    static BufferedImage mapImage(PhotoSession s, ReportViewport v, ReportVisuals visuals) {
+        Granulometry.Distribution d = s.distribution();
+        GranulometryColorScale scale = visuals.scale(d);
+        if (scale == null) return null;
+        BufferedImage src = s.analyzedImage;
+        int w = src.getWidth(), h = src.getHeight();
+        int[] px = src.getRGB(0, 0, w, h, null, 0, w);
+        GranulometryColorScale.paintMap(px, w, h, s.active(), d, scale, visuals.mapOpacity);
+        BufferedImage painted = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        painted.setRGB(0, 0, w, h, px, 0, w);
+        int band = Math.max(60, Math.round(v.width * 70f / 380));
+        BufferedImage out = new BufferedImage(v.width, v.height + band, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = out.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.setColor(new Color(16, 26, 35)); g.fillRect(0, 0, out.getWidth(), out.getHeight());
+        Graphics2D p = (Graphics2D) g.create();
+        p.clip(new Rectangle2D.Double(0, 0, v.width, v.height));
+        p.translate(-v.left * v.scale, -v.top * v.scale);
+        p.scale(v.scale, v.scale);
+        InterestRegion roi = s.region();
+        if (v.cropped) p.clip(new Rectangle2D.Double(roi.left, roi.top, roi.width(), roi.height()));
+        if (v.circular) p.clip(new Ellipse2D.Double(roi.left, roi.top, roi.width(), roi.height()));
+        p.drawImage(painted, 0, 0, null);
+        p.dispose();
+        int lw = v.width - 24;
+        HistogramView.legend(g, scale, visuals, 12, v.height + 24, Math.max(40, lw), Color.WHITE);
+        g.dispose();
+        return out;
     }
 
     /** Mesmo layout de PhotoComposer.Layout (proporcoes a partir de 380 px de largura). */
@@ -86,7 +138,9 @@ final class DesktopExport {
         }
     }
 
-    static BufferedImage compose(PhotoSession s, ReportViewport v) {
+    static BufferedImage compose(PhotoSession s, ReportViewport v) { return compose(s, v, HistogramView.DEFAULTS); }
+
+    static BufferedImage compose(PhotoSession s, ReportViewport v, ReportVisuals visuals) {
         PelletDetector.Result result = s.active();
         CrackAnalysis cracks = s.activeCracks();
         Granulometry.Distribution d = s.distribution();
@@ -128,7 +182,7 @@ final class DesktopExport {
         for (int i = 0; i < lines.length; i++) g.drawString(lines[i], 12 * sc, y + offsets[i] * sc);
         Graphics2D h = (Graphics2D) g.create();
         h.translate(0, layout.histogramTop);
-        HistogramView.paint(h, d, v.width, layout.height - layout.histogramTop);
+        HistogramView.paint(h, d, s.crackHistogram(), visuals, v.width, layout.height - layout.histogramTop);
         h.dispose();
         g.dispose();
         return out;

@@ -10,9 +10,9 @@ import java.io.File;
 /** PelotaVision para Windows: ponto de entrada. Usa o mesmo nucleo de analise do Android. */
 public final class DesktopApp {
     public static final String NAME = "PelotaVision Windows";
-    public static final String VERSION = "0.4.0";
+    public static final String VERSION = "0.5.0";
     /** Versao do nucleo de analise compartilhado com o Android. */
-    public static final String CORE_VERSION = "0.13.0";
+    public static final String CORE_VERSION = "0.14.0";
 
     private DesktopApp() {}
 

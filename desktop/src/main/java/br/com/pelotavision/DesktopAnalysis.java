@@ -24,6 +24,8 @@ final class DesktopAnalysis {
         int crackSensitivity = 50;  // padrao Android
         double minimumExpectedMm = 5;
         Granulometry.Settings scale; // escala vigente (entra no contexto da busca, como no Android)
+        CrackClassifierChoice crackChoice = CrackClassifierChoice.RANDOM_FOREST; // Modelos de analise
+        ReportVisuals visuals = HistogramView.DEFAULTS; // mapa e grafico (gravados no relatorio)
 
         /** O metodo neural so vale com o modelo instalado; sem ele, volta para bordas. */
         int effectiveMethod() { return method == DetectionTuner.NEURAL && !NeuralPelletDetector.available(belt) ? DetectionTuner.GRADIENT : method; }
@@ -83,8 +85,29 @@ final class DesktopAnalysis {
     }
 
     static String crackModelNote() {
-        return crackModel() == null ? crackNote : "Random Forest experimental (crack_forest.pvrf), sem novo treinamento.";
+        CrackClassifierChoice.Resolution r = lastResolution;
+        String base = crackModel() == null ? crackNote : "Random Forest experimental (crack_forest.pvrf), sem novo treinamento.";
+        if (r == null || r.effective == CrackClassifierChoice.RANDOM_FOREST) return r != null && r.message != null ? r.message : base;
+        return r.effective == CrackClassifierChoice.MOBILENET ? "MobileNetV3 experimental (nao validada); o RF continua o padrao." : base + " Comparacao com MobileNetV3 registrada (status do RF).";
     }
+
+    private static MobileNetCrackModel network;
+    static volatile CrackClassifierChoice.Resolution lastResolution;
+
+    /** Rede carregada so quando escolhida; liberada quando o RF volta a ser usado. */
+    static synchronized CrackDetector crackDetector(CrackClassifierChoice requested) {
+        if (requested == null) requested = CrackClassifierChoice.RANDOM_FOREST;
+        if (requested.needsNetwork()) {
+            if (network == null) {
+                File onnx = DesktopApp.model(MobileNetCrackModel.MODEL), meta = DesktopApp.model(MobileNetCrackModel.METADATA);
+                network = MobileNetCrackModel.load(onnx, meta.isFile() ? readOrEmpty(meta) : "");
+            }
+        } else network = null;
+        CrackClassifierChoice.Resolution r = CrackClassifierChoice.resolve(requested, crackModel() != null, network != null, MobileNetCrackModel.lastError);
+        lastResolution = r;
+        return new CrackDetector(crackModel(), r.effective.needsNetwork() ? network : null, r.effective);
+    }
+    static synchronized String networkId() { return network == null ? null : network.id; }
 
     /**
      * @param analyzed imagem BGR ja reduzida para analise (lado maior <= 3000 px)
@@ -113,8 +136,7 @@ final class DesktopAnalysis {
             } else {
                 local = DetectionTuner.detect(gray, current, window);
             }
-            CrackModel model = crackModel();
-            CrackAnalysis cracks = window.toGlobal(new CrackDetector(model).detect(gray, local, cfg.crackSensitivity));
+            CrackAnalysis cracks = window.toGlobal(crackDetector(cfg.crackChoice).detect(gray, local, cfg.crackSensitivity));
             PelletDetector.Result result = window.toGlobal(local);
             return new Output(result, cracks, selected, suggestions, window, ow, oh, sample, System.currentTimeMillis() - start, crackModelNote());
         } finally {
@@ -148,7 +170,7 @@ final class DesktopAnalysis {
         Mat gray = null;
         try {
             gray = window.region == null ? full : window.cropGray(full);
-            CrackAnalysis cracks = window.toGlobal(new CrackDetector(crackModel()).detect(gray, trial.result, crackSensitivity));
+            CrackAnalysis cracks = window.toGlobal(crackDetector(lastResolution == null ? CrackClassifierChoice.RANDOM_FOREST : lastResolution.requested).detect(gray, trial.result, crackSensitivity));
             return new Output(window.toGlobal(trial.result), cracks, trial.option, report, window, ow, oh, sample, System.currentTimeMillis() - start, crackModelNote());
         } finally {
             if (gray != null && gray != full) gray.release();

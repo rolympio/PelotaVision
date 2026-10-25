@@ -156,6 +156,8 @@ final class PhotoSession {
     PelletDetector.Result active() { return active; }
     CrackAnalysis activeCracks() { return activeCracks; }
     Granulometry.Distribution distribution() { return distribution; }
+    /** Série de pelotas trincadas nas mesmas classes (indisponível sem classificação; nunca zero inventado). */
+    CrackHistogram crackHistogram() { return distribution == null || active == null ? null : CrackHistogram.compute(distribution, items(active), activeCracks); }
     ShapeStatistics shape() { return shape; }
     String distributionError() { return distributionError; }
     List<Integer> indices() { return indices; }
