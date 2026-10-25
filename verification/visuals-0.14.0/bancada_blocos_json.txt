@@ -1,0 +1,118 @@
+{
+ "available": true,
+ "unavailable_reason": null,
+ "crack_definition": "POSSIBLE status (classifier indication or manual review); INCONCLUSIVE = uncertain\/not evaluable; NO_INDICATION = no visible crack",
+ "same_classes_as_histogram": true,
+ "subset_of_total": true,
+ "added_to_total": false,
+ "total_pellets": 89,
+ "cracked_pellets": 30,
+ "no_indication_pellets": 56,
+ "uncertain_pellets": 3,
+ "evaluable_pellets": 86,
+ "cracked_percent_of_evaluable": 34.883720930232556,
+ "normalization_displayed": "PERCENT_OF_ALL",
+ "normalization_note": "PERCENT_OF_ALL divides both series by total_pellets (subset preserved); CONDITIONAL divides each series by its own total",
+ "bins": [
+  {
+   "lower_px": 50,
+   "upper_px": 60,
+   "count_all": 1,
+   "count_cracked": 1,
+   "percent_cracked_of_all_pellets": 1.1235955056179776,
+   "percent_of_cracked_pellets": 3.3333333333333335,
+   "cracked_share_within_class": 100
+  },
+  {
+   "lower_px": 60,
+   "upper_px": 70,
+   "count_all": 3,
+   "count_cracked": 1,
+   "percent_cracked_of_all_pellets": 1.1235955056179776,
+   "percent_of_cracked_pellets": 3.3333333333333335,
+   "cracked_share_within_class": 33.333333333333336
+  },
+  {
+   "lower_px": 70,
+   "upper_px": 80,
+   "count_all": 5,
+   "count_cracked": 3,
+   "percent_cracked_of_all_pellets": 3.3707865168539324,
+   "percent_of_cracked_pellets": 10,
+   "cracked_share_within_class": 60
+  },
+  {
+   "lower_px": 80,
+   "upper_px": 90,
+   "count_all": 10,
+   "count_cracked": 2,
+   "percent_cracked_of_all_pellets": 2.247191011235955,
+   "percent_of_cracked_pellets": 6.666666666666667,
+   "cracked_share_within_class": 20
+  },
+  {
+   "lower_px": 90,
+   "upper_px": 100,
+   "count_all": 12,
+   "count_cracked": 7,
+   "percent_cracked_of_all_pellets": 7.865168539325842,
+   "percent_of_cracked_pellets": 23.333333333333332,
+   "cracked_share_within_class": 58.333333333333336
+  },
+  {
+   "lower_px": 100,
+   "upper_px": 110,
+   "count_all": 21,
+   "count_cracked": 5,
+   "percent_cracked_of_all_pellets": 5.617977528089888,
+   "percent_of_cracked_pellets": 16.666666666666668,
+   "cracked_share_within_class": 23.80952380952381
+  },
+  {
+   "lower_px": 110,
+   "upper_px": 120,
+   "count_all": 11,
+   "count_cracked": 4,
+   "percent_cracked_of_all_pellets": 4.49438202247191,
+   "percent_of_cracked_pellets": 13.333333333333334,
+   "cracked_share_within_class": 36.36363636363637
+  },
+  {
+   "lower_px": 120,
+   "upper_px": 130,
+   "count_all": 16,
+   "count_cracked": 3,
+   "percent_cracked_of_all_pellets": 3.3707865168539324,
+   "percent_of_cracked_pellets": 10,
+   "cracked_share_within_class": 18.75
+  },
+  {
+   "lower_px": 130,
+   "upper_px": 140,
+   "count_all": 7,
+   "count_cracked": 1,
+   "percent_cracked_of_all_pellets": 1.1235955056179776,
+   "percent_of_cracked_pellets": 3.3333333333333335,
+   "cracked_share_within_class": 14.285714285714286
+  },
+  {
+   "lower_px": 140,
+   "upper_px": 150,
+   "count_all": 2,
+   "count_cracked": 2,
+   "percent_cracked_of_all_pellets": 2.247191011235955,
+   "percent_of_cracked_pellets": 6.666666666666667,
+   "cracked_share_within_class": 100
+  },
+  {
+   "lower_px": 150,
+   "upper_px": 160,
+   "count_all": 1,
+   "count_cracked": 1,
+   "percent_cracked_of_all_pellets": 1.1235955056179776,
+   "percent_of_cracked_pellets": 3.3333333333333335,
+   "cracked_share_within_class": 100
+  }
+ ]
+}
+{"palette":"continuous HSV hue 240->0 (blue, cyan, green, yellow, red), S=0.85 V=0.95","scale_mode":"relativa","min":54.725114,"max":152.737736,"unit":"px","equal_range_middle_color":false,"opacity":0.25,"photo_weight":0.75,"diameter_labels":false,"colored_region":"inside each fitted ellipse of pellets included in the histogram; nothing outside the ROI or on the belt background","diameter_basis":"equivalent diameter used by the histogram (same scale and classes)","fixed_range_requested":false}
