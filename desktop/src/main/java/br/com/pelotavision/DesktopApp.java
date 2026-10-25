@@ -44,6 +44,7 @@ public final class DesktopApp {
             log.append("appDir=").append(appDir()).append('\n');
             log.append("crackModel=").append(model("crack_forest.pvrf")).append(' ').append(model("crack_forest.pvrf").isFile()).append('\n');
             log.append("neuralModel=").append(NeuralPelletDetector.status()).append('\n');
+            log.append("crackNetworkAsset=").append(model(MobileNetCrackModel.MODEL).isFile()).append('\n');
             log.append("neuralBeltModel=").append(NeuralPelletDetector.status(true)).append('\n');
             org.opencv.core.Mat bgr = Mats.readUpright(image);
             PhotoSession session = new PhotoSession(image, null, null, bgr);
@@ -64,13 +65,14 @@ public final class DesktopApp {
             log.append("count_roi=").append(session.active().circles.size()).append('\n');
             java.util.List<File> files = DesktopExport.save(outDir, session, cfg);
             String json = new String(java.nio.file.Files.readAllBytes(files.get(4).toPath()), java.nio.charset.StandardCharsets.UTF_8);
-            boolean jsonOk = json.contains("\"region_of_interest\"") && json.contains("\"RECTANGLE\"") && json.contains("\"physical_scale\"") && json.contains("\"processing_scope\"");
+            boolean jsonOk = json.contains("\"region_of_interest\"") && json.contains("\"RECTANGLE\"") && json.contains("\"physical_scale\"") && json.contains("\"processing_scope\"")
+                    && json.contains("\"report_schema_version\": 2") && json.contains("\"granulometric_map\"") && json.contains("\"crack_histogram\"");
             session.release();
             log.append("crackModelLoaded=").append(DesktopAnalysis.crackModel() != null).append('\n');
             log.append("files=").append(files.size()).append('\n');
             log.append("json_android_keys=").append(jsonOk).append('\n');
             if (session.active().circles.isEmpty() || out.result.circles.isEmpty() || !pending || !jsonOk) code = 3;
-            if (DesktopAnalysis.crackModel() == null || files.size() != 5) code = 2;
+            if (DesktopAnalysis.crackModel() == null || files.size() != 6 || !files.get(5).getName().endsWith("_mapa.png")) code = 2;
         } catch (Throwable e) {
             log.append("error=").append(e).append('\n');
             code = 1;
