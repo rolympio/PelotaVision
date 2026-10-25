@@ -68,6 +68,23 @@ jobs:
         shell: cmd
         run: gradlew.bat -p desktop test jar runtimeLibs --stacktrace
 
+      - name: Testes com falha (anotacoes)
+        if: always()
+        run: |
+          python - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          t = f = 0
+          for p in glob.glob('desktop/build/test-results/test/*.xml'):
+              r = ET.parse(p).getroot(); t += int(r.get('tests', 0))
+              for tc in r.iter('testcase'):
+                  bad = tc.find('failure') if tc.find('failure') is not None else tc.find('error')
+                  if bad is not None:
+                      f += 1
+                      msg = (bad.get('message') or '').replace('\n', ' ')[:500]
+                      print(f"::error title=Teste Windows {tc.get('classname').split('.')[-1]}.{tc.get('name')}::{msg}")
+          print(f"::notice title=Testes Windows::total={t} falhas={f}")
+          PY
+
       # Passo proprio: o GitHub limita a 10 anotacoes por passo.
       - name: Rede neural - paridade e comparacao dos metodos
         if: always()
@@ -102,6 +119,7 @@ jobs:
           for d in vcruntime140.dll vcruntime140_1.dll msvcp140.dll; do [ -f "$JH/bin/$d" ] && cp "$JH/bin/$d" "$IN/" || echo "sem $d no JDK"; done
           cp app/src/main/assets/crack_forest.pvrf app/src/main/assets/metadata.json app/src/main/assets/pellet_stardist.onnx app/src/main/assets/pellet_stardist.json "$IN/modelos/"
           for f in pellet_stardist_belt.onnx pellet_stardist_belt.json; do if [ -f "app/src/main/assets/$f" ]; then cp "app/src/main/assets/$f" "$IN/modelos/"; else echo "::warning title=Correia::$f ausente; correia + rede usa o modelo de bancada"; fi; done
+          for f in crack_mobilenetv3.onnx crack_mobilenetv3.json; do if [ -f "app/src/main/assets/$f" ]; then cp "app/src/main/assets/$f" "$IN/modelos/"; else echo "::warning title=MobileNetV3::$f ausente; trincas so com o Random Forest"; fi; done
           cp app/src/main/assets/FSRCNN_* "$IN/modelos/"
           LIC=$(find "C:/opencv-4.12.0/opencv" -maxdepth 3 -iname "LICENSE*" -type f | head -1 || true)
           if [ -n "$LIC" ]; then cp "$LIC" "$IN/OpenCV_LICENSE.txt"; else echo "::warning::LICENSE do OpenCV nao encontrado no pacote oficial"; fi
@@ -150,7 +168,7 @@ jobs:
           TAG="windows-v${PV_DESKTOP_VERSION}-build${GITHUB_RUN_NUMBER}"
           SHORT=$(echo "$GITHUB_SHA" | cut -c1-7)
           {
-            echo "PelotaVision Windows ${PV_DESKTOP_VERSION} - nucleo de analise do Android 0.13.0 - commit ${SHORT}."
+            echo "PelotaVision Windows ${PV_DESKTOP_VERSION} - nucleo de analise do Android 0.14.0 - commit ${SHORT}."
             echo
             echo "**Como usar:** baixe \`${PV_ZIP}\`, extraia para uma pasta (ex.: Documentos\\PelotaVision) e abra \`PelotaVision.exe\`. Nao precisa instalar nem de administrador."
             echo

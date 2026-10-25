@@ -58,8 +58,10 @@ public class CrackExportTest {
   PelletDetector.Result pellets=new PelletDetector.Result(Arrays.asList(new PelletDetector.Detection(100,100,40,Math.PI*1600,1,false,false)),380,300,1,1,false);
   CrackAnalysis cracks=new CrackAnalysis(380,300,50,1,Arrays.asList(new CrackAnalysis.Entry(1,CrackAnalysis.Status.POSSIBLE,new float[]{80,85,120,85})));
   ResultSaver.SavedResult saved=ResultSaver.save(context,photo,source,"image/png",pellets,PelletDetector.Parameters.medium(),cracks,null);
-  assertEquals(5,provider.files.size());assertEquals(5,provider.published);
+  // 0.14.0: original, resultado, mapa, granulometria, json, csv
+  assertEquals(6,provider.files.size());assertEquals(6,provider.published);assertTrue(new File(root,saved.base+"_mapa.png").isFile());
   JSONObject json=new JSONObject(new String(Files.readAllBytes(new File(root,saved.base+".json").toPath()),java.nio.charset.StandardCharsets.UTF_8));
+  assertEquals(2,json.getInt("report_schema_version"));assertEquals(saved.base+"_mapa.png",json.getJSONObject("granulometric_map").getString("file"));assertTrue(json.getJSONObject("crack_histogram").getBoolean("available"));
   assertTrue(json.isNull("physical_scale"));assertEquals("px",json.getJSONObject("histogram").getString("unit"));assertEquals(1,json.getJSONObject("cracks").getInt("possible_crack_pellets"));
   String grain=new String(Files.readAllBytes(new File(root,saved.base+"_granulometria.csv").toPath()),java.nio.charset.StandardCharsets.UTF_8);assertTrue(grain.contains("lower_px;upper_px"));assertFalse(grain.contains("lower_mm"));
   String csv=new String(Files.readAllBytes(new File(root,saved.base+".csv").toPath()),java.nio.charset.StandardCharsets.UTF_8);assertTrue(csv.contains("crack_status;crack_manually_reviewed"));String row=csv.split("\n")[1];String[] columns=row.split(";",-1);assertEquals(32,columns.length);assertEquals("",columns[9]);assertEquals("",columns[10]);assertEquals("POSSIBLE",columns[12]);

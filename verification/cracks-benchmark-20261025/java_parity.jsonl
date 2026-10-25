@@ -1,0 +1,3 @@
+{"model":"app/src/main/assets/crack_forest.pvrf","vectors":400,"max_abs_diff":0.000e+00,"java_us_per_score_incl_parse":194.9}
+{"model":"artifacts/crack_benchmark/models/rf_original_plus_synthetic.pvrf","vectors":400,"max_abs_diff":0.000e+00,"java_us_per_score_incl_parse":270.4}
+{"model":"artifacts/crack_benchmark/models/rf_original.pvrf","vectors":400,"max_abs_diff":0.000e+00,"java_us_per_score_incl_parse":280.4}

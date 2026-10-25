@@ -61,12 +61,49 @@ public final class ReportJson {
     public static JSONObject crackJson(CrackAnalysis cracks)throws Exception {
         JSONObject json=new JSONObject();if(cracks==null){json.put("status","not_analyzed");return json;}
         boolean trained=false;for(CrackAnalysis.Entry e:cracks.entries)if(Double.isFinite(e.modelScore)){trained=true;break;}
-        json.put("method",trained?CrackModel.ID:"experimental_blackhat_dark_line_geometry");json.put("trained_model",trained);json.put("model_scope","experimental; provisional labels; synthetic or unverified scenes; no real production validation");json.put("score_type","uncalibrated forest score, not a probability");json.put("trace_method","blackhat connected-line geometry; not trained crack segmentation");json.put("sensitivity",cracks.sensitivity);json.put("analysis_ms",cracks.durationMs);
+        String method=trained?cracks.entries.get(0).method:"experimental_blackhat_dark_line_geometry";for(CrackAnalysis.Entry e:cracks.entries)if(Double.isFinite(e.modelScore)){method=e.method;break;}
+        boolean network=method.startsWith("mobilenet");
+        json.put("method",method);json.put("trained_model",trained);json.put("model_scope","experimental; provisional labels; synthetic or unverified scenes; no real production validation");json.put("score_type",network?"uncalibrated softmax score of the network, not a probability":"uncalibrated forest score, not a probability");
+        json.put("classifier",network?"MobileNetV3-Small (experimental, not validated)":trained?"Random Forest":"heuristic fallback");
+        json.put("crack_crop_pixels","original analyzed grayscale; never the super-resolution image");
+        String comparison=null;int both=0,agree=0,netPossible=0;for(CrackAnalysis.Entry e:cracks.entries)if(e.comparisonMethod!=null&&Double.isFinite(e.comparisonScore)){comparison=e.comparisonMethod;both++;CrackAnalysis.Status alt=e.comparisonScore>=.6?CrackAnalysis.Status.POSSIBLE:e.comparisonScore<=.4?CrackAnalysis.Status.NO_INDICATION:CrackAnalysis.Status.INCONCLUSIVE;if(alt==CrackAnalysis.Status.POSSIBLE)netPossible++;if(alt==e.automatic)agree++;}
+        if(comparison!=null){JSONObject c=new JSONObject();c.put("mode","rf_status_with_network_score_recorded");c.put("network_model",comparison);c.put("pellets_scored_by_both",both);c.put("automatic_status_agreement",agree);c.put("network_possible_at_0.6",netPossible);c.put("note","Status comes from the Random Forest; the network score is recorded for evaluation only. Agreement is not accuracy.");json.put("comparison",c);}else json.put("comparison",JSONObject.NULL);json.put("trace_method","blackhat connected-line geometry; not trained crack segmentation");json.put("sensitivity",cracks.sensitivity);json.put("analysis_ms",cracks.durationMs);
         json.put("possible_crack_pellets",cracks.count(CrackAnalysis.Status.POSSIBLE));json.put("no_indication_pellets",cracks.count(CrackAnalysis.Status.NO_INDICATION));json.put("inconclusive_pellets",cracks.count(CrackAnalysis.Status.INCONCLUSIVE));json.put("manually_reviewed_pellets",cracks.reviewedCount());
         json.put("note","Visible-surface screening; no indication is not proof of no crack. Each pellet counted once.");
         JSONArray entries=new JSONArray();for(CrackAnalysis.Entry e:cracks.entries){JSONObject item=new JSONObject();item.put("pellet_id",e.pelletId);item.put("automatic_status",e.automatic.name());item.put("status",e.status.name());item.put("manually_reviewed",e.manuallyReviewed);
-            item.put("model_score",Double.isFinite(e.modelScore)?e.modelScore:JSONObject.NULL);item.put("method",e.method);JSONArray runs=new JSONArray();if(e.status==CrackAnalysis.Status.POSSIBLE)for(float value:e.markedRuns())runs.put(value);item.put("marked_runs_x1_y1_x2_y2_px",runs);entries.put(item);}
+            item.put("model_score",Double.isFinite(e.modelScore)?e.modelScore:JSONObject.NULL);item.put("method",e.method);if(e.comparisonMethod!=null){item.put("comparison_score",Double.isFinite(e.comparisonScore)?e.comparisonScore:JSONObject.NULL);item.put("comparison_method",e.comparisonMethod);}JSONArray runs=new JSONArray();if(e.status==CrackAnalysis.Status.POSSIBLE)for(float value:e.markedRuns())runs.put(value);item.put("marked_runs_x1_y1_x2_y2_px",runs);entries.put(item);}
         json.put("pellets",entries);return json;
+    }
+    /** Version of the result JSON. Absent in files up to 0.13.0 (= 1); 2 adds crack_histogram, granulometric_map, analysis_models. */
+    public static final int SCHEMA_VERSION=2;
+    public static JSONObject crackHistogramJson(CrackHistogram h,ReportVisuals v)throws Exception {
+        JSONObject j=new JSONObject();j.put("available",h.available);j.put("unavailable_reason",h.available?JSONObject.NULL:h.unavailableReason);
+        j.put("crack_definition","POSSIBLE status (classifier indication or manual review); INCONCLUSIVE = uncertain/not evaluable; NO_INDICATION = no visible crack");
+        j.put("same_classes_as_histogram",true);j.put("subset_of_total",true);j.put("added_to_total",false);
+        j.put("total_pellets",h.total);j.put("cracked_pellets",h.available?h.crackedTotal:JSONObject.NULL);j.put("no_indication_pellets",h.available?h.intactTotal:JSONObject.NULL);j.put("uncertain_pellets",h.uncertainTotal);
+        j.put("evaluable_pellets",h.available?h.evaluable():JSONObject.NULL);j.put("cracked_percent_of_evaluable",finite(h.crackedPercentOfEvaluable()));
+        j.put("normalization_displayed",v.normalization.name());j.put("normalization_note","PERCENT_OF_ALL divides both series by total_pellets (subset preserved); CONDITIONAL divides each series by its own total");
+        String suffix=h.distribution.settings.pixelsOnly()?"_px":"_mm";JSONArray bins=new JSONArray();
+        for(int i=0;i<h.binCount();i++){JSONObject b=new JSONObject();b.put("lower"+suffix,h.distribution.lower(i));b.put("upper"+suffix,h.distribution.upper(i));b.put("count_all",h.all(i));b.put("count_cracked",h.available?h.cracked(i):JSONObject.NULL);
+            b.put("percent_cracked_of_all_pellets",h.available?finite(h.crackedValue(i,CrackHistogram.Normalization.PERCENT_OF_ALL)):JSONObject.NULL);b.put("percent_of_cracked_pellets",h.available?finite(h.crackedValue(i,CrackHistogram.Normalization.CONDITIONAL)):JSONObject.NULL);
+            b.put("cracked_share_within_class",h.available&&h.all(i)>0?100.0*h.cracked(i)/h.all(i):JSONObject.NULL);bins.put(b);}
+        j.put("bins",bins);return j;
+    }
+    public static Object mapJson(Granulometry.Distribution d,ReportVisuals v)throws Exception {
+        GranulometryColorScale scale=v.scale(d);if(scale==null)return JSONObject.NULL;JSONObject j=new JSONObject();
+        j.put("palette","continuous HSV hue 240->0 (blue, cyan, green, yellow, red), S=0.85 V=0.95");j.put("scale_mode",scale.mode());j.put("min",scale.min);j.put("max",scale.max);j.put("unit",scale.unit);
+        j.put("equal_range_middle_color",scale.equalRange());j.put("opacity",v.mapOpacity);j.put("photo_weight",1-v.mapOpacity);j.put("diameter_labels",v.mapLabels);
+        j.put("colored_region","inside each fitted ellipse of pellets included in the histogram; nothing outside the ROI or on the belt background");j.put("diameter_basis","equivalent diameter used by the histogram (same scale and classes)");
+        j.put("fixed_range_requested",v.mapFixed);return j;
+    }
+    public static JSONObject analysisModelsJson(DetectionTuner.Option applied,CrackClassifierChoice.Resolution crack,String networkId)throws Exception {
+        JSONObject j=new JSONObject(),seg=new JSONObject(),cls=new JSONObject();
+        seg.put("selected",applied==null?"not_recorded":applied.methodName());seg.put("classical_available",true);seg.put("neural_model","StarDist (see neural_model)");
+        seg.put("yolo11_seg","unavailable: no instance masks with human ground truth; Ultralytics code and weights are AGPL-3.0 (license review required before distribution)");
+        seg.put("hybrid","unavailable: no validated fusion rule");j.put("segmentation",seg);
+        cls.put("requested",crack==null?"RANDOM_FOREST":crack.requested.name());cls.put("effective",crack==null?"RANDOM_FOREST":crack.effective.name());cls.put("fallback_message",crack==null||crack.message==null?JSONObject.NULL:crack.message);
+        cls.put("random_forest_id",CrackModel.ID);cls.put("mobilenet_id",networkId==null?JSONObject.NULL:networkId);cls.put("mobilenet_status","experimental_not_validated");
+        cls.put("crack_localization_unet","unavailable: no real crack masks");j.put("crack_classifier",cls);return j;
     }
     public static Object regionJson(InterestRegion region,int excluded)throws Exception {
         if(region==null)return JSONObject.NULL;

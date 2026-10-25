@@ -1,0 +1,533 @@
+{
+ "protocol": {
+  "dev": "LeaveOneGroupOut em 6 grupos: ['scene:brown40', 'scene:cluster', 'scene:dense', 'scene:gray20', 'scene:gray42', 'scene:spaced']",
+  "holdout": [
+   "photo:crack_example"
+  ],
+  "epochs": 10,
+  "batch": 32,
+  "lr": 0.0006,
+  "weight_decay": 0.0001,
+  "synthetic_weight": 0.5,
+  "input": "128x128 cinza 0..255, lado 2.3r, máscara 1.08r preenchida com 128.0",
+  "pretrained": "torchvision mobilenet_v3_small IMAGENET1K_V1",
+  "seed": 20261025,
+  "threshold": 0.5,
+  "app_policy": [
+   0.4,
+   0.6
+  ],
+  "holdout_used_for_selection": false
+ },
+ "results": {
+  "mnv3_real_only": {
+   "uses_synthetic_training": false,
+   "dev": {
+    "auc": 0.9748768472906404,
+    "confusion_[[TN,FP],[FN,TP]]": [
+     [
+      140,
+      0
+     ],
+     [
+      5,
+      24
+     ]
+    ],
+    "precision": 1.0,
+    "recall": 0.8275862068965517,
+    "f1": 0.9056603773584906,
+    "false_positives": 0,
+    "false_negatives": 5,
+    "app_policy_0.4_0.6": {
+     "possible_cracked": 23,
+     "possible_intact": 0,
+     "inconclusive": 2,
+     "no_indication_cracked": 4
+    }
+   },
+   "train_seconds_final": 14.2,
+   "holdout": {
+    "n": 82,
+    "cracked": 7,
+    "auc": 0.6571428571428571,
+    "confusion_[[TN,FP],[FN,TP]]": [
+     [
+      75,
+      0
+     ],
+     [
+      7,
+      0
+     ]
+    ],
+    "precision": NaN,
+    "recall": 0.0,
+    "f1": 0.0,
+    "false_positives": 0,
+    "false_negatives": 7,
+    "app_policy_0.4_0.6": {
+     "possible_cracked": 0,
+     "possible_intact": 0,
+     "inconclusive": 0,
+     "no_indication_cracked": 7
+    },
+    "by_size_terciles": {
+     "pequenas": {
+      "raio_px": [
+       27.362557,
+       49.77275
+      ],
+      "n": 27,
+      "trincadas": 1,
+      "auc": 0.3076923076923077,
+      "confusion_[[TN,FP],[FN,TP]]": [
+       [
+        26,
+        0
+       ],
+       [
+        1,
+        0
+       ]
+      ],
+      "precision": NaN,
+      "recall": 0.0,
+      "f1": 0.0,
+      "false_positives": 0,
+      "false_negatives": 1
+     },
+     "medias": {
+      "raio_px": [
+       49.77994,
+       55.812989
+      ],
+      "n": 28,
+      "trincadas": 1,
+      "auc": 1.0,
+      "confusion_[[TN,FP],[FN,TP]]": [
+       [
+        27,
+        0
+       ],
+       [
+        1,
+        0
+       ]
+      ],
+      "precision": NaN,
+      "recall": 0.0,
+      "f1": 0.0,
+      "false_positives": 0,
+      "false_negatives": 1
+     },
+     "grandes": {
+      "raio_px": [
+       56.501278,
+       76.368868
+      ],
+      "n": 27,
+      "trincadas": 5,
+      "auc": 0.7818181818181819,
+      "confusion_[[TN,FP],[FN,TP]]": [
+       [
+        22,
+        0
+       ],
+       [
+        5,
+        0
+       ]
+      ],
+      "precision": NaN,
+      "recall": 0.0,
+      "f1": 0.0,
+      "false_positives": 0,
+      "false_negatives": 5
+     }
+    },
+    "auc_ci95": [
+     0.45326406926406926,
+     0.8559672619047618
+    ],
+    "delta_auc_vs_rf_ci95": [
+     -0.11891639610389612,
+     0.4479945054945051
+    ],
+    "resampling": "pelotas (não fotos): IC otimista com 1 foto"
+   },
+   "onnx_bytes": 6096839,
+   "onnx_sha256": "318082a07ae2bd77cf9272e4d30b9b0883cc3bef5687acacc836b103cc29983b",
+   "parameters": 1519906
+  },
+  "mnv3_plus_synthetic": {
+   "uses_synthetic_training": true,
+   "dev": {
+    "auc": 0.9943349753694581,
+    "confusion_[[TN,FP],[FN,TP]]": [
+     [
+      129,
+      11
+     ],
+     [
+      1,
+      28
+     ]
+    ],
+    "precision": 0.717948717948718,
+    "recall": 0.9655172413793104,
+    "f1": 0.8235294117647058,
+    "false_positives": 11,
+    "false_negatives": 1,
+    "app_policy_0.4_0.6": {
+     "possible_cracked": 28,
+     "possible_intact": 9,
+     "inconclusive": 10,
+     "no_indication_cracked": 0
+    }
+   },
+   "train_seconds_final": 107.3,
+   "holdout": {
+    "n": 82,
+    "cracked": 7,
+    "auc": 0.96,
+    "confusion_[[TN,FP],[FN,TP]]": [
+     [
+      64,
+      11
+     ],
+     [
+      0,
+      7
+     ]
+    ],
+    "precision": 0.3888888888888889,
+    "recall": 1.0,
+    "f1": 0.56,
+    "false_positives": 11,
+    "false_negatives": 0,
+    "app_policy_0.4_0.6": {
+     "possible_cracked": 5,
+     "possible_intact": 6,
+     "inconclusive": 23,
+     "no_indication_cracked": 0
+    },
+    "by_size_terciles": {
+     "pequenas": {
+      "raio_px": [
+       27.362557,
+       49.77275
+      ],
+      "n": 27,
+      "trincadas": 1,
+      "auc": 0.7692307692307693,
+      "confusion_[[TN,FP],[FN,TP]]": [
+       [
+        20,
+        6
+       ],
+       [
+        0,
+        1
+       ]
+      ],
+      "precision": 0.14285714285714285,
+      "recall": 1.0,
+      "f1": 0.25,
+      "false_positives": 6,
+      "false_negatives": 0
+     },
+     "medias": {
+      "raio_px": [
+       49.77994,
+       55.812989
+      ],
+      "n": 28,
+      "trincadas": 1,
+      "auc": 1.0,
+      "confusion_[[TN,FP],[FN,TP]]": [
+       [
+        25,
+        2
+       ],
+       [
+        0,
+        1
+       ]
+      ],
+      "precision": 0.3333333333333333,
+      "recall": 1.0,
+      "f1": 0.5,
+      "false_positives": 2,
+      "false_negatives": 0
+     },
+     "grandes": {
+      "raio_px": [
+       56.501278,
+       76.368868
+      ],
+      "n": 27,
+      "trincadas": 5,
+      "auc": 0.9727272727272728,
+      "confusion_[[TN,FP],[FN,TP]]": [
+       [
+        19,
+        3
+       ],
+       [
+        0,
+        5
+       ]
+      ],
+      "precision": 0.625,
+      "recall": 1.0,
+      "f1": 0.7692307692307693,
+      "false_positives": 3,
+      "false_negatives": 0
+     }
+    },
+    "auc_ci95": [
+     0.8985880110880111,
+     1.0
+    ],
+    "delta_auc_vs_rf_ci95": [
+     0.21521336996336995,
+     0.7044043648078459
+    ],
+    "resampling": "pelotas (não fotos): IC otimista com 1 foto"
+   },
+   "onnx_bytes": 6096839,
+   "onnx_sha256": "629d30dd917219d18a7c21e7b63f1ecdb68ba09b7b51774c790bb372ce325d21",
+   "parameters": 1519906
+  },
+  "embedded_rf_0.5.0_reference": {
+   "holdout": {
+    "auc": 0.49142857142857144,
+    "confusion_[[TN,FP],[FN,TP]]": [
+     [
+      19,
+      56
+     ],
+     [
+      1,
+      6
+     ]
+    ],
+    "precision": 0.0967741935483871,
+    "recall": 0.8571428571428571,
+    "f1": 0.17391304347826084,
+    "false_positives": 56,
+    "false_negatives": 1,
+    "app_policy_0.4_0.6": {
+     "possible_cracked": 4,
+     "possible_intact": 48,
+     "inconclusive": 19,
+     "no_indication_cracked": 0
+    },
+    "by_size_terciles": {
+     "pequenas": {
+      "raio_px": [
+       27.362557,
+       49.77275
+      ],
+      "n": 27,
+      "trincadas": 1,
+      "auc": 0.5769230769230769,
+      "confusion_[[TN,FP],[FN,TP]]": [
+       [
+        4,
+        22
+       ],
+       [
+        0,
+        1
+       ]
+      ],
+      "precision": 0.043478260869565216,
+      "recall": 1.0,
+      "f1": 0.08333333333333333,
+      "false_positives": 22,
+      "false_negatives": 0
+     },
+     "medias": {
+      "raio_px": [
+       49.77994,
+       55.812989
+      ],
+      "n": 28,
+      "trincadas": 1,
+      "auc": 0.9629629629629629,
+      "confusion_[[TN,FP],[FN,TP]]": [
+       [
+        7,
+        20
+       ],
+       [
+        0,
+        1
+       ]
+      ],
+      "precision": 0.047619047619047616,
+      "recall": 1.0,
+      "f1": 0.0909090909090909,
+      "false_positives": 20,
+      "false_negatives": 0
+     },
+     "grandes": {
+      "raio_px": [
+       56.501278,
+       76.368868
+      ],
+      "n": 27,
+      "trincadas": 5,
+      "auc": 0.4818181818181818,
+      "confusion_[[TN,FP],[FN,TP]]": [
+       [
+        8,
+        14
+       ],
+       [
+        1,
+        4
+       ]
+      ],
+      "precision": 0.2222222222222222,
+      "recall": 0.8,
+      "f1": 0.3478260869565218,
+      "false_positives": 14,
+      "false_negatives": 1
+     }
+    },
+    "auc_ci95": [
+     0.27564102564102566,
+     0.7299730735065512
+    ],
+    "delta_auc_vs_rf_ci95": null,
+    "resampling": "pelotas (não fotos): IC otimista com 1 foto"
+   }
+  }
+ },
+ "inference_cpu_runner": {
+  "mnv3_real_only": {
+   "onnxruntime_ms_per_pellet": 1.2227921829268846,
+   "onnxruntime_max_abs_diff_vs_torch": 3.2782554626464844e-07,
+   "opencv_dnn_ms_per_pellet": 3.294716841462726,
+   "opencv_dnn_max_abs_diff_vs_torch": 1.1026859283447266e-06,
+   "opencv_version": "4.12.0"
+  },
+  "mnv3_plus_synthetic": {
+   "onnxruntime_ms_per_pellet": 1.2216893902438264,
+   "onnxruntime_max_abs_diff_vs_torch": 4.947185516357422e-06,
+   "opencv_dnn_ms_per_pellet": 3.3349097073164002,
+   "opencv_dnn_max_abs_diff_vs_torch": 5.4836273193359375e-06,
+   "opencv_version": "4.12.0"
+  }
+ },
+ "java_parity_reference": [
+  {
+   "id": "12",
+   "x": 455.644769,
+   "y": 55.732991,
+   "r": 42.013356,
+   "input_sum": 1512088.0,
+   "p_cracked": 0.2436000406742096
+  },
+  {
+   "id": "13",
+   "x": 1226.218923,
+   "y": 78.902251,
+   "r": 32.194013,
+   "input_sum": 1664026.0,
+   "p_cracked": 0.31181609630584717
+  },
+  {
+   "id": "16",
+   "x": 1015.275809,
+   "y": 84.990174,
+   "r": 55.232864,
+   "input_sum": 1678360.0,
+   "p_cracked": 0.1888962686061859
+  },
+  {
+   "id": "17",
+   "x": 870.810335,
+   "y": 89.986883,
+   "r": 61.493774,
+   "input_sum": 1721145.0,
+   "p_cracked": 0.4041690528392792
+  },
+  {
+   "id": "18",
+   "x": 687.941704,
+   "y": 90.282455,
+   "r": 56.501278,
+   "input_sum": 1647719.0,
+   "p_cracked": 0.4169071912765503
+  },
+  {
+   "id": "19",
+   "x": 208.805711,
+   "y": 93.596392,
+   "r": 70.719016,
+   "input_sum": 1667548.0,
+   "p_cracked": 0.9522069692611694
+  },
+  {
+   "id": "20",
+   "x": 556.429417,
+   "y": 103.724506,
+   "r": 67.32798,
+   "input_sum": 1637432.0,
+   "p_cracked": 0.25114375352859497
+  },
+  {
+   "id": "21",
+   "x": 1322.950991,
+   "y": 104.953375,
+   "r": 62.446685,
+   "input_sum": 1643559.0,
+   "p_cracked": 0.37008872628211975
+  },
+  {
+   "id": "23",
+   "x": 757.621778,
+   "y": 140.591092,
+   "r": 47.135888,
+   "input_sum": 1522932.0,
+   "p_cracked": 0.26365572214126587
+  },
+  {
+   "id": "24",
+   "x": 1430.1449,
+   "y": 141.901796,
+   "r": 49.77275,
+   "input_sum": 1561084.0,
+   "p_cracked": 0.34277698397636414
+  },
+  {
+   "id": "25",
+   "x": 1501.193117,
+   "y": 143.247504,
+   "r": 27.362557,
+   "input_sum": 1474653.0,
+   "p_cracked": 0.53984135389328
+  },
+  {
+   "id": "27",
+   "x": 1223.771932,
+   "y": 165.264903,
+   "r": 52.747042,
+   "input_sum": 1610985.0,
+   "p_cracked": 0.46674156188964844
+  }
+ ],
+ "environment": {
+  "python": "3.12.15",
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "torch": "2.5.1+cpu",
+  "torchvision": "0.20.1+cpu",
+  "opencv": "4.12.0",
+  "numpy": "2.1.3",
+  "cpus": 2
+ }
+}

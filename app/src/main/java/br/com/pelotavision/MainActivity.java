@@ -90,6 +90,13 @@ public final class MainActivity extends ComponentActivity {
     private HistogramView histogram;
     private GranulometricColorMap colorMap;
     private boolean colorMapVisible=false;
+    /** Visualização: 0 original (só a foto), 1 segmentação (marcações), 2 mapa granulométrico. */
+    private int viewMode=1;private Button mapButton;
+    private ReportVisuals visuals=ReportVisuals.defaults();
+    private CrackHistogram crackHistogram;
+    private volatile CrackClassifierChoice crackChoice=CrackClassifierChoice.RANDOM_FOREST;
+    private volatile CrackClassifierChoice.Resolution crackResolution;
+    private volatile MobileNetCrackModel crackNetwork;
     private int originalWidth,originalHeight;
     private Granulometry.Settings scaleSettings;
     private Granulometry.Distribution distribution;
@@ -137,7 +144,7 @@ public final class MainActivity extends ComponentActivity {
         org.opencv.core.Core.setNumThreads(2);
         try(InputStream model=getAssets().open("crack_forest.pvrf")){crackModel=new CrackModel(model);}
         catch(Exception e){toast("Modelo de trincas indisponível: usando triagem heurística.");}
-        installNeuralModel();
+        installNeuralModel();restoreVisuals();
         crackLabel.setText(crackModel==null?"Trincas: heurística de reserva":"Trincas: modelo experimental · fotografe");
         handler.post(heartbeat);
         getOnBackPressedDispatcher().addCallback(this,new androidx.activity.OnBackPressedCallback(true){
@@ -187,6 +194,7 @@ public final class MainActivity extends ComponentActivity {
         TextView legend=text("Na foto: vermelho = possível trinca · amarelo = inconclusiva",10,Color.rgb(155,180,189));root.addView(legend);
         LinearLayout crackRow=row();root.addView(crackRow);
         crackLabel=text("Trincas: analisadas ao fotografar",11,Color.rgb(181,198,208));crackRow.addView(crackLabel,new LinearLayout.LayoutParams(0,-2,1));
+        Button models=button("Modelos",false);models.setTag("analysis_models");models.setTextSize(11);models.setOnClickListener(v->showAnalysisModels());crackRow.addView(models,new LinearLayout.LayoutParams(dp(80),dp(36)));
         crackSettings=button("Trincas",false);crackSettings.setTextSize(11);crackSettings.setOnClickListener(v->showCrackSettings());crackRow.addView(crackSettings,new LinearLayout.LayoutParams(dp(85),dp(36)));
         overlay.setOnTouchListener((v,event)->{if(mode!=Mode.PHOTO||photoResult==null)return false;if(event.getAction()==MotionEvent.ACTION_UP){v.performClick();reviewCrackAt(event.getX(),event.getY());}return true;});
         LinearLayout scaleRow=row();root.addView(scaleRow);
@@ -197,12 +205,12 @@ public final class MainActivity extends ComponentActivity {
         roiActions=row();roiActions.setVisibility(View.GONE);root.addView(roiActions);
         segmentRoi=button("Segmentar foto",false);segmentRoi.setTag("segment_active_roi");segmentRoi.setTextSize(11);segmentRoi.setOnClickListener(v->showSegmentationOptions());roiActions.addView(segmentRoi,new LinearLayout.LayoutParams(0,dp(42),1));
         searchRoi=button("Buscar melhor ajuste",false);searchRoi.setTag("search_active_roi");searchRoi.setTextSize(11);searchRoi.setOnClickListener(v->startActiveAnalysis(true));roiActions.addView(searchRoi,new LinearLayout.LayoutParams(0,dp(42),1));
-        histogram=new HistogramView(this);histogram.setVisibility(View.GONE);root.addView(histogram,new LinearLayout.LayoutParams(-1,dp(180)));
+        histogram=new HistogramView(this);histogram.setVisibility(View.GONE);histogram.setOnClickListener(v->showHistogramOptions());root.addView(histogram,new LinearLayout.LayoutParams(-1,dp(180)));
         LinearLayout tools=row();root.addView(tools);
         profileLabel=text("Pelotas médias",11,Color.rgb(151,174,187));profileLabel.setTag("suggestion_label");profileLabel.setOnClickListener(v->{if(photoDetailReport!=null&&!roiNeedsAnalysis)showDetailSummary();else showSuggestions();});tools.addView(profileLabel,new LinearLayout.LayoutParams(0,-2,1));
         CheckBox numberBox=new CheckBox(this);numberBox.setText("Números");numberBox.setTextSize(11);numberBox.setTextColor(Color.WHITE);numberBox.setChecked(true);
         numberBox.setOnCheckedChangeListener((button,checked)-> {numbers=checked;if(mode==Mode.PHOTO&&photoResult!=null)overlay.display(photoResult,numbers);else if(mode==Mode.LIVE&&lastLiveResult!=null)overlay.display(lastLiveResult,numbers);});tools.addView(numberBox);
-        Button mapBtn=button("Mapa",false);mapBtn.setTextSize(11);mapBtn.setOnClickListener(v->toggleColorMap());tools.addView(mapBtn,new LinearLayout.LayoutParams(dp(64),dp(40)));
+        Button mapBtn=button("Seg.",false);mapBtn.setTag("view_mode");mapBtn.setTextSize(11);mapBtn.setOnClickListener(v->toggleColorMap());mapBtn.setOnLongClickListener(v->{showMapOptions();return true;});mapButton=mapBtn;tools.addView(mapBtn,new LinearLayout.LayoutParams(dp(64),dp(40)));
         torch=button("Luz",false);torch.setTextSize(11);torch.setOnClickListener(v->toggleTorch());tools.addView(torch,new LinearLayout.LayoutParams(dp(58),dp(40)));
         adjust=button("Ajustes",false);adjust.setTextSize(11);adjust.setOnClickListener(v->showAdjustments());tools.addView(adjust,new LinearLayout.LayoutParams(dp(77),dp(40)));
         LinearLayout actions=row();actions.setPadding(0,dp(7),0,0);root.addView(actions);
@@ -309,7 +317,7 @@ public final class MainActivity extends ComponentActivity {
                 DetectionTuner.Trial chosen=suggestions.cancelled?suggestions.find(current.id):suggestions.best();
                 if(chosen!=null&&chosen.result!=null){selected=chosen.option;local=chosen.result;}else local=DetectionTuner.detect(gray,current,window);
             }else local=DetectionTuner.detect(gray,current,window);
-            CrackAnalysis cracks=window.toGlobal(new CrackDetector(crackModel).detect(gray,local,crackSensitivity));
+            CrackAnalysis cracks=window.toGlobal(crackDetector().detect(gray,local,crackSensitivity));
             PelletDetector.Result result=window.toGlobal(local);Bitmap ready=bitmap;
             final DetectionTuner.Report searchReport=suggestions;final DetectionTuner.Option selectedOption=selected;
             runOnUiThread(()-> {
@@ -373,7 +381,7 @@ public final class MainActivity extends ComponentActivity {
             if(search){final DetailGeometry map=input.geometry;java.util.List<TilePlan.Tile> nativeTiles=TilePlan.create(map.width,map.height,sr);TilePlan.Tile representative=nativeTiles.get(0);double distance=Double.POSITIVE_INFINITY;for(TilePlan.Tile tile:nativeTiles){double d=Math.hypot(tile.left+tile.width/2.-map.width/2.,tile.top+tile.height/2.-map.height/2.);if(d<distance){distance=d;representative=tile;}}
                 Mat view=input.gray.submat(representative.top,representative.top+representative.height,representative.left,representative.left+representative.width);small=view.clone();view.release();report=DetectionTuner.search(small,selected,DetectionAssessment.Context.tile(scaleSettings,source[0],source[1],scope.region,minimumExpectedMm,map,representative),()->cancel.get()||isDestroyed(),(done,total,label)->runOnUiThread(()->updateTuneProgress(done,total,"Pré-ajuste no bloco original · "+label)));if(cancel.get())throw new java.util.concurrent.CancellationException();if(report.best()!=null)selected=report.best().option;}
             FsrcnnUpscaler upscaler=sr?new FsrcnnUpscaler(superResolutionModel()):null;
-            DetailedAnalysis.Output analyzed=DetailedAnalysis.run(input.gray,input.geometry,selected,compare,upscaler,scaleSettings,source[0],source[1],minimumExpectedMm,crackModel,crackSensitivity,()->cancel.get()||isDestroyed(),(done,total,label)->runOnUiThread(()->updateTuneProgress(done,total,label)));
+            DetailedAnalysis.Output analyzed=DetailedAnalysis.run(input.gray,input.geometry,selected,compare,upscaler,scaleSettings,source[0],source[1],minimumExpectedMm,crackDetector(),crackSensitivity,()->cancel.get()||isDestroyed(),(done,total,label)->runOnUiThread(()->updateTuneProgress(done,total,label)));
             final Bitmap displayed=ready;final DetailedAnalysis.Report detailedReport=analyzed.report.withSearch(report);final DetectionTuner.Option chosen=selected;
             runOnUiThread(()->{closeTuneProgress();if(isDestroyed()||isFinishing()){displayed.recycle();return;}if(cancel.get()){displayed.recycle();mode=Mode.PHOTO;applyRegion(interestRegion);hint.setText("Processamento cancelado; resultado anterior preservado.");return;}Granulometry.Settings previous=scaleSettings;boolean changed=previous!=null&&previous.selectedObject!=null&&!scope.keepsReference(previous.selectedObject,analyzed.result,source[0],source[1]);if(changed)previous=null;
                 photoFile=null;releasePreviousPhoto();photoBitmap=displayed;photoFile=file;photoMime=mime;originalWidth=source[0];originalHeight=source[1];scaleSettings=previous;photoAllResult=analyzed.result;photoAllCracks=analyzed.cracks;photoParameters=chosen.parameters;photoOption=chosen;photoSuggestions=null;suggestionWindow=null;photoAnalysisWindow=scope;photoDetailReport=detailedReport;detailMode=true;detailCompare=compare;detailSr=sr;interestRegion=scope.region;cropRoiReport=scope.region!=null;roiNeedsAnalysis=false;frozen.setVisibility(View.VISIBLE);mode=Mode.PHOTO;applyRegion(interestRegion);
@@ -391,17 +399,17 @@ public final class MainActivity extends ComponentActivity {
         try {copy=photoBitmap.copy(Bitmap.Config.ARGB_8888,false);}
         catch(OutOfMemoryError e){toast("Memória insuficiente para salvar. Feche outros aplicativos.");return;}
         File source=photoFile;String mime=photoMime;PelletDetector.Result result=photoResult;PelletDetector.Parameters cfg=photoParameters;
-        Granulometry.Distribution exportedDistribution=distribution;CrackAnalysis exportedCracks=photoCracks;
+        Granulometry.Distribution exportedDistribution=distribution;CrackAnalysis exportedCracks=photoCracks;final ReportVisuals exportedVisuals=visuals;final CrackClassifierChoice.Resolution exportedChoice=crackResolution;final MobileNetCrackModel net=crackNetwork;final String exportedNetwork=net==null?null:net.id;
         InterestRegion exportedRegion=interestRegion;int outside=regionExcludedCount();final boolean exportedCrop=cropRoiReport;final DetailedAnalysis.Report exportedDetail=photoDetailReport;
         DetectionTuner.Report exportedSuggestions=rankedSuggestions();DetectionTuner.Option exportedOption=photoOption;
         setBusy(Mode.SAVING,"Salvando…");
         worker.execute(()-> {
             try {
-                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail);
+                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork);
                 runOnUiThread(()-> {if(!isDestroyed()){
                     mode=Mode.PHOTO;updateControls();hint.setText("Histograma salvo no arquivo _resultado.png. Dados em Downloads / PelotaVision.");
                     new AlertDialog.Builder(this).setTitle("Resultado salvo")
-                        .setMessage("O relatório "+saved.base+"_resultado.png contém a imagem sem marcações, a imagem com elipses e possíveis trincas e o histograma. Quando selecionada, a ROI é ampliada nos dois painéis. O arquivo _original preserva os bytes da entrada.")
+                        .setMessage("O relatório "+saved.base+"_resultado.png contém a imagem sem marcações, a imagem com elipses e possíveis trincas e o histograma (todas × trincadas). O mapa granulométrico com legenda fica em "+saved.base+"_mapa.png. Quando selecionada, a ROI é ampliada nos dois painéis. O arquivo _original preserva os bytes da entrada.")
                         .setNegativeButton("Fechar",null).setPositiveButton("Abrir imagem",(d,w)->openSavedImage(saved.image)).show();
                 }});
             } catch(Exception|OutOfMemoryError e) {runOnUiThread(()-> {if(!isDestroyed()){mode=Mode.PHOTO;updateControls();toast("Falha ao salvar: "+e.getMessage());}});}
@@ -467,16 +475,16 @@ public final class MainActivity extends ComponentActivity {
         return items;
     }
     private void refreshDistribution() {
-        distribution=null;histogram.display(null);histogram.setVisibility(View.GONE);hideColorMap(false);
+        distribution=null;crackHistogram=null;histogram.display(null);histogram.setVisibility(View.GONE);hideColorMap(false);
         if(roiNeedsAnalysis){scaleLabel.setText(scaleSettings==null?"ROI sem escala física":"Escala preservada · aguardando segmentação");updateControls();return;}
         if(photoResult==null){scaleLabel.setText("Sem escala · toque em Escala / mm");updateControls();return;}
-        if(scaleSettings==null){distribution=PhotoComposer.pixelHistogram(photoResult);histogram.display(distribution);histogram.setVisibility(View.VISIBLE);if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.viewport(displayWindow);if(colorMapVisible){colorMap.setVisibility(View.VISIBLE);overlay.setVisibility(View.GONE);}}scaleLabel.setText("Sem escala física · histograma em px");hint.setText("Toque numa pelota para revisar ou calibrar pela medida real. Escala / mm mantém as opções manuais.");updateControls();return;}
+        if(scaleSettings==null){distribution=PhotoComposer.pixelHistogram(photoResult);showHistogram();histogram.setVisibility(View.VISIBLE);if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.visuals(visuals);colorMap.viewport(displayWindow);}applyViewMode();scaleLabel.setText("Sem escala física · histograma em px");hint.setText("Toque numa pelota para revisar ou calibrar pela medida real. Escala / mm mantém as opções manuais.");updateControls();return;}
         try {
             distribution=Granulometry.compute(measurementItems(),scaleSettings,originalWidth,originalHeight,photoResult.width,photoResult.height);
             scaleSettings=distribution.settings;
             scaleLabel.setText((scaleSettings.beltReference!=null?"Correia · ":scaleSettings.selectedObject!=null?"REF · ":scaleSettings.estimated()?"Estimativa · ":"")+HistogramView.number(scaleSettings.originalPixelsPerMm)+" px/mm · classe "+HistogramView.number(distribution.settings.binWidthMm)+" mm");
-            histogram.display(distribution);histogram.setVisibility(View.VISIBLE);
-            if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.viewport(displayWindow);if(colorMapVisible){colorMap.setVisibility(View.VISIBLE);overlay.setVisibility(View.GONE);}}
+            showHistogram();histogram.setVisibility(View.VISIBLE);
+            if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.visuals(visuals);colorMap.viewport(displayWindow);}applyViewMode();
             hint.setText(scaleSettings.selectedObject!=null?"Escala pela referência escolhida. Toque em REF para editar a medida.":scaleSettings.estimated()?"Escala estimada pela média informada. Use uma referência para medir em mm.":
                 "Escala aplicada. Confira a faixa em mm antes de salvar; largura da classe não é calibração.");
         } catch(IllegalArgumentException e){scaleLabel.setText("Ajuste a escala ou a classe");hint.setText(e.getMessage());}
@@ -533,7 +541,8 @@ public final class MainActivity extends ComponentActivity {
     }
     private void updateCrackCount(){
         if(photoCracks==null)return;
-        crackLabel.setText((crackModel==null?"Heurística · ":"RF experimental · ")+"Possíveis: "+photoCracks.count(CrackAnalysis.Status.POSSIBLE)+" · sem indicação: "+photoCracks.count(CrackAnalysis.Status.NO_INDICATION)+" · inconclusivas: "+photoCracks.count(CrackAnalysis.Status.INCONCLUSIVE));
+        int both=0,netPossible=0;for(CrackAnalysis.Entry e:photoCracks.entries)if(e.comparisonMethod!=null&&Double.isFinite(e.comparisonScore)){both++;if(e.comparisonScore>=.6)netPossible++;}
+        crackLabel.setText(crackMethodLabel()+"Possíveis: "+photoCracks.count(CrackAnalysis.Status.POSSIBLE)+" · sem indicação: "+photoCracks.count(CrackAnalysis.Status.NO_INDICATION)+" · inconclusivas: "+photoCracks.count(CrackAnalysis.Status.INCONCLUSIVE)+(both>0?" · MobileNetV3 indicaria "+netPossible+" de "+both:""));
     }
     private void reviewCrackAt(float vx,float vy){
         if(photoResult==null||photoBitmap==null)return;
@@ -560,7 +569,7 @@ public final class MainActivity extends ComponentActivity {
                     if(photoAllCracks!=null&&regionIndices.size()==photoCracks.entries.size()){
                         photoAllCracks=photoAllCracks.review(regionIndices.get(index),status);photoCracks=photoAllCracks.select(regionIndices);
                     }else photoCracks=photoCracks.review(index,status);
-                    overlay.cracks(photoCracks);updateCrackCount();
+                    overlay.cracks(photoCracks);updateCrackCount();if(distribution!=null)showHistogram();
                 }).show())
             .setNegativeButton("Fechar",null).setOnDismissListener(dialog->{enlarged.setImageDrawable(null);if(zoom!=photoBitmap)zoom.recycle();}).create();
         reviewDialog.show();reviewDialog.getButton(AlertDialog.BUTTON_NEUTRAL).setEnabled(d.ellipseFitted&&!d.partial&&!d.needsReview);
@@ -862,26 +871,146 @@ public final class MainActivity extends ComponentActivity {
     private GradientDrawable shape(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
     private int dp(float value){return Math.round(value*getResources().getDisplayMetrics().density);}
     
+    /** Botão de visualização: Segmentação → Mapa → Original → Segmentação. Toque longo: opções do mapa. */
     private void toggleColorMap() {
-        colorMapVisible=!colorMapVisible;
-        if(colorMap==null)return;
-        if(colorMapVisible && photoResult!=null && distribution!=null) {
-            colorMap.display(photoResult,distribution);colorMap.viewport(displayWindow);colorMap.setVisibility(View.VISIBLE);
-            overlay.setVisibility(View.GONE);
-            toast("Mapa granulométrico ativo · toque novamente para voltar");
-        } else {
-            boolean requested=colorMapVisible;
-            hideColorMap(true);
-            toast(requested?"Analise uma foto para ver o mapa granulométrico":"Visualização original restaurada");
-        }
+        if(mode!=Mode.PHOTO||photoResult==null||distribution==null){toast("Analise uma foto para alternar a visualização. Toque longo: opções do mapa.");return;}
+        setViewMode(viewMode==1?2:viewMode==2?0:1);
+        toast(viewMode==2?"Mapa granulométrico · toque longo no botão para opacidade e escala":viewMode==0?"Visualização original (sem marcações)":"Visualização de segmentação");
+    }
+    private void setViewMode(int value){viewMode=value;colorMapVisible=value==2;applyViewMode();}
+    private void applyViewMode(){
+        if(mapButton!=null)mapButton.setText(viewMode==2?"Mapa":viewMode==0?"Orig.":"Seg.");
+        if(colorMap==null||overlay==null)return;
+        boolean photo=mode==Mode.PHOTO&&photoResult!=null&&distribution!=null;
+        colorMap.setVisibility(photo&&viewMode==2?View.VISIBLE:View.GONE);
+        overlay.setVisibility(!photo||viewMode==1?View.VISIBLE:View.INVISIBLE);
     }
 
     /** Oculta o mapa e devolve o overlay (marcações, toque para revisar trincas e calibrar). */
     private void hideColorMap(boolean resetToggle) {
-        if(resetToggle)colorMapVisible=false;
+        if(resetToggle){colorMapVisible=false;viewMode=1;}
+        if(mapButton!=null&&resetToggle)mapButton.setText("Seg.");
         if(colorMap==null)return;
         colorMap.setVisibility(View.GONE);
         overlay.setVisibility(View.VISIBLE);
+    }
+
+    private void showHistogram(){
+        if(distribution==null||histogram==null)return;
+        crackHistogram=CrackHistogram.compute(distribution,measurementItems(),photoCracks);
+        histogram.display(distribution,crackHistogram,visuals);
+    }
+
+    private String crackMethodLabel(){
+        CrackClassifierChoice.Resolution r=crackResolution;CrackClassifierChoice c=r==null?CrackClassifierChoice.RANDOM_FOREST:r.effective;
+        if(crackModel==null&&c==CrackClassifierChoice.RANDOM_FOREST)return "Heurística · ";
+        return c==CrackClassifierChoice.MOBILENET?"MobileNetV3 experimental · ":c==CrackClassifierChoice.COMPARISON?"RF (comparação com MobileNetV3) · ":"RF experimental · ";
+    }
+
+    /** Resolved detector for the selected classifier; the network is loaded only when it is requested. */
+    private CrackDetector crackDetector(){
+        CrackClassifierChoice requested=crackChoice;MobileNetCrackModel net=null;
+        if(requested.needsNetwork()){
+            net=crackNetwork;
+            if(net==null){try{net=MobileNetCrackModel.load(copyAsset(MobileNetCrackModel.MODEL),readAsset(MobileNetCrackModel.METADATA));}catch(Exception e){MobileNetCrackModel.lastError=e.getMessage();net=null;}crackNetwork=net;}
+        }else crackNetwork=null; // não manter a rede carregada sem uso
+        CrackClassifierChoice.Resolution r=CrackClassifierChoice.resolve(requested,crackModel!=null,net!=null,MobileNetCrackModel.lastError);
+        crackResolution=r;
+        if(r.message!=null){final String m=r.message;runOnUiThread(()->toast(m));}
+        return new CrackDetector(crackModel,r.effective.needsNetwork()?net:null,r.effective);
+    }
+
+    private void restoreVisuals(){
+        android.content.SharedPreferences p=getPreferences(MODE_PRIVATE);
+        CrackHistogram.Normalization n;try{n=CrackHistogram.Normalization.valueOf(p.getString("hist_normalization","PERCENT_OF_ALL"));}catch(IllegalArgumentException e){n=CrackHistogram.Normalization.PERCENT_OF_ALL;}
+        visuals=new ReportVisuals(p.getFloat("map_opacity",(float)GranulometryColorScale.DEFAULT_OPACITY),p.getBoolean("map_labels",false),p.getBoolean("map_fixed",false),
+            p.getFloat("map_fixed_min",8),p.getFloat("map_fixed_max",16),p.getBoolean("hist_all",true),p.getBoolean("hist_cracked",true),p.getBoolean("hist_values",false),n);
+        crackChoice=CrackClassifierChoice.parse(p.getString("crack_classifier","RANDOM_FOREST"));
+    }
+    private void saveVisuals(){
+        getPreferences(MODE_PRIVATE).edit().putFloat("map_opacity",(float)visuals.mapOpacity).putBoolean("map_labels",visuals.mapLabels).putBoolean("map_fixed",visuals.mapFixed)
+            .putFloat("map_fixed_min",(float)visuals.mapFixedMin).putFloat("map_fixed_max",(float)visuals.mapFixedMax).putBoolean("hist_all",visuals.showAll).putBoolean("hist_cracked",visuals.showCracked)
+            .putBoolean("hist_values",visuals.showValues).putString("hist_normalization",visuals.normalization.name()).putString("crack_classifier",crackChoice.name()).apply();
+    }
+    private void refreshVisuals(){saveVisuals();if(colorMap!=null)colorMap.visuals(visuals);showHistogram();applyViewMode();}
+
+    private CheckBox check(LinearLayout content,String label,boolean checked,String tag){CheckBox c=new CheckBox(this);c.setText(label);c.setTextColor(Color.WHITE);c.setTextSize(13);c.setChecked(checked);c.setTag(tag);content.addView(c);return c;}
+
+    /** Opções do mapa granulométrico: opacidade 0–70%, diâmetros sobre as pelotas, escala relativa ou fixa em mm. */
+    private void showMapOptions(){
+        LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(8),dp(20),dp(8));ScrollView scroll=new ScrollView(this);scroll.addView(content);
+        TextView opacityLabel=text("",14,Color.WHITE);content.addView(opacityLabel);
+        SeekBar opacity=new SeekBar(this);opacity.setMax(70);opacity.setProgress((int)Math.round(visuals.mapOpacity*100));opacity.setTag("map_opacity");content.addView(opacity);
+        Runnable label=()->opacityLabel.setText("Opacidade da cor: "+opacity.getProgress()+"% (foto "+(100-opacity.getProgress())+"%)");label.run();
+        opacity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int v,boolean u){label.run();}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});
+        CheckBox labels=check(content,"Mostrar o diâmetro sobre cada pelota",visuals.mapLabels,"map_labels");
+        content.addView(text("Rótulos sobrepostos ou em pelotas pequenas na tela são omitidos para manter a leitura.",11,Color.LTGRAY));
+        CheckBox fixed=check(content,"Escala fixa (comparar fotos diferentes)",visuals.mapFixed,"map_fixed");
+        LinearLayout range=row();EditText min=new EditText(this),max=new EditText(this);
+        for(EditText e:new EditText[]{min,max}){e.setTextColor(Color.WHITE);e.setSingleLine();e.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);range.addView(e,new LinearLayout.LayoutParams(0,-2,1));}
+        min.setText(HistogramView.number(visuals.mapFixedMin).replace(',','.'));max.setText(HistogramView.number(visuals.mapFixedMax).replace(',','.'));min.setTag("map_min");max.setTag("map_max");
+        content.addView(text("Mínimo e máximo ("+(distribution==null?"mm":distribution.settings.unit())+")",12,Color.LTGRAY));content.addView(range);
+        content.addView(text("Escala relativa: do menor ao maior diâmetro incluído nesta foto. Fixa: cores comparáveis entre fotos; valores fora da faixa ficam nas cores das pontas. Todos iguais: cor intermediária.",11,Color.LTGRAY));
+        TextView error=text("",12,Color.rgb(255,146,146));content.addView(error);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Mapa granulométrico").setView(scroll).setNegativeButton("Cancelar",null).setPositiveButton("Aplicar",null).create();
+        dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{
+            double lo=parseNumber(min.getText().toString()),hi=parseNumber(max.getText().toString());
+            if(fixed.isChecked())GranulometryColorScale.fixed(lo,hi,"mm");
+            visuals=visuals.withMap(opacity.getProgress()/100.0,labels.isChecked(),fixed.isChecked(),lo,hi);refreshVisuals();
+            if(mode==Mode.PHOTO&&photoResult!=null&&distribution!=null)setViewMode(2);dialog.dismiss();
+        }catch(IllegalArgumentException e){error.setText(e.getMessage());}}));dialog.show();
+    }
+    private static double parseNumber(String value){try{return Double.parseDouble(value.trim().replace(',','.'));}catch(NumberFormatException e){throw new IllegalArgumentException("Número inválido.");}}
+
+    /** Opções do gráfico: séries, valores nas barras, frequência absoluta ou percentual. */
+    private void showHistogramOptions(){
+        LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(8),dp(20),dp(8));ScrollView scroll=new ScrollView(this);scroll.addView(content);
+        CheckBox all=check(content,"Mostrar todas as pelotas",visuals.showAll,"hist_all");
+        CheckBox cracked=check(content,"Mostrar pelotas trincadas",visuals.showCracked,"hist_cracked");
+        CheckBox values=check(content,"Exibir valores nas barras",visuals.showValues,"hist_values");
+        content.addView(text("Frequência",14,Color.WHITE));android.widget.RadioGroup group=new android.widget.RadioGroup(this);
+        CrackHistogram.Normalization[] modes=CrackHistogram.Normalization.values();String[] labels={"Absoluta · número de pelotas","Percentual do total de pelotas válidas (trincadas como subconjunto)","Condicional · cada série soma 100% (distribuição entre as trincadas)"};int[] ids=new int[modes.length];
+        for(int i=0;i<modes.length;i++){android.widget.RadioButton r=new android.widget.RadioButton(this);ids[i]=View.generateViewId();r.setId(ids[i]);r.setText(labels[i]);r.setTextColor(Color.WHITE);r.setTextSize(12);group.addView(r);if(modes[i]==visuals.normalization)group.check(ids[i]);}
+        content.addView(group);
+        content.addView(text("A série laranja usa as mesmas classes e eixos e nunca é somada ao total. Sem classificação válida, aparece \"classificação indisponível\", não zero. Percentual de trincadas numa faixa ≠ percentual da população total.",11,Color.LTGRAY));
+        new AlertDialog.Builder(this).setTitle("Gráfico granulométrico").setView(scroll).setNegativeButton("Cancelar",null).setPositiveButton("Aplicar",(d,w)->{
+            CrackHistogram.Normalization n=visuals.normalization;for(int i=0;i<ids.length;i++)if(group.getCheckedRadioButtonId()==ids[i])n=modes[i];
+            visuals=visuals.withHistogram(all.isChecked()||!cracked.isChecked(),cracked.isChecked(),values.isChecked(),n);refreshVisuals();}).show();
+    }
+
+    /** Modelos de análise: segmentação, classificação de trincas e visualização (modos sem validação aparecem como experimentais/indisponíveis). */
+    private void showAnalysisModels(){
+        if(mode==Mode.PROCESSING||mode==Mode.SAVING)return;
+        LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(8),dp(20),dp(8));ScrollView scroll=new ScrollView(this);scroll.addView(content);
+        content.addView(text("Segmentação",15,Color.WHITE));android.widget.RadioGroup seg=new android.widget.RadioGroup(this);
+        String[] segLabels={"Clássica · bordas (gradientes com CLAHE)","Clássica · LoG",NeuralPelletDetector.available(beltScene)?"Neural · StarDist (experimental, demonstração)":"Neural · StarDist — indisponível","Neural · YOLO11-seg — indisponível","Híbrida — indisponível"};
+        int[] segIds=new int[segLabels.length];
+        for(int i=0;i<segLabels.length;i++){android.widget.RadioButton r=new android.widget.RadioButton(this);segIds[i]=View.generateViewId();r.setId(segIds[i]);r.setText(segLabels[i]);r.setTextColor(Color.WHITE);r.setTextSize(12);r.setEnabled(i<2||(i==2&&NeuralPelletDetector.available(beltScene)));seg.addView(r);}
+        seg.check(segIds[method()]);content.addView(seg);
+        content.addView(text("YOLO11-seg: sem máscaras de instância com rótulo humano para treinar e validar; código e pesos da Ultralytics são AGPL-3.0 (exige revisão de licença antes de distribuir). Híbrida: não há regra de fusão validada. Segmentação mais bonita não prova diâmetro mais exato.",11,Color.LTGRAY));
+        content.addView(text("Classificação de trincas",15,Color.WHITE));android.widget.RadioGroup cls=new android.widget.RadioGroup(this);
+        CrackClassifierChoice[] choices=CrackClassifierChoice.values();int[] clsIds=new int[choices.length];
+        boolean assetPresent;try{getAssets().open(MobileNetCrackModel.MODEL).close();assetPresent=true;}catch(Exception e){assetPresent=false;}
+        for(int i=0;i<choices.length;i++){android.widget.RadioButton r=new android.widget.RadioButton(this);clsIds[i]=View.generateViewId();r.setId(clsIds[i]);r.setText(choices[i].label+(choices[i].needsNetwork()&&!assetPresent?" — indisponível":""));r.setTextColor(Color.WHITE);r.setTextSize(12);r.setEnabled(!choices[i].needsNetwork()||assetPresent);cls.addView(r);if(choices[i]==crackChoice)cls.check(clsIds[i]);}
+        content.addView(cls);
+        content.addView(text("O Random Forest continua o padrão. A MobileNetV3 foi treinada com poucas trincas reais (rótulos provisórios) e testada em uma única foto: use para comparar, não para decidir. Os recortes vêm dos pixels originais, nunca da super-resolução. O escore não é probabilidade calibrada. Localização de trincas por U-Net: indisponível (não há máscaras reais de trinca).",11,Color.LTGRAY));
+        content.addView(text("Visualização",15,Color.WHITE));android.widget.RadioGroup view=new android.widget.RadioGroup(this);
+        String[] viewLabels={"Original","Segmentação","Mapa granulométrico"};int[] viewIds=new int[3];
+        for(int i=0;i<3;i++){android.widget.RadioButton r=new android.widget.RadioButton(this);viewIds[i]=View.generateViewId();r.setId(viewIds[i]);r.setText(viewLabels[i]);r.setTextColor(Color.WHITE);r.setTextSize(12);view.addView(r);}
+        view.check(viewIds[viewMode]);content.addView(view);
+        Button mapOptions=button("Opções do mapa…",false);mapOptions.setTextSize(12);content.addView(mapOptions);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Modelos de análise").setView(scroll).setNegativeButton("Cancelar",null).setPositiveButton("Aplicar",null).create();
+        mapOptions.setOnClickListener(v->{dialog.dismiss();showMapOptions();});
+        dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            int newMethod=detectionMethod;for(int i=0;i<3;i++)if(seg.getCheckedRadioButtonId()==segIds[i])newMethod=i;
+            CrackClassifierChoice newChoice=crackChoice;for(int i=0;i<choices.length;i++)if(cls.getCheckedRadioButtonId()==clsIds[i])newChoice=choices[i];
+            int newView=viewMode;for(int i=0;i<3;i++)if(view.getCheckedRadioButtonId()==viewIds[i])newView=i;
+            boolean segChanged=newMethod!=method(),clsChanged=newChoice!=crackChoice;
+            detectionMethod=newMethod;crackChoice=newChoice;if(!newChoice.needsNetwork())crackNetwork=null;
+            getPreferences(MODE_PRIVATE).edit().putInt("detection_method",detectionMethod).putBoolean("legacy_detection",detectionMethod==DetectionTuner.LOG).apply();saveVisuals();
+            applyParameters();refreshSuggestionLabel();dialog.dismiss();setViewMode(newView);
+            if((segChanged||clsChanged)&&mode==Mode.PHOTO&&photoFile!=null){epoch++;File file=photoFile;String mime=photoMime;PelletDetector.Parameters cfg=segChanged?parameters:photoParameters;setBusy(Mode.PROCESSING,"Reanalisando com os modelos escolhidos…");worker.execute(()->processPhoto(file,mime,cfg));}
+        }));dialog.show();
     }
 
     private void toast(String message){Toast.makeText(this,message,Toast.LENGTH_LONG).show();}

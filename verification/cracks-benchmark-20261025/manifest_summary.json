@@ -1,0 +1,15 @@
+{
+  "rows": 1517,
+  "by_origin_role_material_label": {
+    "real/holdout/fired/cracked": 7,
+    "real/holdout/fired/intact": 75,
+    "real/holdout/fired/uncertain": 40,
+    "synthetic/train_only/fired/cracked": 462,
+    "synthetic/train_only/fired/intact": 708,
+    "synthetic/train_only/unknown/cracked": 8,
+    "synthetic/train_only/unknown/intact": 32,
+    "unverified/dev/unknown/cracked": 29,
+    "unverified/dev/unknown/intact": 140,
+    "unverified/dev/unknown/uncertain": 16
+  }
+}

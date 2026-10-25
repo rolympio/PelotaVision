@@ -1,9 +1,10 @@
 import cv2,numpy as np
+from cv4compat import warp_crop
 N=96
 yy,xx=np.mgrid[:N,:N];inside=((xx-(N-1)/2)**2+(yy-(N-1)/2)**2)<(.78*(N-1)/2)**2
 def extract(gray,x,y,r,return_marks=False):
  matrix=np.array([[2*r/(N-1),0,x-r],[0,2*r/(N-1),y-r]],np.float64)
- raw=cv2.warpAffine(gray,matrix,(N,N),flags=cv2.INTER_LINEAR|cv2.WARP_INVERSE_MAP,borderMode=cv2.BORDER_REFLECT_101)
+ raw=warp_crop(gray,matrix,N)  # = cv2.warpAffine INTER_LINEAR|WARP_INVERSE_MAP, BORDER_REFLECT_101 do OpenCV 4.x (ver cv4compat.py)
  vals=raw[inside];hist=np.bincount(vals,minlength=256);cdf=hist.cumsum();n=int(inside.sum());lo=int(np.searchsorted(cdf,n*.05));hi=int(np.searchsorted(cdf,n*.95));median=int(np.searchsorted(cdf,n*.5));spread=max(16,hi-lo)
  norm=np.clip(np.rint((raw.astype(float)-lo)*200/spread+25),0,255).astype('uint8');norm[~inside]=int(np.clip(np.rint((median-lo)*200/spread+25),0,255));norm=cv2.GaussianBlur(norm,(3,3),.7)
  f=[];marks=np.zeros((N,N),np.uint8)

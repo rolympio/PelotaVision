@@ -93,6 +93,16 @@ final class MainFrame extends JFrame {
     private final JButton applyScaleButton = new JButton("Aplicar escala");
     private final JButton clearScaleButton = new JButton("Sem escala (px)");
     private final JLabel scaleLabel = new JLabel("Sem escala fisica · valores em px");
+    // ---- Modelos de analise (0.5.0): visualizacao, mapa, classificador de trincas e grafico ----
+    private final JComboBox<String> viewBox = new JComboBox<>(new String[]{"Original", "Segmentacao", "Mapa granulometrico"});
+    private final javax.swing.JSlider opacitySlider = new javax.swing.JSlider(0, 70, 25);
+    private final JCheckBox mapLabels = new JCheckBox("Diametros");
+    private final JCheckBox mapFixed = new JCheckBox("Escala fixa");
+    private final JTextField mapMin = new JTextField("8", 4), mapMax = new JTextField("16", 4);
+    private final JComboBox<String> crackBox = new JComboBox<>(new String[]{CrackClassifierChoice.RANDOM_FOREST.label, CrackClassifierChoice.MOBILENET.label, CrackClassifierChoice.COMPARISON.label});
+    private final JComboBox<String> segExtra = new JComboBox<>(new String[]{"YOLO11-seg: indisponivel", "Hibrida: indisponivel"});
+    private final JButton chartButton = new JButton("Grafico…");
+    ReportVisuals visuals = HistogramView.DEFAULTS;
 
     final CameraSource camera = new CameraSource();
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> { Thread t = new Thread(r, "PelotaVision-analise"); t.setDaemon(true); return t; });
@@ -123,6 +133,7 @@ final class MainFrame extends JFrame {
         methodBox.setToolTipText("<html>Bancada: " + NeuralPelletDetector.status(false) + "<br>Correia: " + NeuralPelletDetector.status(true)
                 + "<br>A rede so propoe objetos; as elipses sao medidas nas bordas. Modelo de correia treinado com pseudo-rotulos sem revisao humana.</html>");
         sensitivity.setValue(prefs.getInt("sensitivity", 75));
+        restoreVisuals();
         autoSuggest.setSelected(prefs.getBoolean("auto", true));
         lockFocus.setSelected(prefs.getBoolean("lockFocus", true));
         lockExposure.setSelected(prefs.getBoolean("lockExposure", true));
@@ -136,6 +147,13 @@ final class MainFrame extends JFrame {
                 numbers, Box.createHorizontalStrut(12), roiButton, analyzeButton, cancelButton, saveButton));
         extraToolbar = row();
         top.add(extraToolbar);
+        segExtra.setEnabled(false);
+        segExtra.setToolTipText("<html>YOLO11-seg: sem mascaras de instancia com rotulo humano; codigo e pesos Ultralytics sao AGPL-3.0 (revisao de licenca antes de distribuir).<br>Hibrida: sem regra de fusao validada.</html>");
+        crackBox.setToolTipText("<html>Random Forest e o padrao. MobileNetV3 e experimental: poucas trincas reais (rotulos provisorios), testada em uma foto.<br>Recortes dos pixels originais (nunca da super-resolucao). Escore nao calibrado. U-Net de trincas: indisponivel (sem mascaras reais).</html>");
+        opacitySlider.setPreferredSize(new Dimension(110, 24));
+        opacitySlider.setToolTipText("Opacidade da cor no mapa (0-70%; padrao 25%)");
+        top.add(row(new JLabel("Modelos de analise ·"), new JLabel("Segmentacao neural extra:"), segExtra, new JLabel("Trincas:"), crackBox,
+                new JLabel("Visualizacao:"), viewBox, new JLabel("Opacidade:"), opacitySlider, mapLabels, mapFixed, mapMin, new JLabel("a"), mapMax, chartButton));
 
         JPanel side = new JPanel();
         side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
@@ -191,6 +209,18 @@ final class MainFrame extends JFrame {
         cancelButton.addActionListener(e -> { AtomicBoolean c = cancel; if (c != null) c.set(true); });
         saveButton.addActionListener(e -> save());
         numbers.addActionListener(e -> view.setNumbers(numbers.isSelected()));
+        viewBox.addActionListener(e -> { view.setViewMode(viewBox.getSelectedIndex()); });
+        opacitySlider.addChangeListener(e -> applyVisuals());
+        mapLabels.addActionListener(e -> applyVisuals());
+        mapFixed.addActionListener(e -> applyVisuals());
+        mapMin.addActionListener(e -> applyVisuals());
+        mapMax.addActionListener(e -> applyVisuals());
+        chartButton.addActionListener(e -> chartOptions());
+        crackBox.addActionListener(e -> {
+            prefs.put("crackChoice", CrackClassifierChoice.values()[crackBox.getSelectedIndex()].name());
+            // Mesmos contornos, so a triagem de trincas e refeita com o classificador escolhido.
+            if (mode == Mode.PHOTO && session != null && session.analyzed() && !session.needsAnalysis() && session.output() != null) analyze(false, session.output().applied);
+        });
         measureButton.addActionListener(e -> startMeasure());
         applyScaleButton.addActionListener(e -> applyScaleFromFields());
         clearScaleButton.addActionListener(e -> { pxPerMm.setText(""); setScale(null); });
@@ -204,6 +234,48 @@ final class MainFrame extends JFrame {
 
     final JPanel extraToolbar;
     final JPanel scalePanel;
+
+    private void restoreVisuals() {
+        CrackHistogram.Normalization n;
+        try { n = CrackHistogram.Normalization.valueOf(prefs.get("histNorm", "ABSOLUTE")); } catch (IllegalArgumentException e) { n = CrackHistogram.Normalization.ABSOLUTE; }
+        visuals = new ReportVisuals(prefs.getDouble("mapOpacity", GranulometryColorScale.DEFAULT_OPACITY), prefs.getBoolean("mapLabels", false), prefs.getBoolean("mapFixed", false),
+                prefs.getDouble("mapMin", 8), prefs.getDouble("mapMax", 16), prefs.getBoolean("histAll", true), prefs.getBoolean("histCracked", true), prefs.getBoolean("histValues", false), n);
+        opacitySlider.setValue((int) Math.round(visuals.mapOpacity * 100));
+        mapLabels.setSelected(visuals.mapLabels); mapFixed.setSelected(visuals.mapFixed);
+        mapMin.setText(HistogramView.fmt2(visuals.mapFixedMin)); mapMax.setText(HistogramView.fmt2(visuals.mapFixedMax));
+        crackBox.setSelectedIndex(CrackClassifierChoice.parse(prefs.get("crackChoice", "RANDOM_FOREST")).ordinal());
+        viewBox.setSelectedIndex(1);
+    }
+
+    /** Aplica opacidade, rotulos e escala do mapa (escala fixa invalida e recusada sem alterar a anterior). */
+    private void applyVisuals() {
+        double lo = visuals.mapFixedMin, hi = visuals.mapFixedMax;
+        try { lo = Double.parseDouble(mapMin.getText().trim().replace(',', '.')); hi = Double.parseDouble(mapMax.getText().trim().replace(',', '.')); if (mapFixed.isSelected()) GranulometryColorScale.fixed(lo, hi, "mm"); }
+        catch (IllegalArgumentException e) { if (mapFixed.isSelected()) { setStatus("Escala fixa invalida: informe minimo < maximo."); mapFixed.setSelected(false); } }
+        visuals = visuals.withMap(opacitySlider.getValue() / 100.0, mapLabels.isSelected(), mapFixed.isSelected(), lo, hi);
+        prefs.putDouble("mapOpacity", visuals.mapOpacity); prefs.putBoolean("mapLabels", visuals.mapLabels); prefs.putBoolean("mapFixed", visuals.mapFixed);
+        prefs.putDouble("mapMin", visuals.mapFixedMin); prefs.putDouble("mapMax", visuals.mapFixedMax);
+        refreshVisuals();
+    }
+
+    private void refreshVisuals() {
+        if (session == null) return;
+        histogram.display(session.distribution(), session.crackHistogram(), visuals);
+        view.setMap(session.distribution(), visuals);
+    }
+
+    /** Opcoes do grafico: series, valores nas barras, frequencia absoluta / percentual / condicional. */
+    private void chartOptions() {
+        JCheckBox all = new JCheckBox("Mostrar todas as pelotas", visuals.showAll), cracked = new JCheckBox("Mostrar pelotas trincadas", visuals.showCracked),
+                values = new JCheckBox("Exibir valores nas barras", visuals.showValues);
+        JComboBox<String> norm = new JComboBox<>(new String[]{"Frequencia absoluta (numero de pelotas)", "Percentual do total de pelotas validas (subconjunto)", "Condicional: cada serie soma 100%"});
+        norm.setSelectedIndex(visuals.normalization.ordinal());
+        Object[] content = {all, cracked, values, norm, new JLabel("<html>A serie laranja usa as mesmas classes e eixos e nunca e somada ao total.<br>Sem classificacao valida aparece \"classificacao indisponivel\", nao zero.</html>")};
+        if (JOptionPane.showConfirmDialog(this, content, "Grafico granulometrico", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
+        visuals = visuals.withHistogram(all.isSelected() || !cracked.isSelected(), cracked.isSelected(), values.isSelected(), CrackHistogram.Normalization.values()[norm.getSelectedIndex()]);
+        prefs.putBoolean("histAll", visuals.showAll); prefs.putBoolean("histCracked", visuals.showCracked); prefs.putBoolean("histValues", visuals.showValues); prefs.put("histNorm", visuals.normalization.name());
+        refreshVisuals();
+    }
 
     /** Pontos de extensao para recursos adicionais (calibracoes, trincas, ajustes). */
     private void installExtensions() { Features.install(this); }
@@ -310,6 +382,8 @@ final class MainFrame extends JFrame {
         view.setViewport(null);
         view.setReference(null);
         view.setOverlay(null, null);
+        view.setMap(null, visuals);
+        view.setViewMode(1); // ao vivo: sempre marcacoes
         view.setBanner(null);
         view.setMeasure(null, null);
         updateControls();
@@ -357,6 +431,8 @@ final class MainFrame extends JFrame {
         c.sensitivity = (Integer) sensitivity.getValue();
         c.autoSuggest = autoSuggest.isSelected();
         c.crackSensitivity = crackSensitivity;
+        c.crackChoice = CrackClassifierChoice.values()[Math.max(0, crackBox.getSelectedIndex())];
+        c.visuals = visuals;
         c.scale = session == null ? null : session.scale();
         c.minimumExpectedMm = session == null ? 5 : session.minimumExpectedMm();
         return c;
@@ -392,7 +468,10 @@ final class MainFrame extends JFrame {
                     String warning = s.accept(out);
                     mode = Mode.PHOTO;
                     refreshPhoto();
-                    setStatus("Analise concluida: " + s.active().circles.size() + " propostas" + (out.suggestions != null && out.suggestions.cancelled ? " (busca cancelada; ajuste atual)" : "") + ".");
+                    CrackClassifierChoice.Resolution cr = DesktopAnalysis.lastResolution;
+                    setStatus("Analise concluida: " + s.active().circles.size() + " propostas" + (out.suggestions != null && out.suggestions.cancelled ? " (busca cancelada; ajuste atual)" : "") + "."
+                            + (cr == null ? "" : " Trincas: " + cr.effective.label + (cr.message != null ? " — " + cr.message : "") + "."));
+                    if (cr != null && cr.fellBack()) JOptionPane.showMessageDialog(this, cr.message, "Classificador de trincas", JOptionPane.WARNING_MESSAGE);
                     if (warning != null) JOptionPane.showMessageDialog(this, warning, "Escala", JOptionPane.WARNING_MESSAGE);
                 });
             } catch (RuntimeException ex) {
@@ -444,7 +523,9 @@ final class MainFrame extends JFrame {
         }
         summary.setText(t.toString());
         summary.setCaretPosition(0);
-        histogram.display(s.distribution());
+        histogram.display(s.distribution(), s.crackHistogram(), visuals);
+        view.setMap(s.distribution(), visuals);
+        view.setViewMode(viewBox.getSelectedIndex());
         refreshScaleLabel();
         Features.refresh(this);
         updateControls();
