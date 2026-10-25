@@ -1,4 +1,12 @@
-# PelotaVision — Android 0.12.0 · Windows 0.3.0
+# PelotaVision — Android 0.13.0 · Windows 0.4.0
+
+## Integração 0.13.0
+Versão que reúne num único build o que estava em branches separados:
+- Rede neural StarDist e cena Bancada/Correia (PR #1, antes 0.12.0);
+- Mapa granulométrico colorido, botão **Mapa** no Android (PR #7);
+- Correção da circularidade após escala anisotrópica e autoteste Windows mais rígido (PR #3).
+
+Ficam de fora até validação: trincas sintéticas (PRs #2 e #4) e datasets externos (PR #6).
 
 ## Cena Bancada / Correia — novo na 0.12.0
 
