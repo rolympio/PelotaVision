@@ -152,8 +152,32 @@ final class MainFrame extends JFrame {
         crackBox.setToolTipText("<html>Random Forest e o padrao. MobileNetV3 e experimental: poucas trincas reais (rotulos provisorios), testada em uma foto.<br>Recortes dos pixels originais (nunca da super-resolucao). Escore nao calibrado. U-Net de trincas: indisponivel (sem mascaras reais).</html>");
         opacitySlider.setPreferredSize(new Dimension(110, 24));
         opacitySlider.setToolTipText("Opacidade da cor no mapa (0-70%; padrao 25%)");
-        top.add(row(new JLabel("Modelos de analise ·"), new JLabel("Segmentacao neural extra:"), segExtra, new JLabel("Trincas:"), crackBox,
-                new JLabel("Visualizacao:"), viewBox, new JLabel("Opacidade:"), opacitySlider, mapLabels, mapFixed, mapMin, new JLabel("a"), mapMax, chartButton));
+        JButton guidedButton = new JButton("Etapas da analise...");
+        JButton advancedButton = new JButton("Modelos e visualizacao...");
+        top.add(row(guidedButton, advancedButton));
+        JPanel advancedPanel = new JPanel();
+        advancedPanel.setLayout(new BoxLayout(advancedPanel, BoxLayout.Y_AXIS));
+        advancedPanel.add(row(new JLabel("Segmentacao neural extra:"), segExtra, new JLabel("Trincas:"), crackBox));
+        advancedPanel.add(row(new JLabel("Visualizacao:"), viewBox, new JLabel("Opacidade:"), opacitySlider));
+        advancedPanel.add(row(mapLabels, mapFixed, mapMin, new JLabel("a"), mapMax, chartButton));
+        advancedButton.addActionListener(e -> JOptionPane.showMessageDialog(this, advancedPanel,
+                "Modelos e visualizacao", JOptionPane.PLAIN_MESSAGE));
+        guidedButton.addActionListener(e -> {
+            String[] steps = {"1 · Abrir imagem ou capturar", "2 · Definir ROI", "3 · Calibrar escala",
+                    "4 · Segmentar", "5 · Revisar grafico", "6 · Salvar foto e dados"};
+            int selected = JOptionPane.showOptionDialog(this, "Escolha a proxima etapa:",
+                    "Fluxo de analise", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                    null, steps, steps[0]);
+            switch (selected) {
+                case 0: openImage(); break;
+                case 1: editRegion(); break;
+                case 2: pxPerMm.requestFocusInWindow(); break;
+                case 3: analyze(false, null); break;
+                case 4: chartButton.doClick(); break;
+                case 5: save(); break;
+                default: break;
+            }
+        });
 
         JPanel side = new JPanel();
         side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
