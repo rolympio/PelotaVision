@@ -541,7 +541,8 @@ public final class MainActivity extends ComponentActivity {
     }
     private void updateCrackCount(){
         if(photoCracks==null)return;
-        crackLabel.setText(crackMethodLabel()+"Possíveis: "+photoCracks.count(CrackAnalysis.Status.POSSIBLE)+" · sem indicação: "+photoCracks.count(CrackAnalysis.Status.NO_INDICATION)+" · inconclusivas: "+photoCracks.count(CrackAnalysis.Status.INCONCLUSIVE));
+        int both=0,netPossible=0;for(CrackAnalysis.Entry e:photoCracks.entries)if(e.comparisonMethod!=null&&Double.isFinite(e.comparisonScore)){both++;if(e.comparisonScore>=.6)netPossible++;}
+        crackLabel.setText(crackMethodLabel()+"Possíveis: "+photoCracks.count(CrackAnalysis.Status.POSSIBLE)+" · sem indicação: "+photoCracks.count(CrackAnalysis.Status.NO_INDICATION)+" · inconclusivas: "+photoCracks.count(CrackAnalysis.Status.INCONCLUSIVE)+(both>0?" · MobileNetV3 indicaria "+netPossible+" de "+both:""));
     }
     private void reviewCrackAt(float vx,float vy){
         if(photoResult==null||photoBitmap==null)return;

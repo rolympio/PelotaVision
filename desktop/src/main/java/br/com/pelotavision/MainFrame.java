@@ -216,7 +216,11 @@ final class MainFrame extends JFrame {
         mapMin.addActionListener(e -> applyVisuals());
         mapMax.addActionListener(e -> applyVisuals());
         chartButton.addActionListener(e -> chartOptions());
-        crackBox.addActionListener(e -> { prefs.put("crackChoice", CrackClassifierChoice.values()[crackBox.getSelectedIndex()].name()); if (mode == Mode.PHOTO && session != null) setStatus("Classificador de trincas alterado: clique em Segmentar para reanalisar."); });
+        crackBox.addActionListener(e -> {
+            prefs.put("crackChoice", CrackClassifierChoice.values()[crackBox.getSelectedIndex()].name());
+            // Mesmos contornos, so a triagem de trincas e refeita com o classificador escolhido.
+            if (mode == Mode.PHOTO && session != null && session.analyzed() && !session.needsAnalysis() && session.output() != null) analyze(false, session.output().applied);
+        });
         measureButton.addActionListener(e -> startMeasure());
         applyScaleButton.addActionListener(e -> applyScaleFromFields());
         clearScaleButton.addActionListener(e -> { pxPerMm.setText(""); setScale(null); });
@@ -464,7 +468,10 @@ final class MainFrame extends JFrame {
                     String warning = s.accept(out);
                     mode = Mode.PHOTO;
                     refreshPhoto();
-                    setStatus("Analise concluida: " + s.active().circles.size() + " propostas" + (out.suggestions != null && out.suggestions.cancelled ? " (busca cancelada; ajuste atual)" : "") + ".");
+                    CrackClassifierChoice.Resolution cr = DesktopAnalysis.lastResolution;
+                    setStatus("Analise concluida: " + s.active().circles.size() + " propostas" + (out.suggestions != null && out.suggestions.cancelled ? " (busca cancelada; ajuste atual)" : "") + "."
+                            + (cr == null ? "" : " Trincas: " + cr.effective.label + (cr.message != null ? " — " + cr.message : "") + "."));
+                    if (cr != null && cr.fellBack()) JOptionPane.showMessageDialog(this, cr.message, "Classificador de trincas", JOptionPane.WARNING_MESSAGE);
                     if (warning != null) JOptionPane.showMessageDialog(this, warning, "Escala", JOptionPane.WARNING_MESSAGE);
                 });
             } catch (RuntimeException ex) {

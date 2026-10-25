@@ -253,6 +253,18 @@ final class DesktopExport {
         CrackAnalysis c = s.activeCracks();
         if (c != null) l.add(String.format(Locale.ROOT, "Trincas (triagem): possivel %d · inconclusivo %d · sem indicacao %d · revisadas %d",
                 c.count(CrackAnalysis.Status.POSSIBLE), c.count(CrackAnalysis.Status.INCONCLUSIVE), c.count(CrackAnalysis.Status.NO_INDICATION), c.reviewedCount()));
+        if (c != null && !c.entries.isEmpty()) {
+            String method = c.entries.get(0).method;
+            l.add("Classificador de trincas: " + (method.startsWith("mobilenet") ? "MobileNetV3 (experimental, nao validada)" : method.startsWith("random_forest") ? "Random Forest" : "heuristica de reserva") + " · " + method);
+            int both = 0, agree = 0, netPossible = 0;
+            for (CrackAnalysis.Entry e : c.entries) if (e.comparisonMethod != null && Double.isFinite(e.comparisonScore)) {
+                both++;
+                CrackAnalysis.Status alt = e.comparisonScore >= .6 ? CrackAnalysis.Status.POSSIBLE : e.comparisonScore <= .4 ? CrackAnalysis.Status.NO_INDICATION : CrackAnalysis.Status.INCONCLUSIVE;
+                if (alt == CrackAnalysis.Status.POSSIBLE) netPossible++;
+                if (alt == e.automatic) agree++;
+            }
+            if (both > 0) l.add(String.format(Locale.ROOT, "Comparacao: status e marcacoes continuam do RF; MobileNetV3 indicaria possivel em %d · concordancia automatica %d de %d pelotas", netPossible, agree, both));
+        }
         if (out.suggestions != null) {
             l.add(String.format(Locale.ROOT, "Busca: %d de %d opcoes em %.1f s%s. Pontos nao sao probabilidade.", out.suggestions.trials.size(), out.suggestions.planned,
                     out.suggestions.durationMs / 1000.0, out.suggestions.cancelled ? " (cancelada)" : out.suggestions.timeLimited ? " (limite de tempo)" : ""));
