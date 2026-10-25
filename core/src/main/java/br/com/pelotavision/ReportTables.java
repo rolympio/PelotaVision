@@ -29,6 +29,17 @@ public final class ReportTables {
         return grainCsv.toString();
     }
 
+    /** Histogram CSV with the cracked series appended as the last columns (older readers keep working). */
+    public static String histogramCsv(CrackHistogram h) {
+        Granulometry.Distribution distribution = h.distribution;
+        String suffix = distribution.settings.pixelsOnly() ? "_px" : "_mm";
+        StringBuilder csv = new StringBuilder("\uFEFFlower" + suffix + ";upper" + suffix + ";count;percent_by_number;count_cracked;percent_cracked_of_all\n");
+        for (int i = 0; i < distribution.binCount(); i++)
+            csv.append(String.format(Locale.ROOT, "%.6f;%.6f;%d;%.6f;%s;%s\n", distribution.lower(i), distribution.upper(i), distribution.count(i), distribution.percent(i),
+                    h.available ? Integer.toString(h.cracked(i)) : "", h.available ? String.format(Locale.ROOT, "%.6f", h.crackedValue(i, CrackHistogram.Normalization.PERCENT_OF_ALL)) : ""));
+        return csv.toString();
+    }
+
     public static String pelletCsv(PelletDetector.Result result, CrackAnalysis cracks, Granulometry.Distribution distribution) {
         if (distribution == null) distribution = pixelHistogram(result);
         boolean physical = !distribution.settings.pixelsOnly();

@@ -85,6 +85,12 @@ public final class Granulometry {
         public double percent(int index){return included==0?0:100.*counts[index]/included;}
         public boolean includes(Item item) {return accepted(item,settings);}
         public double diameterMm(double pixels){return pixels/analyzedPixelsPerMm;}
+        /** Class of an included diameter, with exactly the rule used to fill {@link #count(int)}; -1 if outside. */
+        public int binIndex(double mm) {
+            if(!Double.isFinite(mm)||mm<=0||counts.length==0)return -1;
+            int index=(int)Math.min(counts.length-1,classIndex(mm,settings.binWidthMm)-firstIndex);
+            return index<0?-1:index;
+        }
     }
     private static boolean accepted(Item item,Settings settings) {
         return Double.isFinite(item.diameterPx)&&item.diameterPx>0&&
