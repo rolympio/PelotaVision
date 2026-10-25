@@ -1,4 +1,11 @@
-# PelotaVision — Android 0.13.0 · Windows 0.4.0
+# PelotaVision — Android 0.15.0 · Windows 0.6.0
+
+## Interface guiada — 0.15.0 / 0.6.0
+- Android: barra principal simplificada com **Etapas da análise** e **Opções**; ROI, calibração, segmentação, revisão e exportação agrupadas em menus de etapas. Os ajustes avançados, modelos, visualização e trincas deixam de ocupar linhas fixas na tela.
+- Windows: barra superior reduzida; modelos e visualização ficam em diálogo dedicado; atalho **Etapas da análise** organiza aquisição, ROI, escala, segmentação, gráfico e exportação.
+- Os algoritmos de detecção e classificação não foram modificados nesta versão. O fluxo deve ser validado em dispositivos e em CI antes de distribuir.
+- Nota: no Windows o painel lateral de escala permanece disponível e o atalho de calibração direciona o foco ao campo correspondente.
+
 
 ## Integração 0.13.0
 Versão que reúne num único build o que estava em branches separados:

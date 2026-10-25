@@ -195,9 +195,9 @@ public final class MainActivity extends ComponentActivity {
         LinearLayout crackRow=row();root.addView(crackRow);
         crackLabel=text("Trincas: analisadas ao fotografar",11,Color.rgb(181,198,208));crackRow.addView(crackLabel,new LinearLayout.LayoutParams(0,-2,1));
         Button models=button("Modelos",false);models.setTag("analysis_models");models.setTextSize(11);models.setOnClickListener(v->showAnalysisModels());crackRow.addView(models,new LinearLayout.LayoutParams(dp(80),dp(36)));
-        crackSettings=button("Trincas",false);crackSettings.setTextSize(11);crackSettings.setOnClickListener(v->showCrackSettings());crackRow.addView(crackSettings,new LinearLayout.LayoutParams(dp(85),dp(36)));
+        crackSettings=button("Trincas",false);crackSettings.setTextSize(11);crackSettings.setOnClickListener(v->showCrackSettings());crackRow.addView(crackSettings,new LinearLayout.LayoutParams(dp(85),dp(36)));crackRow.setVisibility(View.GONE);
         overlay.setOnTouchListener((v,event)->{if(mode!=Mode.PHOTO||photoResult==null)return false;if(event.getAction()==MotionEvent.ACTION_UP){v.performClick();reviewCrackAt(event.getX(),event.getY());}return true;});
-        LinearLayout scaleRow=row();root.addView(scaleRow);
+        LinearLayout scaleRow=row();root.addView(scaleRow);scaleRow.setVisibility(View.GONE);
         scaleLabel=text("Fotografe para calibrar em px/mm",11,Color.rgb(151,174,187));scaleRow.addView(scaleLabel,new LinearLayout.LayoutParams(0,-2,1));
         regionButton=button("Área",false);regionButton.setTextSize(11);regionButton.setOnClickListener(v->showRegionEditor());scaleRow.addView(regionButton,new LinearLayout.LayoutParams(dp(66),dp(40)));
         calibration=button("Escala / mm",false);calibration.setTextSize(11);calibration.setEnabled(false);
@@ -206,19 +206,62 @@ public final class MainActivity extends ComponentActivity {
         segmentRoi=button("Segmentar foto",false);segmentRoi.setTag("segment_active_roi");segmentRoi.setTextSize(11);segmentRoi.setOnClickListener(v->showSegmentationOptions());roiActions.addView(segmentRoi,new LinearLayout.LayoutParams(0,dp(42),1));
         searchRoi=button("Buscar melhor ajuste",false);searchRoi.setTag("search_active_roi");searchRoi.setTextSize(11);searchRoi.setOnClickListener(v->startActiveAnalysis(true));roiActions.addView(searchRoi,new LinearLayout.LayoutParams(0,dp(42),1));
         histogram=new HistogramView(this);histogram.setVisibility(View.GONE);histogram.setOnClickListener(v->showHistogramOptions());root.addView(histogram,new LinearLayout.LayoutParams(-1,dp(180)));
-        LinearLayout tools=row();root.addView(tools);
+        LinearLayout tools=row();root.addView(tools);tools.setVisibility(View.GONE);
         profileLabel=text("Pelotas médias",11,Color.rgb(151,174,187));profileLabel.setTag("suggestion_label");profileLabel.setOnClickListener(v->{if(photoDetailReport!=null&&!roiNeedsAnalysis)showDetailSummary();else showSuggestions();});tools.addView(profileLabel,new LinearLayout.LayoutParams(0,-2,1));
         CheckBox numberBox=new CheckBox(this);numberBox.setText("Números");numberBox.setTextSize(11);numberBox.setTextColor(Color.WHITE);numberBox.setChecked(true);
         numberBox.setOnCheckedChangeListener((button,checked)-> {numbers=checked;if(mode==Mode.PHOTO&&photoResult!=null)overlay.display(photoResult,numbers);else if(mode==Mode.LIVE&&lastLiveResult!=null)overlay.display(lastLiveResult,numbers);});tools.addView(numberBox);
         Button mapBtn=button("Seg.",false);mapBtn.setTag("view_mode");mapBtn.setTextSize(11);mapBtn.setOnClickListener(v->toggleColorMap());mapBtn.setOnLongClickListener(v->{showMapOptions();return true;});mapButton=mapBtn;tools.addView(mapBtn,new LinearLayout.LayoutParams(dp(64),dp(40)));
         torch=button("Luz",false);torch.setTextSize(11);torch.setOnClickListener(v->toggleTorch());tools.addView(torch,new LinearLayout.LayoutParams(dp(58),dp(40)));
         adjust=button("Ajustes",false);adjust.setTextSize(11);adjust.setOnClickListener(v->showAdjustments());tools.addView(adjust,new LinearLayout.LayoutParams(dp(77),dp(40)));
-        LinearLayout actions=row();actions.setPadding(0,dp(7),0,0);root.addView(actions);
+        LinearLayout workflow=row();workflow.setPadding(0,dp(7),0,0);root.addView(workflow);
+         Button workflowButton=button("Etapas da análise",false);workflowButton.setTag("guided_workflow");workflowButton.setOnClickListener(v->showGuidedWorkflow());
+         workflow.addView(workflowButton,new LinearLayout.LayoutParams(0,dp(44),1));
+         Button optionsButton=button("Opções",false);optionsButton.setOnClickListener(v->showWorkflowOptions());
+         LinearLayout.LayoutParams optionsParams=new LinearLayout.LayoutParams(dp(94),dp(44));optionsParams.leftMargin=dp(8);workflow.addView(optionsButton,optionsParams);
+         LinearLayout actions=row();actions.setPadding(0,dp(7),0,0);root.addView(actions);
         capture=button("Fotografar",true);capture.setEnabled(false);capture.setOnClickListener(v->capturePhoto());actions.addView(capture,new LinearLayout.LayoutParams(0,dp(49),1));
         save=button("Salvar foto + dados",true);save.setOnClickListener(v->savePhoto());save.setVisibility(View.GONE);actions.addView(save,new LinearLayout.LayoutParams(0,dp(49),1));
         open=button("Abrir foto",false);open.setOnClickListener(v->openPhoto());LinearLayout.LayoutParams other=new LinearLayout.LayoutParams(dp(112),dp(49));other.leftMargin=dp(8);actions.addView(open,other);
         back=button("Câmera",false);back.setOnClickListener(v->returnToCamera());back.setVisibility(View.GONE);LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(dp(95),dp(49));bp.leftMargin=dp(8);actions.addView(back,bp);
         TextView foot=text("Contagem automática · requer revisão",10,Color.rgb(151,174,187));foot.setGravity(Gravity.CENTER);foot.setPadding(0,dp(8),0,0);root.addView(foot);
+    }
+    /** Fluxo guiado: as ferramentas avançadas ficam fora da tela principal. */
+    private void showGuidedWorkflow() {
+        final boolean photo=mode==Mode.PHOTO;
+        String[] labels={"1 · Capturar ou abrir imagem", "2 · Definir área de interesse (ROI)",
+                "3 · Calibrar escala física", "4 · Segmentar e ajustar",
+                "5 · Revisar trincas e granulometria", "6 · Exportar resultados"};
+        new AlertDialog.Builder(this).setTitle("Etapas da análise")
+                .setItems(labels,(d,which)->{
+                    switch(which){
+                        case 0: if(photo)returnToCamera();else openPhoto();break;
+                        case 1: if(photo)showRegionEditor();else toast("Abra ou fotografe uma imagem primeiro.");break;
+                        case 2: if(photo)showCalibration();else toast("Abra ou fotografe uma imagem primeiro.");break;
+                        case 3: if(photo)showSegmentationOptions();else showAdjustments();break;
+                        case 4: if(photo)showWorkflowOptions();else toast("Segmente uma foto para revisar os resultados.");break;
+                        case 5: if(photo)savePhoto();else toast("Abra ou fotografe uma imagem primeiro.");break;
+                    }
+                }).setNegativeButton("Fechar",null).show();
+    }
+    private void showWorkflowOptions() {
+        String[] labels={"Modelos de análise", "Sensibilidade das trincas",
+                "Ajustes de detecção", "Buscar melhor ajuste",
+                "Mapa granulométrico", "Gráfico e histograma", "Exibir/ocultar números",
+                "Luz da câmera", "Configurar escala"};
+        new AlertDialog.Builder(this).setTitle("Ferramentas e visualização")
+                .setItems(labels,(d,which)->{
+                    switch(which){
+                        case 0: showAnalysisModels();break;
+                        case 1: showCrackSettings();break;
+                        case 2: showAdjustments();break;
+                        case 3: if(mode==Mode.PHOTO)startActiveAnalysis(true);else toast("Abra uma foto primeiro.");break;
+                        case 4: showMapOptions();break;
+                        case 5: showHistogramOptions();break;
+                        case 6: numbers=!numbers;if(photoResult!=null&&mode==Mode.PHOTO)overlay.display(photoResult,numbers);else if(lastLiveResult!=null)overlay.display(lastLiveResult,numbers);break;
+                        case 7: toggleTorch();break;
+                        case 8: if(mode==Mode.PHOTO)showCalibration();else toast("Abra uma foto primeiro.");break;
+                    }
+                }).setNegativeButton("Fechar",null).show();
     }
     private void bindCamera() {
         if(binding||!nativeReady||isDestroyed()||isFinishing())return;
