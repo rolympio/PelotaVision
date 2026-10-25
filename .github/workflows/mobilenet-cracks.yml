@@ -1,0 +1,79 @@
+name: Trincas - treinar MobileNetV3-Small (experimental)
+
+# Treino reproduzivel em CPU do runner, com o mesmo protocolo do benchmark do RF
+# (verification/cracks-benchmark-20261025). Resultados (ONNX, metricas, predicoes e log) sao
+# gravados de volta no proprio branch, porque logs e artefatos do Actions nao sao legiveis
+# pela sessao de desenvolvimento. O modelo entra nos assets SOMENTE como opcao experimental;
+# o Random Forest continua sendo o padrao.
+on:
+  workflow_dispatch:
+    inputs:
+      epocas:
+        description: 'Epocas por ajuste'
+        default: '10'
+  push:
+    branches-ignore: [main]
+    paths: ['tools/cracks/train_mobilenet.py', '.github/workflows/mobilenet-cracks.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mobilenet-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  train:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 170
+    env:
+      EPOCAS: ${{ github.event.inputs.epocas || '10' }}
+      OUT: verification/mobilenet-cracks-20261025
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Dependencias
+        run: |
+          pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu
+          pip install "numpy<2.2" opencv-python-headless==4.12.0.88 scikit-image Pillow onnx onnxruntime==1.20.1 joblib "scikit-learn>=1.8,<1.10"
+      - name: Recortes reais e sinteticos (mesmo manifesto do benchmark do RF)
+        run: |
+          mkdir -p /tmp/trincas
+          git archive origin/feature/trincas-sintese ml_training | tar -x -C /tmp/trincas
+          python tools/cracks/render_synthetic.py --synth-dir /tmp/trincas/ml_training/crack_synthesis --out data/synthetic --per-donor 12 --extra-neg 6
+          python tools/cracks/build_manifest.py --scenes ml_training/data/annotations.json \
+            --holdout tools/cracks/labels/holdout_crack_example.json --synthetic-manifest data/synthetic/synthetic.csv --out data/pv_cracks
+          python - <<'E'
+          import csv
+          a = sorted((r['image_path'], r['label'], r['split_role']) for r in csv.DictReader(open('data/pv_cracks/labels.csv', encoding='utf-8')))
+          b = sorted((r['image_path'], r['label'], r['split_role']) for r in csv.DictReader(open('verification/cracks-benchmark-20261025/manifest_labels.csv', encoding='utf-8')))
+          print('manifesto igual ao do benchmark do RF:', a == b, len(a))
+          E
+      - name: Treinar e avaliar
+        id: train
+        run: |
+          set +e
+          mkdir -p $OUT
+          python -u tools/cracks/train_mobilenet.py --manifest data/pv_cracks/labels.csv --out $OUT --epochs "$EPOCAS" > /tmp/run.txt 2>&1
+          s=$?; tail -n 40 /tmp/run.txt; cp /tmp/run.txt $OUT/run_stdout.txt
+          echo "status=$s" >> "$GITHUB_OUTPUT"
+          grep -E "holdout AUC|^dev " /tmp/run.txt | while IFS= read -r l; do echo "::notice title=MobileNetV3::$l"; done
+          [ $s -eq 0 ] || echo "::error title=MobileNetV3::falhou (status $s): $(tail -n 3 /tmp/run.txt | tr '\n' ' ')"
+      - name: Gravar no branch (modelo so como opcao experimental)
+        if: ${{ !cancelled() }}
+        run: |
+          A=app/src/main/assets
+          if [ "${{ steps.train.outputs.status }}" = "0" ]; then
+            cp $OUT/mnv3_plus_synthetic.onnx $A/crack_mobilenetv3.onnx
+            cp $OUT/crack_mobilenetv3.json $A/crack_mobilenetv3.json
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A $OUT $A/crack_mobilenetv3.onnx $A/crack_mobilenetv3.json 2>/dev/null || git add -A $OUT
+          git commit -m "MobileNetV3 trincas: treino no CI ($EPOCAS epocas, status ${{ steps.train.outputs.status }}) [skip ci]" || exit 0
+          git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}"
+          [ "${{ steps.train.outputs.status }}" = "0" ]
