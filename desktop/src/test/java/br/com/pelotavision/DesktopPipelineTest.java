@@ -64,7 +64,7 @@ public class DesktopPipelineTest {
     /** A transformação anisotrópica deve atualizar a circularidade geométrica. */
     @Test public void affineRecomputesEllipseRoundness() {
         PelletDetector.Detection seed = new PelletDetector.Detection(50, 50, 10, Math.PI * 100, 1, false, false);
-        PelletDetector.Detection circle = new PelletDetector.Detection(seed, 10, 10, 0, true, 1, 0, false, false);
+        PelletDetector.Detection circle = new PelletDetector.Detection(seed, 50, 50, 10, 10, 0, true, 1, 0, false, false);
         PelletDetector.Detection stretched = circle.affine(2, 1, 0, 0);
         assertEquals(20, stretched.semiMajor, 1e-8);
         assertEquals(10, stretched.semiMinor, 1e-8);
