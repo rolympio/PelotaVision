@@ -1,1 +1,1 @@
-PLACEHOLDER
+$(cat /tmp/MainActivity_patched.java)
