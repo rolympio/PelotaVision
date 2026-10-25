@@ -66,6 +66,10 @@ A sugestão usa os mesmos métodos de bordas e LoG, com correção de iluminaç�
 
 Workflows: `android.yml` (APK assinado) e `windows.yml` (pacote portátil .zip, testes do núcleo com OpenCV nativo e autoteste do pacote montado). Releases publicadas por *Run workflow* com "publicar" marcado.
 
+## Pipeline experimental de trincas (não altera o app)
+
+`tools/cracks/` e `tools/train_cracks.py` fazem recorte por pelota, manifesto com rótulos `cracked`/`intact`/`uncertain`, sintéticos apenas no treino, validação agrupada por foto e comparação com o RF embarcado, com paridade PVF1 Python × `CrackModel.java`. A auditoria de fontes externas está em `docs/datasets/fontes.json`. Todas estão bloqueadas, e o importador recusa fontes não verificadas. Os resultados de 25/10/2026 estão em `verification/cracks-benchmark-20261025/RELATORIO.md`. O RF 0.5.0 continua no app: nenhum candidato demonstrou melhoria em fotos reais independentes. Testes: `python -m pytest tools/tests -q`.
+
 ## Projeto e compilação
 
 Java 17, Gradle 8.9, Android Gradle Plugin 8.7.3, SDK/build-tools 35. As dependências continuam em `app/build.gradle`. Configure o SDK em `local.properties` ou no Android Studio. Execute:

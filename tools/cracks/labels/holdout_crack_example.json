@@ -1,0 +1,31 @@
+{
+ "_doc": "Teste final externo provisório. Rótulos do assistente registrados em feature/trincas-sintese (crack_validation/crack_example_labels_provisorios.json) ANTES de qualquer escore; nenhum modelo treinado nesta foto. NÃO é rótulo de especialista; serve para indicação, não para decidir troca de modelo.",
+ "image": "verification/fixtures/crack_example.png",
+ "circles": "verification/fixtures/crack_example_analysis.json",
+ "source_id": "fixture_crack_example",
+ "origin": "real",
+ "material_type": "fired",
+ "material_origin": "visual_provisional",
+ "license_status": "internal_unverified",
+ "label_origin": "assistant_visual_provisional",
+ "positive_ids": [
+  19,
+  33,
+  37,
+  69,
+  81,
+  84,
+  93
+ ],
+ "uncertain_ids": [
+  22,
+  28,
+  47,
+  48,
+  75,
+  89,
+  94
+ ],
+ "negative_rule": "exhaustive_review",
+ "negative_rule_note": "O assistente inspecionou todas as pelotas inteiras; as não listadas foram julgadas sem trinca visível. Parciais ficam uncertain."
+}

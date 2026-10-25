@@ -1,0 +1,13 @@
+{
+  "samples": 1170,
+  "cracked": 462,
+  "intact": 708,
+  "excluded_invisible_positives": 30,
+  "skipped_photos": [
+    "1000411647"
+  ],
+  "seed": 20261024,
+  "per_donor": 12,
+  "extra_neg": 6,
+  "opencv": "5.0.0"
+}

@@ -1,0 +1,81 @@
+{
+  "_doc": "Registro auditável de fontes externas para trincas em pelotas. status: verified (uso em treino autorizado), blocked (não importar). O importador tools/import_external_pellets.py recusa qualquer fonte cujo status não seja 'verified', mesmo com --license-verified.",
+  "verified_on": "2026-10-25",
+  "verified_by": "Claude (sessão de agente) — conferir com Jurídico/PI da Vale antes de mudar qualquer status para verified",
+  "sources": {
+    "pellet_size_distribution": {
+      "url": "https://github.com/aryadeo/Pellet_Size_Distribution",
+      "version": "git d224b5535dc0a7606e5981f3ad84fa55c3f7442f (2022-12-05)",
+      "authors": "Arya Jyoti Deo, Santosh Kumar Behera, Debi Prasad Das (CSIR-IMMT, Índia); artigo submetido à IEEE T-ASE",
+      "license": "NENHUMA: o repositório não contém LICENSE nem declaração de uso; o README só descreve o artigo. Sem licença, aplica-se reserva de todos os direitos.",
+      "content": "Image_Dataset/Training_corrected.zip (119 imagens + 119 máscaras) e Testing_corrected.zip (31 + 31); JPEG 656x480 em tons de cinza; pelotas VERDES caindo na descarga do disco pelotizador; máscara semântica binária pelota/fundo (sem instâncias, sem trincas). Também Training.rar/Testing.rar com máscaras 0/1.",
+      "archive_sha256": {
+        "Training_corrected.zip": "af9fd59c1e4b3c18e847f4b665b763d230deefcc4830008f9836643c977b474c",
+        "Testing_corrected.zip": "91ecd32a56d28c98eb753e9358cacc4a95eda8e04eeb520b15a614b279c3a062",
+        "Training.rar": "6a51ddc6e8e574bafc84177ac99bd331ff8ce7061d3e173dd45bc06f3b8ec8e3",
+        "Testing.rar": "2339c33bfc467bbcaa0c327f02ad872f0ef69d8b346a7d35b40cf940bd8b00ee"
+      },
+      "material_type": "green",
+      "crack_labels": false,
+      "training_permission": "não concedida",
+      "redistribution": "não",
+      "commercial_use": "não autorizado",
+      "status": "blocked",
+      "reason": "Sem licença. Mesmo autorizado, não tem rótulo de trinca: serviria só para segmentação/domínio de pelota verde, com todas as pelotas 'uncertain'.",
+      "action": "Pedir permissão por escrito ao autor (aryadeo15@gmail.com) para uso interno em P&D da Vale, incluindo uso comercial e treinamento."
+    },
+    "roboflow_iron_pellets": {
+      "url": "https://universe.roboflow.com/hamitouche/iron-pellets",
+      "version": "não identificada (página sem descrição; contagens e classes não exibidas sem login)",
+      "license": "Página declara 'Public Domain' (sem texto adicional).",
+      "content": "desconhecido: número de imagens, classes e tipo de anotação não visíveis; nenhuma evidência de rótulo de trinca.",
+      "material_type": "unknown",
+      "crack_labels": "desconhecido",
+      "training_permission": "provável (domínio público declarado), a confirmar na versão exportada",
+      "status": "blocked",
+      "reason": "Exportação exige conta/API key Roboflow; universe.roboflow.com e api.roboflow.com bloqueados no ambiente de execução. Não foi possível baixar nem inspecionar as imagens.",
+      "action": "Exportar em formato COCO Segmentation com conta Roboflow, registrar versão/data/hash, e converter com tools/cracks/convert_annotations.py coco. Pelotas sem anotação de trinca ficam 'uncertain'."
+    },
+    "isij_2022_green_pellet_cracks": {
+      "url": "https://www.jstage.jst.go.jp/article/isijinternational/62/8/62_ISIJINT-2022-108/_html/-char/en",
+      "citation": "Zhou S., Liu X., Chen Y., Sun X. Evaluation of Deep Network-based Methods for Crack Detection of Iron Ore Green Pellet. ISIJ International 62(8):1694-1704, 2022. doi:10.2355/isijinternational.ISIJINT-2022-108",
+      "license": "Artigo sob CC BY-NC-ND 4.0. O conjunto de imagens NÃO é publicado nem tem declaração de disponibilidade.",
+      "content": "640 imagens 512x512 em tons de cinza (320 trincadas, 320 sem trinca) de pelotas VERDES de usina, câmera Baumer VCXG-53M, após queda de 0,5 m sobre chapa de aço.",
+      "material_type": "green",
+      "crack_labels": true,
+      "training_permission": "não concedida; NC/ND do artigo não cobre dados e conflita com uso comercial",
+      "status": "blocked",
+      "reason": "Dados não disponíveis para download; é a única fonte encontrada com rótulos reais de trinca.",
+      "action": "Solicitar dados e licença aos autores (autora correspondente: Xiaoyan Liu, Hunan University), explicitando uso interno industrial pela Vale."
+    },
+    "magnetic_tile_defects": {
+      "url": "https://github.com/Akki-Maharaj/Manufacturing-Defect-Detection",
+      "version": "git 3b77935ae58c76b9411e44ec9e0e7d4fbd90c28a (2026-09-03)",
+      "license": "Código MIT (Copyright 2026 Akshat). Dados vêm de https://github.com/abin24/Magnetic-tile-defect-datasets. (git cc4eb530, 2020), SEM arquivo de licença; README: 'It is welcomed to use our dataset. And if it is used in your research, please cite our paper.'",
+      "content": "1344 imagens de telhas magnéticas, 6 classes (Blowhole, Break, Crack, Fray, Uneven, Free), máscaras por pixel.",
+      "material_type": "not_pellet",
+      "crack_labels": "trincas de cerâmica magnética, não de pelota",
+      "training_permission": "uso em pesquisa com citação; uso comercial não declarado",
+      "status": "blocked",
+      "reason": "Não é pelota; a regra do projeto proíbe atribuir esses rótulos a pelotas. Só serviria como benchmark exploratório de transferência, de baixo valor para a decisão. Não baixado.",
+      "action": "Nenhuma. Se desejado, benchmark exploratório separado, sem entrar no manifesto de trincas."
+    }
+  },
+  "internal_sources": {
+    "pelotavision_0.5.0_scenes": {
+      "path": "ml_training/data (7 cenas, 225 círculos)",
+      "status": "internal_unverified",
+      "note": "Rótulos provisórios do assistente. paired40 declaradamente sintética; as outras 6 de procedência não comprovada, com aparência de imagem gerada. Usadas como 'dev', NÃO como teste real."
+    },
+    "fixture_crack_example": {
+      "path": "verification/fixtures/crack_example.png",
+      "status": "internal_unverified",
+      "note": "Foto externa de pelotas queimadas empilhadas, sem escala, procedência não registrada. Rótulos provisórios do assistente. Única foto real disponível para teste final indicativo."
+    },
+    "synthetic_procedural_trincas_sintese": {
+      "path": "branch feature/trincas-sintese: ml_training/crack_synthesis (doadoras em verification/fixtures/1000411645-47.jpg)",
+      "status": "internal_unverified",
+      "note": "1000411647.jpg tem marca d'água 'Jindal Steel & Power Iron Ore Pellet' (imagem de terceiro): excluída como doadora por padrão. 1000411645/46 de procedência não registrada."
+    }
+  }
+}

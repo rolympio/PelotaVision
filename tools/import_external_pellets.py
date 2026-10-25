@@ -3,12 +3,23 @@
 
 Usage: python tools/import_external_pellets.py --source roboflow_iron_pellets --input /path/to/export --output data/external
 This script does NOT download or infer labels. Images without verified annotations are marked unlabelled.
+The source must be registered with status "verified" in docs/datasets/fontes.json (license audit);
+--license-verified alone is NOT enough. As of 2026-10-25 every external source is "blocked".
 """
 import argparse
 import csv
 import hashlib
 import json
 from pathlib import Path
+
+REGISTRY = Path(__file__).resolve().parents[1] / "docs" / "datasets" / "fontes.json"
+
+
+def registry_status(source):
+    """Status auditado da fonte; qualquer coisa diferente de 'verified' bloqueia a importação."""
+    doc = json.loads(REGISTRY.read_text(encoding="utf-8"))
+    entry = doc["sources"].get(source)
+    return (entry or {}).get("status", "unregistered"), (entry or {}).get("reason", "fonte não registrada")
 
 EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
 SOURCES = {
@@ -19,7 +30,7 @@ SOURCES = {
     },
     "pellet_size_distribution": {
         "url": "https://github.com/aryadeo/Pellet_Size_Distribution",
-        "license": "UNVERIFIED",
+        "license": "NONE (no LICENSE file; all rights reserved) - see docs/datasets/fontes.json",
         "task": "pellet_size",
     },
     "magnetic_tile_defects": {
@@ -38,6 +49,9 @@ def main():
     args = p.parse_args()
     if not args.license_verified:
         p.error("License review required: pass --license-verified only after confirming rights.")
+    status, reason = registry_status(args.source)
+    if status != "verified":
+        p.error(f"Source '{args.source}' is '{status}' in docs/datasets/fontes.json: {reason}")
     if not args.input.is_dir():
         p.error("Input directory does not exist.")
     from PIL import Image

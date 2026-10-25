@@ -9,3 +9,9 @@ signing/*.keystore
 signing/*.jks
 *.keystore
 *.jks
+
+# Python / pipeline de trincas (dados e artefatos ficam fora do Git)
+__pycache__/
+*.pyc
+artifacts/
+data/external/

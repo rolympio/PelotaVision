@@ -1,3 +1,6 @@
+# Bloqueado por auditoria (2026-10-25): Pellet_Size_Distribution não tem licença.
+# O importador recusa fontes sem status "verified" em docs/datasets/fontes.json,
+# mesmo com a caixa abaixo marcada. Mudar o status exige autorização escrita do autor.
 name: External pellet dataset import (review required)
 on:
   workflow_dispatch:
