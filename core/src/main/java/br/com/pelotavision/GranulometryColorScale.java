@@ -10,23 +10,36 @@ package br.com.pelotavision;
  * empty (all diameters equal) every pellet gets the middle color.
  */
 public final class GranulometryColorScale {
-    public static final double DEFAULT_OPACITY = 0.25, MAX_OPACITY = 0.70;
+    /** 0.15.1: 55% por padrão e até 90% (antes 25% / 70%): sobre correia clara a cor a 25% ficava quase invisível. */
+    public static final double DEFAULT_OPACITY = 0.55, MAX_OPACITY = 0.90;
+    /** Escala relativa robusta (D10–D90) a partir deste número de pelotas incluídas; abaixo, mínimo–máximo. */
+    public static final int ROBUST_MIN_COUNT = 20;
     private static final float SATURATION = 0.85f, VALUE = 0.95f;
 
     public final double min, max;
     public final boolean fixed;
     public final String unit;
+    /** "min_max", "d10_d90" (relativa robusta) ou "fixed". */
+    public final String basis;
 
     private GranulometryColorScale(double min, double max, boolean fixed, String unit) {
+        this(min, max, fixed, unit, fixed ? "fixed" : "min_max");
+    }
+    private GranulometryColorScale(double min, double max, boolean fixed, String unit, String basis) {
         this.min = min;
         this.max = max;
         this.fixed = fixed;
         this.unit = unit;
+        this.basis = basis;
     }
 
     /** Null when the distribution has no included pellet. */
     public static GranulometryColorScale relative(Granulometry.Distribution d) {
         if (d == null || d.included == 0 || !Double.isFinite(d.minMm) || !Double.isFinite(d.maxMm)) return null;
+        // 0.15.1: com muitas pelotas, poucos fragmentos/extremos esticavam a escala e quase tudo ficava
+        // verde-amarelo. D10–D90 espalha as cores sobre a massa central; abaixo de D10 = azul, acima de D90 = vermelho.
+        if (d.included >= ROBUST_MIN_COUNT && Double.isFinite(d.d10) && Double.isFinite(d.d90) && d.d90 > d.d10)
+            return new GranulometryColorScale(d.d10, d.d90, false, d.settings.unit(), "d10_d90");
         return new GranulometryColorScale(d.minMm, d.maxMm, false, d.settings.unit());
     }
 
@@ -48,6 +61,10 @@ public final class GranulometryColorScale {
     public int rgb(double value) { return colorAt(fraction(value)); }
 
     public String mode() { return fixed ? "fixa" : "relativa"; }
+    /** Texto da legenda, incluindo a base da escala relativa. */
+    public String label() { return fixed ? "fixa" : "d10_d90".equals(basis) ? "relativa D10–D90" : "relativa mín–máx"; }
+    /** Legenda: valores além das pontas também recebem a cor da ponta. */
+    public boolean clipsEnds() { return "d10_d90".equals(basis); }
 
     /** n evenly spaced legend values from min to max (n ≥ 2). */
     public double[] ticks(int n) {
@@ -84,6 +101,12 @@ public final class GranulometryColorScale {
         return (r << 16) | (g << 8) | b;
     }
 
+    /** Opacidade do contorno: zero quando o preenchimento é zero (foto original preservada). */
+    public static double rimOpacity(double opacity) {
+        double a = clampOpacity(opacity);
+        return a <= 0 ? 0 : Math.min(MAX_OPACITY, a + 0.30);
+    }
+
     /** Alpha byte for drawing APIs (Android Paint / AWT Color). */
     public static int alpha(double opacity) { return (int) Math.round(clampOpacity(opacity) * 255); }
 
@@ -96,15 +119,19 @@ public final class GranulometryColorScale {
                                    int color, double opacity) {
         if (!(a > 0) || !(b > 0) || !Double.isFinite(cx) || !Double.isFinite(cy)) return 0;
         double t = Math.toRadians(angleDeg), c = Math.cos(t), s = Math.sin(t), ext = Math.max(a, b);
+        // 0.15.1: contorno mais forte (≈1,5 px ou 20% do raio) para separar pelotas encostadas sobre fundo claro.
+        double ring = Math.min(0.35, Math.max(0.20, 1.5 / Math.min(a, b))), inner = 1 - ring, rimStart = inner * inner;
+        double rim = rimOpacity(opacity);
         int x0 = Math.max(0, (int) Math.floor(cx - ext)), x1 = Math.min(width - 1, (int) Math.ceil(cx + ext));
         int y0 = Math.max(0, (int) Math.floor(cy - ext)), y1 = Math.min(height - 1, (int) Math.ceil(cy + ext));
         int n = 0;
         for (int y = y0; y <= y1; y++)
             for (int x = x0; x <= x1; x++) {
                 double dx = x + 0.5 - cx, dy = y + 0.5 - cy, u = (dx * c + dy * s) / a, v = (-dx * s + dy * c) / b;
-                if (u * u + v * v <= 1) {
+                double q = u * u + v * v;
+                if (q <= 1) {
                     int i = y * width + x;
-                    rgb[i] = (rgb[i] & 0xFF000000) | blend(rgb[i] & 0xFFFFFF, color, opacity);
+                    rgb[i] = (rgb[i] & 0xFF000000) | blend(rgb[i] & 0xFFFFFF, color, q >= rimStart ? rim : opacity);
                     n++;
                 }
             }

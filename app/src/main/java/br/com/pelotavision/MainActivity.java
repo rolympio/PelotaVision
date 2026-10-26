@@ -1032,12 +1032,12 @@ public final class MainActivity extends ComponentActivity {
     private void restoreVisuals(){
         android.content.SharedPreferences p=getPreferences(MODE_PRIVATE);
         CrackHistogram.Normalization n;try{n=CrackHistogram.Normalization.valueOf(p.getString("hist_normalization","PERCENT_OF_ALL"));}catch(IllegalArgumentException e){n=CrackHistogram.Normalization.PERCENT_OF_ALL;}
-        visuals=new ReportVisuals(p.getFloat("map_opacity",(float)GranulometryColorScale.DEFAULT_OPACITY),p.getBoolean("map_labels",false),p.getBoolean("map_fixed",false),
+        visuals=new ReportVisuals(p.getFloat("map_opacity_v2",(float)GranulometryColorScale.DEFAULT_OPACITY),p.getBoolean("map_labels",false),p.getBoolean("map_fixed",false),
             p.getFloat("map_fixed_min",8),p.getFloat("map_fixed_max",16),p.getBoolean("hist_all",true),p.getBoolean("hist_cracked",true),p.getBoolean("hist_values",false),n);
         crackChoice=CrackClassifierChoice.parse(p.getString("crack_classifier","RANDOM_FOREST"));
     }
     private void saveVisuals(){
-        getPreferences(MODE_PRIVATE).edit().putFloat("map_opacity",(float)visuals.mapOpacity).putBoolean("map_labels",visuals.mapLabels).putBoolean("map_fixed",visuals.mapFixed)
+        getPreferences(MODE_PRIVATE).edit().putFloat("map_opacity_v2",(float)visuals.mapOpacity).putBoolean("map_labels",visuals.mapLabels).putBoolean("map_fixed",visuals.mapFixed)
             .putFloat("map_fixed_min",(float)visuals.mapFixedMin).putFloat("map_fixed_max",(float)visuals.mapFixedMax).putBoolean("hist_all",visuals.showAll).putBoolean("hist_cracked",visuals.showCracked)
             .putBoolean("hist_values",visuals.showValues).putString("hist_normalization",visuals.normalization.name()).putString("crack_classifier",crackChoice.name()).apply();
     }
@@ -1049,7 +1049,7 @@ public final class MainActivity extends ComponentActivity {
     private void showMapOptions(){
         LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(8),dp(20),dp(8));ScrollView scroll=new ScrollView(this);scroll.addView(content);
         TextView opacityLabel=text("",14,Color.WHITE);content.addView(opacityLabel);
-        SeekBar opacity=new SeekBar(this);opacity.setMax(70);opacity.setProgress((int)Math.round(visuals.mapOpacity*100));opacity.setTag("map_opacity");content.addView(opacity);
+        SeekBar opacity=new SeekBar(this);opacity.setMax(90);opacity.setProgress((int)Math.round(visuals.mapOpacity*100));opacity.setTag("map_opacity");content.addView(opacity);
         Runnable label=()->opacityLabel.setText("Opacidade da cor: "+opacity.getProgress()+"% (foto "+(100-opacity.getProgress())+"%)");label.run();
         opacity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int v,boolean u){label.run();}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});
         CheckBox labels=check(content,"Mostrar o diâmetro sobre cada pelota",visuals.mapLabels,"map_labels");

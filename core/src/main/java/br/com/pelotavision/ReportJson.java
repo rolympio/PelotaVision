@@ -91,7 +91,7 @@ public final class ReportJson {
     }
     public static Object mapJson(Granulometry.Distribution d,ReportVisuals v)throws Exception {
         GranulometryColorScale scale=v.scale(d);if(scale==null)return JSONObject.NULL;JSONObject j=new JSONObject();
-        j.put("palette","continuous HSV hue 240->0 (blue, cyan, green, yellow, red), S=0.85 V=0.95");j.put("scale_mode",scale.mode());j.put("min",scale.min);j.put("max",scale.max);j.put("unit",scale.unit);
+        j.put("palette","continuous HSV hue 240->0 (blue, cyan, green, yellow, red), S=0.85 V=0.95");j.put("scale_mode",scale.mode());j.put("scale_basis",scale.basis);j.put("rim_opacity",GranulometryColorScale.rimOpacity(v.mapOpacity));j.put("min",scale.min);j.put("max",scale.max);j.put("unit",scale.unit);
         j.put("equal_range_middle_color",scale.equalRange());j.put("opacity",v.mapOpacity);j.put("photo_weight",1-v.mapOpacity);j.put("diameter_labels",v.mapLabels);
         j.put("colored_region","inside each fitted ellipse of pellets included in the histogram; nothing outside the ROI or on the belt background");j.put("diameter_basis","equivalent diameter used by the histogram (same scale and classes)");
         j.put("fixed_range_requested",v.mapFixed);return j;

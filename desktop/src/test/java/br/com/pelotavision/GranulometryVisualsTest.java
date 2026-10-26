@@ -57,9 +57,11 @@ public class GranulometryVisualsTest {
         assertEquals(Math.round(0x20 * 0.75 + 255 * 0.25), (b >> 16) & 255);
         assertEquals(Math.round(0x40 * 0.75), (b >> 8) & 255);
         assertEquals(Math.round(0x60 * 0.75), b & 255);
-        assertEquals("opacidade limitada a 70%", GranulometryColorScale.blend(photo, color, 0.70), GranulometryColorScale.blend(photo, color, 0.95));
-        assertEquals(0.25, ReportVisuals.defaults().mapOpacity, 0);
-        assertEquals(0.70, GranulometryColorScale.clampOpacity(2), 0);
+        assertEquals("opacidade limitada a 90%", GranulometryColorScale.blend(photo, color, 0.90), GranulometryColorScale.blend(photo, color, 0.95));
+        assertEquals(0.55, ReportVisuals.defaults().mapOpacity, 0);
+        assertEquals(0.90, GranulometryColorScale.clampOpacity(2), 0);
+        assertEquals(0, GranulometryColorScale.rimOpacity(0), 0);
+        assertEquals(0.85, GranulometryColorScale.rimOpacity(0.55), 1e-12);
         assertEquals(0, GranulometryColorScale.clampOpacity(-1), 0);
     }
 
@@ -211,7 +213,7 @@ public class GranulometryVisualsTest {
         assertFalse(unavailable.getBoolean("available"));
         JSONObject map = (JSONObject) ReportJson.mapJson(d, v);
         assertEquals("relativa", map.getString("scale_mode"));
-        assertEquals(0.25, map.getDouble("opacity"), 0);
+        assertEquals(0.55, map.getDouble("opacity"), 0);
         assertEquals(8.5, map.getDouble("min"), 1e-12);
         JSONObject fixed = (JSONObject) ReportJson.mapJson(d, v.withMap(0.4, true, true, 5, 20));
         assertEquals("fixa", fixed.getString("scale_mode"));
@@ -237,5 +239,32 @@ public class GranulometryVisualsTest {
         catch (IllegalArgumentException expected) { /* fallback é obrigatório */ }
         assertNull(MobileNetCrackModel.load(new java.io.File("nao_existe.onnx"), "{}"));
         assertNotNull(MobileNetCrackModel.lastError);
+    }
+
+    // 0.15.1: escala relativa robusta D10–D90 com muitas pelotas; extremos saturam nas cores das pontas
+    @Test public void manyPelletsUseRobustRelativeScale() {
+        List<Granulometry.Item> l = new ArrayList<>();
+        for (int i = 0; i < 100; i++) l.add(new Granulometry.Item(12 + (i % 9), false, false));
+        l.add(new Granulometry.Item(3, false, false)); l.add(new Granulometry.Item(40, false, false));
+        Granulometry.Distribution d = dist(l, 1, true, false);
+        GranulometryColorScale s = GranulometryColorScale.relative(d);
+        assertEquals("d10_d90", s.basis);
+        assertEquals(d.d10, s.min, 1e-12); assertEquals(d.d90, s.max, 1e-12);
+        assertTrue(s.max - s.min < 40 - 3);
+        assertEquals(GranulometryColorScale.colorAt(0), s.rgb(3));
+        assertEquals(GranulometryColorScale.colorAt(1), s.rgb(40));
+        assertEquals("relativa D10–D90", s.label());
+        assertEquals("min_max", GranulometryColorScale.relative(dist(items(8, 10, 12), 1, true, false)).basis);
+    }
+
+    // 0.15.1: contorno mais opaco que o interior; interior com a opacidade escolhida
+    @Test public void rimIsStrongerThanFill() {
+        int w = 60, h = 60;
+        int[] px = new int[w * h];
+        java.util.Arrays.fill(px, 0xFFC8C8C8);
+        GranulometryColorScale.paintEllipse(px, w, h, 30, 30, 20, 20, 0, 0x0000FF, 0.55);
+        assertEquals(GranulometryColorScale.blend(0xC8C8C8, 0x0000FF, 0.55), px[30 * w + 30] & 0xFFFFFF);
+        assertEquals(GranulometryColorScale.blend(0xC8C8C8, 0x0000FF, 0.85), px[30 * w + 11] & 0xFFFFFF);
+        assertEquals(0xFFC8C8C8, px[30 * w + 5]);
     }
 }

@@ -76,7 +76,7 @@ public class CrackExportTest {
   File dumps=new File(System.getProperty("pelotavision.validationDir"),"pdf-0.15.0");dumps.mkdirs();
   for(int i=0;i<pages.size();i++)try(FileOutputStream f=new FileOutputStream(new File(dumps,"pagina_"+(i+1)+".png"))){pages.get(i).compress(Bitmap.CompressFormat.PNG,100,f);}
   for(Bitmap pg:pages)pg.recycle();annotated.recycle();map.recycle();json.put("low_light",JSONObject.NULL);
-  assertTrue(json.isNull("low_light"));assertEquals("PelotaVision 0.15.0",json.getString("app"));
+  assertTrue(json.isNull("low_light"));assertEquals("PelotaVision 0.15.1",json.getString("app"));
   assertEquals(2,json.getInt("report_schema_version"));assertEquals(saved.base+"_mapa.png",json.getJSONObject("granulometric_map").getString("file"));assertTrue(json.getJSONObject("crack_histogram").getBoolean("available"));
   assertTrue(json.isNull("physical_scale"));assertEquals("px",json.getJSONObject("histogram").getString("unit"));assertEquals(1,json.getJSONObject("cracks").getInt("possible_crack_pellets"));
   String grain=new String(Files.readAllBytes(new File(root,saved.base+"_granulometria.csv").toPath()),java.nio.charset.StandardCharsets.UTF_8);assertTrue(grain.contains("lower_px;upper_px"));assertFalse(grain.contains("lower_mm"));

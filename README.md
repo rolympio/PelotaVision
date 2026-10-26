@@ -46,6 +46,10 @@ Análise de imagens de pelotas de minério de ferro: localização e ajuste elí
 
 Releases: `v0.14.0-build34` (APK) e `windows-v0.5.0-build33` (pacote portátil).
 
+## Novo na 0.15.1 (Android; núcleo comum também no Windows)
+
+- **Mapa granulométrico mais evidente**: opacidade padrão 55% (antes 25%), máximo 90%; contorno de cada pelota mais opaco (+30 p.p.) para separar pelotas encostadas; com ≥ 20 pelotas a escala relativa usa **D10–D90** (abaixo = azul, acima = vermelho), em vez de mínimo–máximo, que poucos extremos esticavam; rótulos de diâmetro omitidos acima de 250 pelotas. A preferência de opacidade foi renomeada para que o novo padrão valha também para quem já tinha 25% salvo. JSON: `scale_basis`, `rim_opacity`.
+
 ## Novo na 0.15.0 (Android)
 
 - **Relatório PDF** (`_relatorio.pdf` em Downloads / PelotaVision), gerado a partir do mesmo JSON salvo: resumo (contagem, média, D10/D50/D90, escala, trincas, ROI), bloco de **iluminação e tratamento de imagem escura**, método e modelos, tabela de classes, limitações, imagem de resultado e mapa granulométrico. Falha no PDF não impede a gravação dos demais arquivos (`pdf_error` no JSON).
