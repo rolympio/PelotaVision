@@ -75,8 +75,24 @@ final class DesktopExport {
 
         BufferedImage map = mapImage(s, viewport, visuals);
         String mapName = map == null ? null : base + "_mapa.png";
+        // 0.5.2: imagem filtrada (só quando a análise aplicou realce de iluminação na ROI).
+        BufferedImage filteredPanel = s.filteredImage() == null ? null : panelImage(s, viewport, s.filteredImage(), false);
+        String filteredName = filteredPanel == null ? null : base + "_filtrada.png";
+        File filteredFile = null;
+        if (filteredPanel != null) {
+            filteredFile = new File(folder, filteredName);
+            if (!ImageIO.write(filteredPanel, "png", filteredFile)) throw new IOException("Falha ao gravar a imagem filtrada.");
+        }
         File json = new File(folder, base + ".json");
         JSONObject report = report(s, cfg, viewport, composite, base, extension);
+        LowLightInfo light = s.lowLight();
+        report.put("low_light", light == null ? JSONObject.NULL : light.toJson());
+        JSONObject imagery = new JSONObject();
+        imagery.put("filtered_file", filteredName == null ? JSONObject.NULL : filteredName);
+        imagery.put("segmented_base", filteredPanel != null ? "filtered" : "original"); imagery.put("map_base", filteredPanel != null ? "filtered" : "original");
+        imagery.put("note", "filtered image is for display and object proposal only; ellipses, diameters and crack crops use ORIGINAL pixels");
+        report.put("report_images", imagery);
+        report.put("files_location", "mesma pasta deste PDF");
         report.put("report_schema_version", ReportJson.SCHEMA_VERSION);
         report.put("analysis_models", ReportJson.analysisModelsJson(s.output() == null ? null : s.output().applied, DesktopAnalysis.lastResolution, DesktopAnalysis.networkId()));
         if (ch != null) report.put("crack_histogram", ReportJson.crackHistogramJson(ch, visuals));
@@ -87,13 +103,29 @@ final class DesktopExport {
         display.put("histogram_show_all", visuals.showAll); display.put("histogram_show_cracked", visuals.showCracked); display.put("histogram_values_on_bars", visuals.showValues);
         display.put("histogram_normalization", visuals.normalization.name()); display.put("all_color", "#268CAB alpha 0.55"); display.put("cracked_color", "#FF8C1A alpha 0.65");
         report.put("visualization", display);
-        Files.write(json.toPath(), report.toString(2).getBytes(StandardCharsets.UTF_8));
-        written.add(json);
+        File mapFile = null;
         if (map != null) {
-            File mapFile = new File(folder, mapName);
+            mapFile = new File(folder, mapName);
             if (!ImageIO.write(map, "png", mapFile)) throw new IOException("Falha ao gravar o mapa granulometrico.");
-            written.add(mapFile);
         }
+        // 0.5.2: relatório PDF a partir do mesmo JSON (conteúdo comum ao Android). Falha no PDF não invalida os demais arquivos.
+        File pdf = new File(folder, base + "_relatorio.pdf");
+        boolean pdfOk = false;
+        try {
+            report.put("pdf_file", pdf.getName());
+            Files.write(pdf.toPath(), DesktopPdfReport.render(report, DesktopPdfReport.figures(report, composite, viewport.height, filteredPanel, map)));
+            pdfOk = true;
+        } catch (Exception | OutOfMemoryError | LinkageError e) {
+            Files.deleteIfExists(pdf.toPath());
+            report.put("pdf_file", JSONObject.NULL);
+            report.put("pdf_error", e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+        Files.write(json.toPath(), report.toString(2).getBytes(StandardCharsets.UTF_8));
+        // Ordem mantida desde a 0.5.0 (json no índice 4, mapa logo depois); 0.5.2 acrescenta filtrada e PDF no fim.
+        written.add(json);
+        if (mapFile != null) written.add(mapFile);
+        if (filteredFile != null) written.add(filteredFile);
+        if (pdfOk) written.add(pdf);
         return written;
     }
 
@@ -102,7 +134,7 @@ final class DesktopExport {
         Granulometry.Distribution d = s.distribution();
         GranulometryColorScale scale = visuals.scale(d);
         if (scale == null) return null;
-        BufferedImage src = s.analyzedImage;
+        BufferedImage src = s.shownImage(); // 0.5.2: filtrada quando houve realce
         int w = src.getWidth(), h = src.getHeight();
         int[] px = src.getRGB(0, 0, w, h, null, 0, w);
         GranulometryColorScale.paintMap(px, w, h, s.active(), d, scale, visuals.mapOpacity);
@@ -155,10 +187,10 @@ final class DesktopExport {
         g.setColor(Color.WHITE);
         g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, Math.max(8, Math.round(12 * sc))));
         g.drawString(v.cropped ? "1 · ROI AMPLIADA — sem marcacoes" : "1 · ORIGINAL — sem marcacoes", 12 * sc, 16 * sc);
-        panel(g, s, v, layout.originalTop, false);
+        panel(g, s, v, layout.originalTop, false, s.analyzedImage);
         g.setColor(Color.WHITE);
-        g.drawString("2 · PELOTAS E POSSIVEIS TRINCAS", 12 * sc, layout.annotatedTop - 8 * sc);
-        panel(g, s, v, layout.annotatedTop, true);
+        g.drawString(s.filteredImage() != null ? "2 · PELOTAS E POSSIVEIS TRINCAS · FILTRADA" : "2 · PELOTAS E POSSIVEIS TRINCAS", 12 * sc, layout.annotatedTop - 8 * sc);
+        panel(g, s, v, layout.annotatedTop, true, s.shownImage());
         g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(8, Math.round(11 * sc))));
         g.setColor(Color.WHITE);
         float y = layout.summaryTop;
@@ -202,7 +234,19 @@ final class DesktopExport {
         return d.settings.pixelsOnly() ? "Sem referencia fisica; histograma em pixels." : d.settings.estimated() ? "ESTIMATIVA pela media informada; nao e referencia independente." : "Sem referencia de objeto selecionada nesta foto.";
     }
 
-    private static void panel(Graphics2D g0, PhotoSession s, ReportViewport v, int top, boolean marked) {
+    /** Um painel isolado (sem títulos), recortado como no relatório. */
+    static BufferedImage panelImage(PhotoSession s, ReportViewport v, BufferedImage image, boolean marked) {
+        BufferedImage out = new BufferedImage(v.width, v.height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = out.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.setColor(new Color(16, 26, 35)); g.fillRect(0, 0, v.width, v.height);
+        panel(g, s, v, 0, marked, image);
+        g.dispose();
+        return out;
+    }
+
+    private static void panel(Graphics2D g0, PhotoSession s, ReportViewport v, int top, boolean marked, BufferedImage image) {
         Graphics2D g = (Graphics2D) g0.create();
         g.clip(new Rectangle2D.Double(0, top, v.width, v.height));
         g.translate(-v.left * v.scale, top - v.top * v.scale);
@@ -211,7 +255,7 @@ final class DesktopExport {
         InterestRegion roi = s.region();
         if (v.cropped) g.clip(new Rectangle2D.Double(roi.left, roi.top, roi.width(), roi.height()));
         if (v.circular) g.clip(new Ellipse2D.Double(roi.left, roi.top, roi.width(), roi.height()));
-        g.drawImage(s.analyzedImage, 0, 0, null);
+        g.drawImage(image, 0, 0, null);
         if (marked) {
             float w = Math.max(2, s.width / 600f);
             ImageView.drawDetections(g, s.active(), s.activeCracks(), w, true);

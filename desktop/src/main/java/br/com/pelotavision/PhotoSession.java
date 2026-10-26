@@ -76,6 +76,31 @@ final class PhotoSession {
     boolean needsAnalysis() { return needsAnalysis; }
     DesktopAnalysis.Output output() { return all; }
 
+    /** 0.5.2: tratamento de iluminação da última análise (null antes de analisar). */
+    LowLightInfo lowLight() { return all == null ? null : all.lowLight; }
+
+    private DesktopAnalysis.Output filteredFor;
+    private BufferedImage filteredImage;
+
+    /**
+     * 0.5.2: imagem filtrada (janela analisada com o realce aplicado; fora dela, a original) quando a última
+     * análise usou realce e a área atual ainda é a analisada; senão null. Só para exibição e relatório.
+     */
+    BufferedImage filteredImage() {
+        if (all == null || all.filteredGray == null || needsAnalysis) return null;
+        if (filteredFor != all) {
+            filteredFor = all;
+            filteredImage = FilteredImage.compose(analyzedImage, all.filteredGray, all.window);
+        }
+        return filteredImage;
+    }
+
+    /** Imagem mostrada na tela e usada na segmentação/mapa do relatório: a filtrada, se houver; senão a original. */
+    BufferedImage shownImage() {
+        BufferedImage f = filteredImage();
+        return f != null ? f : analyzedImage;
+    }
+
     /** Quantas revisoes manuais de trinca a proxima reanalise descartaria. */
     int pendingReviews() { return allCracks == null ? 0 : allCracks.reviewedCount(); }
 

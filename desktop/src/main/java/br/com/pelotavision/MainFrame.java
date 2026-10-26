@@ -506,6 +506,7 @@ final class MainFrame extends JFrame {
     void refreshPhoto() {
         PhotoSession s = session;
         if (s == null) return;
+        view.setImage(s.shownImage(), true); // 0.5.2: filtrada quando a análise aplicou realce de iluminação
         view.setViewport(s.displayWindow());
         view.setOverlay(s.active(), s.activeCracks());
         view.setReference(s.reference());
@@ -516,6 +517,7 @@ final class MainFrame extends JFrame {
         if (s.region() != null) t.append(String.format(Locale.ROOT, "ROI %s %.0f x %.0f px%s.\n", s.region().shape == InterestRegion.Shape.CIRCLE ? "circular" : "retangular",
                 s.region().width(), s.region().height(), s.regionExcluded() > 0 ? " · " + s.regionExcluded() + " fora/cruzando o limite" : ""));
         if (!s.analyzed()) t.append("Aguardando analise.\n");
+        else if (s.filteredImage() != null) t.append("Iluminacao: " + LowLightInfo.label(s.lowLight().mode) + " aplicado na ROI (exibicao e relatorio; medidas nos pixels originais).\n");
         else if (s.needsAnalysis()) t.append("Area alterada · aguardando analise. Salvar fica bloqueado ate segmentar.\n");
         else {
             for (String line : DesktopExport.summaryLines(s)) t.append(line).append('\n');

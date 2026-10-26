@@ -46,11 +46,12 @@ Análise de imagens de pelotas de minério de ferro: localização e ajuste elí
 
 Releases: `v0.14.0-build34` (APK) e `windows-v0.5.0-build33` (pacote portátil).
 
-## Novo na 0.15.2 (Android)
+## Novo na 0.15.2 (Android) / Windows 0.5.2
 
 - **Relatório PDF com figuras individuais**: original, **filtrada** (só quando há realce de iluminação), segmentada, mapa granulométrico e resumo + histograma, cada uma com título e legenda próprios, duas por página quando cabem. Os painéis são recortados do `_resultado.png`, pixel a pixel iguais a ele.
 - **Filtro de iluminação visível**: com realce aplicado (automático ou manual em "Luz"), a tela, a ROI ampliada, a imagem segmentada e o mapa mostram a imagem filtrada; a imagem original continua no painel 1 e no `_original`. Nova saída `_filtrada.png`; JSON: bloco aditivo `report_images` (`filtered_file`, `segmented_base`, `map_base`). Elipses, diâmetros e trincas continuam medidos nos pixels **originais**.
 - versionCode 22.
+- **Windows 0.5.2**: passa a gerar o mesmo relatório PDF (`_relatorio.pdf` na pasta escolhida), com o mesmo conteúdo do Android — textos, tabelas e legendas vêm de `ReportPdfContent`, no núcleo comum; o desenho usa Apache PDFBox 3 (Apache 2.0). O Windows também passa a registrar o bloco `low_light` (recuperação automática na ROI) e, quando houve realce, mostra a imagem filtrada na tela, na segmentação e no mapa, e grava `_filtrada.png`.
 
 ## Novo na 0.15.1 (Android; núcleo comum também no Windows)
 

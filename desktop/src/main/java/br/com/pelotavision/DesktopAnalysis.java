@@ -41,15 +41,24 @@ final class DesktopAnalysis {
         final int originalWidth, originalHeight, sample;
         final long durationMs;
         final String crackModelNote;
+        /** 0.5.2: tratamento de baixa iluminação desta análise (bloco low_light do JSON/PDF), ou null. */
+        final LowLightInfo lowLight;
+        /** 0.5.2: janela analisada já filtrada (window.width × window.height, 8 bits), só com realce; senão null. */
+        final byte[] filteredGray;
 
         Output(PelletDetector.Result result, CrackAnalysis cracks, DetectionTuner.Option applied, DetectionTuner.Report suggestions,
                AnalysisWindow window, int ow, int oh, int sample, long ms, String note) {
+            this(result, cracks, applied, suggestions, window, ow, oh, sample, ms, note, null, null);
+        }
+        Output(PelletDetector.Result result, CrackAnalysis cracks, DetectionTuner.Option applied, DetectionTuner.Report suggestions,
+               AnalysisWindow window, int ow, int oh, int sample, long ms, String note, LowLightInfo lowLight, byte[] filteredGray) {
             this.result = result; this.cracks = cracks; this.applied = applied; this.suggestions = suggestions; this.window = window;
             originalWidth = ow; originalHeight = oh; this.sample = sample; durationMs = ms; crackModelNote = note;
+            this.lowLight = lowLight; this.filteredGray = lowLight != null && lowLight.enhanced() ? filteredGray : null;
         }
 
         Output withSuggestions(DetectionTuner.Report report) {
-            return new Output(result, cracks, applied, report, window, originalWidth, originalHeight, sample, durationMs, crackModelNote);
+            return new Output(result, cracks, applied, report, window, originalWidth, originalHeight, sample, durationMs, crackModelNote, lowLight, filteredGray);
         }
     }
 
@@ -136,16 +145,38 @@ final class DesktopAnalysis {
             } else {
                 local = DetectionTuner.detect(gray, current, window);
             }
-            if (region != null && LowLightPreprocessor.assess(gray).needsCorrection()) {
+            LowLightPreprocessor.Quality quality = LowLightPreprocessor.assess(gray);
+            LowLightInfo light = LowLightInfo.notApplied(quality, region == null ? "low-light recovery runs only on a selected ROI" : "illumination adequate; original kept");
+            if (region != null && quality.needsCorrection()) {
                 DetectionAssessment.Context lowContext = new DetectionAssessment.Context(cfg.scale, ow, oh, null, cfg.minimumExpectedMm, window);
-                local = LowLightRecovery.analyze(gray, selected, window, lowContext).pellets;
+                LowLightRecovery.Result recovered = LowLightRecovery.analyze(gray, selected, window, lowContext);
+                local = recovered.pellets;
+                light = LowLightInfo.automatic(recovered);
             }
             CrackAnalysis cracks = window.toGlobal(crackDetector(cfg.crackChoice).detect(gray, local, cfg.crackSensitivity));
             PelletDetector.Result result = window.toGlobal(local);
-            return new Output(result, cracks, selected, suggestions, window, ow, oh, sample, System.currentTimeMillis() - start, crackModelNote());
+            return new Output(result, cracks, selected, suggestions, window, ow, oh, sample, System.currentTimeMillis() - start, crackModelNote(),
+                    light, filteredGray(gray, light));
         } finally {
             if (gray != null && gray != full) gray.release();
             full.release();
+        }
+    }
+
+    /** Janela cinza com o realce escolhido, para exibição e relatório; null sem realce ou se falhar. Nunca é medida. */
+    static byte[] filteredGray(Mat windowGray, LowLightInfo light) {
+        if (light == null || !light.enhanced()) return null;
+        Mat f = null;
+        try {
+            f = LowLightPreprocessor.apply(windowGray, light.mode);
+            if (f.cols() != windowGray.cols() || f.rows() != windowGray.rows() || f.channels() != 1) return null;
+            byte[] out = new byte[f.cols() * f.rows()];
+            f.get(0, 0, out);
+            return out;
+        } catch (RuntimeException | OutOfMemoryError e) {
+            return null;
+        } finally {
+            if (f != null) f.release();
         }
     }
 
@@ -175,7 +206,8 @@ final class DesktopAnalysis {
         try {
             gray = window.region == null ? full : window.cropGray(full);
             CrackAnalysis cracks = window.toGlobal(crackDetector(lastResolution == null ? CrackClassifierChoice.RANDOM_FOREST : lastResolution.requested).detect(gray, trial.result, crackSensitivity));
-            return new Output(window.toGlobal(trial.result), cracks, trial.option, report, window, ow, oh, sample, System.currentTimeMillis() - start, crackModelNote());
+            LowLightInfo light = LowLightInfo.notApplied(LowLightPreprocessor.assess(gray), "result reused from suggestion search");
+            return new Output(window.toGlobal(trial.result), cracks, trial.option, report, window, ow, oh, sample, System.currentTimeMillis() - start, crackModelNote(), light, null);
         } finally {
             if (gray != null && gray != full) gray.release();
             full.release();

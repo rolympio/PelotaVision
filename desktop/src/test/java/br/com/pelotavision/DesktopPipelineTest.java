@@ -227,9 +227,14 @@ public class DesktopPipelineTest {
                     s.activeCracks().count(CrackAnalysis.Status.POSSIBLE), s.activeCracks().count(CrackAnalysis.Status.INCONCLUSIVE), out.applied.id, out.durationMs / 1000.0));
             s.setScale(new Granulometry.Settings(10, 1, true, false));
             List<File> files = DesktopExport.save(outDir, s, new DesktopAnalysis.Config());
-            // 0.5.0: original, resultado, csv, granulometria, json (mesmos indices) + _mapa.png no fim
-            assertEquals(6, files.size());
+            // 0.5.0: original, resultado, csv, granulometria, json (mesmos indices) + _mapa.png; 0.5.2: + _relatorio.pdf no fim
+            assertEquals(7, files.size());
             assertTrue(files.get(5).getName().endsWith("_mapa.png"));
+            File pdf = files.get(6);
+            assertTrue(pdf.getName().endsWith("_relatorio.pdf"));
+            byte[] pdfBytes = Files.readAllBytes(pdf.toPath());
+            assertEquals("%PDF", new String(pdfBytes, 0, 4, StandardCharsets.US_ASCII));
+            assertTrue(DesktopPdfReport.pages(pdfBytes) >= 2);
             assertTrue("original deve ser copia byte a byte", java.util.Arrays.equals(Files.readAllBytes(img.toPath()), Files.readAllBytes(files.get(0).toPath())));
             List<String> lines = Files.readAllLines(files.get(2).toPath(), StandardCharsets.UTF_8);
             assertEquals(s.active().circles.size() + 1, lines.size());
