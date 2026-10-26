@@ -46,6 +46,12 @@ Análise de imagens de pelotas de minério de ferro: localização e ajuste elí
 
 Releases: `v0.14.0-build34` (APK) e `windows-v0.5.0-build33` (pacote portátil).
 
+## Novo na 0.15.2 (Android)
+
+- **Relatório PDF com figuras individuais**: original, **filtrada** (só quando há realce de iluminação), segmentada, mapa granulométrico e resumo + histograma, cada uma com título e legenda próprios, duas por página quando cabem. Os painéis são recortados do `_resultado.png`, pixel a pixel iguais a ele.
+- **Filtro de iluminação visível**: com realce aplicado (automático ou manual em "Luz"), a tela, a ROI ampliada, a imagem segmentada e o mapa mostram a imagem filtrada; a imagem original continua no painel 1 e no `_original`. Nova saída `_filtrada.png`; JSON: bloco aditivo `report_images` (`filtered_file`, `segmented_base`, `map_base`). Elipses, diâmetros e trincas continuam medidos nos pixels **originais**.
+- versionCode 22.
+
 ## Novo na 0.15.1 (Android; núcleo comum também no Windows)
 
 - **Mapa granulométrico mais evidente**: opacidade padrão 55% (antes 25%), máximo 90%; contorno de cada pelota mais opaco (+30 p.p.) para separar pelotas encostadas; com ≥ 20 pelotas a escala relativa usa **D10–D90** (abaixo = azul, acima = vermelho), em vez de mínimo–máximo, que poucos extremos esticavam; rótulos de diâmetro omitidos acima de 250 pelotas. A preferência de opacidade foi renomeada para que o novo padrão valha também para quem já tinha 25% salvo. JSON: `scale_basis`, `rim_opacity`.

@@ -21,7 +21,8 @@ import java.util.Locale;
  * Relatório PDF (0.15.0), montado a partir do MESMO JSON gravado ao lado, para que PDF e
  * dados nunca divirjam. A4 retrato (595 x 842 pt). Usa apenas android.graphics.pdf.PdfDocument.
  * Página 1+: identificação, resumo, iluminação/realce, modelos, classes granulométricas.
- * Depois: imagem de resultado (original, elipses/trincas, histograma) e mapa granulométrico.
+ * 0.15.2: depois, cada imagem como figura própria — original, filtrada (se houve realce), segmentada,
+ * mapa granulométrico e histograma — duas por página quando cabem.
  */
 final class PdfReport {
     private PdfReport() {}
@@ -31,17 +32,32 @@ final class PdfReport {
     /** Destino das páginas: PdfDocument no aparelho; bitmaps nos testes (o Robolectric não implementa PdfDocument). */
     interface Sink { Canvas begin(int number); void end(); }
 
-    static byte[] render(JSONObject json,Bitmap annotated,Bitmap map) throws Exception {
+    /** 0.15.2: uma imagem do relatório, com título e legenda próprios. A figura não é dona do bitmap. */
+    static final class Figure {
+        final Bitmap image;final String title,caption;
+        Figure(Bitmap image,String title,String caption){this.image=image;this.title=title;this.caption=caption;}
+    }
+
+    static byte[] render(JSONObject json,List<Figure> figures) throws Exception {
         final PdfDocument doc=new PdfDocument();
         try {
             draw(new Sink(){PdfDocument.Page page;
                 public Canvas begin(int n){page=doc.startPage(new PdfDocument.PageInfo.Builder(W,H,n).create());return page.getCanvas();}
-                public void end(){doc.finishPage(page);page=null;}},json,annotated,map);
+                public void end(){doc.finishPage(page);page=null;}},json,figures);
             ByteArrayOutputStream out=new ByteArrayOutputStream();doc.writeTo(out);return out.toByteArray();
         } finally {doc.close();}
     }
+    /** Compatibilidade: separa o composto _resultado.png (original, segmentada, resumo + histograma) e acrescenta o mapa. */
+    static byte[] render(JSONObject json,Bitmap annotated,Bitmap map) throws Exception {
+        List<Bitmap> owned=new ArrayList<>();
+        try{return render(json,figures(json,annotated,null,map,owned));}finally{for(Bitmap b:owned)b.recycle();}
+    }
     /** Desenha todas as páginas no destino; devolve o número de páginas. */
     static int draw(Sink sink,JSONObject json,Bitmap annotated,Bitmap map) throws Exception {
+        List<Bitmap> owned=new ArrayList<>();
+        try{return draw(sink,json,figures(json,annotated,null,map,owned));}finally{for(Bitmap b:owned)b.recycle();}
+    }
+    static int draw(Sink sink,JSONObject json,List<Figure> figures) throws Exception {
         Writer w=new Writer(sink,json.optString("pdf_file",""));
         header(w,json);
         summary(w,json);
@@ -49,10 +65,51 @@ final class PdfReport {
         models(w,json);
         bins(w,json);
         notes(w,json);
+        if(figures!=null&&!figures.isEmpty()){
+            w.ensure(H/2f);w.section("Imagens");
+            int n=0;for(Figure f:figures)if(f!=null&&f.image!=null&&!f.image.isRecycled())w.figure(++n,f);
+        }
         w.finish();
-        if(annotated!=null)imagePage(sink,w,annotated,"Resultado da análise","Original sem marcações, elipses ajustadas, possíveis trincas e histograma (todas × trincadas).");
-        if(map!=null)imagePage(sink,w,map,"Mapa granulométrico","Cores pela classe de diâmetro equivalente; legenda na própria imagem.");
         return w.pageNo;
+    }
+
+    /**
+     * Monta as figuras na ordem do relatório. O composto é recortado pelo PhotoComposer.Layout, de modo que
+     * os painéis do PDF são pixel a pixel os mesmos do _resultado.png. Bitmaps criados aqui vão para owned.
+     * filteredPanel: painel já recortado da imagem filtrada (null quando não houve realce).
+     */
+    static List<Figure> figures(JSONObject json,Bitmap annotated,Bitmap filteredPanel,Bitmap map,List<Bitmap> owned) {
+        List<Figure> out=new ArrayList<>();
+        boolean filtered=filteredPanel!=null;
+        String treatment=treatmentLabel(json);
+        boolean roi=json.optJSONObject("region_of_interest")!=null;
+        String scope=roi?"ROI ampliada. ":"";
+        Bitmap original=null,segmented=null,summary=null;
+        if(annotated!=null){
+            int ph=json.optInt("photo_panel_height",0);
+            PhotoComposer.Layout l=ph>0?new PhotoComposer.Layout(annotated.getWidth(),ph):null;
+            if(l!=null&&l.height==annotated.getHeight()){
+                original=Bitmap.createBitmap(annotated,0,l.originalTop,annotated.getWidth(),ph);owned.add(original);
+                segmented=Bitmap.createBitmap(annotated,0,l.annotatedTop,annotated.getWidth(),ph);owned.add(segmented);
+                summary=Bitmap.createBitmap(annotated,0,l.summaryTop,annotated.getWidth(),annotated.getHeight()-l.summaryTop);owned.add(summary);
+            }
+        }
+        if(original!=null){
+            out.add(new Figure(original,"Imagem original",scope+"Pixels originais da foto, sem filtro e sem marcações. Elipses, diâmetros e trincas são medidos nestes pixels."));
+            if(filtered)out.add(new Figure(filteredPanel,"Imagem filtrada · "+treatment,scope+"Tratamento de iluminação usado para propor os objetos. Serve à visualização e à segmentação; não é usado nas medidas."));
+            out.add(new Figure(segmented,"Imagem segmentada",(filtered?"Sobre a imagem filtrada. ":"")+"Elipses ajustadas e possíveis trincas. Vermelho: possível trinca · amarelo: revisão · tracejado: forma sem ajuste."));
+        }else if(annotated!=null){
+            if(filtered)out.add(new Figure(filteredPanel,"Imagem filtrada · "+treatment,scope+"Tratamento de iluminação usado para propor os objetos; não é usado nas medidas."));
+            out.add(new Figure(annotated,"Resultado da análise","Original sem marcações, "+(filtered?"segmentação sobre a imagem filtrada":"elipses ajustadas")+", possíveis trincas e histograma (todas × trincadas)."));
+        }
+        if(map!=null)out.add(new Figure(map,"Mapa granulométrico",(filtered?"Sobre a imagem filtrada. ":"")+"Cor pela classe de diâmetro equivalente de cada pelota incluída; legenda na própria imagem."));
+        if(summary!=null)out.add(new Figure(summary,"Resumo da imagem e histograma","Contagem, triagem de trincas, forma aparente 2D e distribuição por número (todas × trincadas)."));
+        return out;
+    }
+    static String treatmentLabel(JSONObject json){
+        JSONObject l=json.optJSONObject("low_light");if(l==null)return LowLightInfo.label(LowLightPreprocessor.Mode.ORIGINAL);
+        LowLightPreprocessor.Mode mode;try{mode=LowLightPreprocessor.Mode.valueOf(l.optString("mode","ORIGINAL"));}catch(IllegalArgumentException e){mode=LowLightPreprocessor.Mode.ORIGINAL;}
+        return LowLightInfo.label(mode);
     }
 
     // ---------- seções ----------
@@ -137,22 +194,6 @@ final class PdfReport {
         w.wrap("Distribuição por número de objetos visíveis em imagem 2D; não substitui peneiramento nem ensaio validado. Diâmetro equivalente da elipse = 2·√(a·b). Triagem de trincas pela superfície visível: \"sem indício\" não prova ausência de trinca. Modelos experimentais não foram validados com amostras reais de produção. O JSON e o CSV de mesmo nome contêm todos os valores por pelota.",8,MUTED);
     }
 
-    private static void imagePage(Sink sink,Writer w,Bitmap image,String title,String caption) {
-        Canvas c=sink.begin(++w.pageNo);
-        Paint t=w.paint(14,true,INK);c.drawText(title,M,M+14,t);
-        Paint cap=w.paint(9,false,MUTED);c.drawText(caption,M,M+30,cap);
-        float top=M+42,maxW=W-2*M,maxH=H-top-M-16;
-        float s=Math.min(maxW/image.getWidth(),maxH/image.getHeight());
-        float dw=image.getWidth()*s,dh=image.getHeight()*s,left=M+(maxW-dw)/2;
-        Paint p=new Paint(Paint.FILTER_BITMAP_FLAG|Paint.ANTI_ALIAS_FLAG);
-        // ~200 dpi no tamanho impresso: mantém o PDF leve sem perder leitura das elipses.
-        float dpiScale=200f/72f;int tw=Math.max(1,Math.round(dw*dpiScale)),th=Math.max(1,Math.round(dh*dpiScale));
-        Bitmap draw=image;if(tw<image.getWidth())draw=Bitmap.createScaledBitmap(image,tw,th,true);
-        try{c.drawBitmap(draw,new Rect(0,0,draw.getWidth(),draw.getHeight()),new RectF(left,top,left+dw,top+dh),p);}
-        finally{if(draw!=image)draw.recycle();}
-        footer(c,w);
-        sink.end();
-    }
     private static void footer(Canvas c,Writer w) {
         Paint f=w.paint(7.5f,false,MUTED);
         c.drawText("PelotaVision · "+w.file,M,H-22,f);
@@ -178,6 +219,27 @@ final class PdfReport {
         void line(String s,float size,boolean bold,int color){ensure(size+4);Paint p=paint(size,bold,color);canvas.drawText(s,M,y+size,p);y+=size+4;}
         void rule(){Paint p=paint(1,false,RULE);p.setStrokeWidth(.8f);canvas.drawLine(M,y,W-M,y,p);y+=8;}
         void section(String title){ensure(40);y+=6;Paint p=paint(11.5f,true,ACCENT);canvas.drawText(title.toUpperCase(new Locale("pt","BR")),M,y+11,p);y+=17;}
+        /** Figura numerada: título, legenda e imagem; até duas por página quando a imagem é paisagem. */
+        void figure(int number,Figure f){
+            Paint t=paint(11,true,INK),cap=paint(8.5f,false,MUTED);
+            List<String> lines=split(f.caption,cap,W-2*M);
+            float maxW=W-2*M,maxH=(H-2*M-20)/2f-26-lines.size()*11.5f;
+            float s=Math.min(maxW/f.image.getWidth(),maxH/f.image.getHeight());
+            float dw=f.image.getWidth()*s,dh=f.image.getHeight()*s;
+            ensure(16+lines.size()*11.5f+4+dh+12);
+            canvas.drawText("Figura "+number+" · "+f.title,M,y+11,t);y+=16;
+            for(String l:lines){canvas.drawText(l,M,y+9,cap);y+=11.5f;}
+            y+=4;
+            float left=M+(maxW-dw)/2;
+            Paint p=new Paint(Paint.FILTER_BITMAP_FLAG|Paint.ANTI_ALIAS_FLAG);
+            // ~200 dpi no tamanho impresso: mantém o PDF leve sem perder leitura das elipses.
+            float dpiScale=200f/72f;int tw=Math.max(1,Math.round(dw*dpiScale)),th=Math.max(1,Math.round(dh*dpiScale));
+            Bitmap draw=f.image;if(tw<f.image.getWidth())draw=Bitmap.createScaledBitmap(f.image,tw,th,true);
+            try{canvas.drawBitmap(draw,new Rect(0,0,draw.getWidth(),draw.getHeight()),new RectF(left,y,left+dw,y+dh),p);}
+            finally{if(draw!=f.image)draw.recycle();}
+            Paint frame=paint(1,false,RULE);frame.setStyle(Paint.Style.STROKE);frame.setStrokeWidth(.6f);canvas.drawRect(left,y,left+dw,y+dh,frame);
+            y+=dh+12;
+        }
         void wrap(String s,float size,int color){Paint p=paint(size,false,color);for(String l:split(s,p,W-2*M)){ensure(size+3);canvas.drawText(l,M,y+size,p);y+=size+3;}y+=4;}
         void table(List<String[]> rows){
             Paint k=paint(9,false,MUTED),v=paint(9.5f,true,INK);float kw=(W-2*M)*.46f,vw=(W-2*M)-kw-8;

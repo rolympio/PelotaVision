@@ -118,6 +118,7 @@ public final class MainActivity extends ComponentActivity {
     private boolean roiNeedsAnalysis;
     private boolean detailMode,detailCompare=true,detailSr;
     private DetailedAnalysis.Report photoDetailReport;
+    private Bitmap photoFiltered; // 0.15.2: foto com o filtro de iluminação aplicado na janela analisada (só exibição/relatório)
     private LowLightInfo photoLowLight; // 0.15.0: tratamento de baixa iluminação usado na análise atual (relatório PDF/JSON)
     private LinearLayout roiActions;
     private Button segmentRoi,searchRoi;
@@ -385,16 +386,20 @@ public final class MainActivity extends ComponentActivity {
             }
             CrackAnalysis cracks=window.toGlobal(crackDetector().detect(gray,local,crackSensitivity));
             PelletDetector.Result result=window.toGlobal(local);Bitmap ready=bitmap;
+            // 0.15.2: com realce aplicado, a tela, a imagem segmentada, o mapa e o PDF mostram a imagem filtrada.
+            Bitmap filteredView=null;
+            if(lightInfo.enhanced())try{filteredView=FilteredPhoto.render(bitmap,gray,window,lightInfo.mode);}catch(RuntimeException|OutOfMemoryError e){filteredView=null;}
+            final Bitmap filteredReady=filteredView;
             final DetectionTuner.Report searchReport=suggestions;final DetectionTuner.Option selectedOption=selected;final LowLightInfo analyzedLight=lightInfo;
             runOnUiThread(()-> {
                 closeTuneProgress();
-                if(isDestroyed()||isFinishing()){ready.recycle();if(!replacingCurrent)file.delete();return;}
+                if(isDestroyed()||isFinishing()){ready.recycle();if(filteredReady!=null)filteredReady.recycle();if(!replacingCurrent)file.delete();return;}
                 Granulometry.Settings previousScale=replacingCurrent?scaleSettings:null;
                 boolean referenceInvalidated=previousScale!=null&&previousScale.selectedObject!=null&&!window.keepsReference(previousScale.selectedObject,result,sourceSize[0],sourceSize[1]);
                 if(referenceInvalidated)previousScale=null;
                 if(previousScale!=null&&previousScale.beltReference!=null&&!previousScale.beltReference.matches(sourceSize[0],sourceSize[1],result.width,result.height))previousScale=null;
                 if(replacingCurrent)photoFile=null;
-                releasePreviousPhoto();photoBitmap=ready;photoFile=file;photoMime=mime;photoResult=result;photoCracks=cracks;photoParameters=selectedOption.parameters;photoOption=selectedOption;photoSuggestions=searchReport;
+                releasePreviousPhoto();photoBitmap=ready;photoFiltered=filteredReady;photoFile=file;photoMime=mime;photoResult=result;photoCracks=cracks;photoParameters=selectedOption.parameters;photoOption=selectedOption;photoSuggestions=searchReport;
                 photoAnalysisWindow=window;suggestionWindow=searchReport==null?null:window;roiNeedsAnalysis=false;
                 originalWidth=sourceSize[0];originalHeight=sourceSize[1];scaleSettings=previousScale;
                 photoAllResult=result;photoAllCracks=cracks;photoLowLight=analyzedLight;interestRegion=window.region;cropRoiReport=interestRegion!=null;
@@ -461,9 +466,12 @@ public final class MainActivity extends ComponentActivity {
         if(roiNeedsAnalysis){toast("Segmente a área ativa antes de salvar.");return;}
         refreshDistribution();
         if(distribution==null){toast("Não foi possível montar o histograma. Confira a escala.");return;}
-        Bitmap copy;
+        Bitmap copy,filteredCopy=null;
         try {copy=photoBitmap.copy(Bitmap.Config.ARGB_8888,false);}
         catch(OutOfMemoryError e){toast("Memória insuficiente para salvar. Feche outros aplicativos.");return;}
+        Bitmap shown=shownPhoto();
+        if(shown!=null&&shown!=photoBitmap)try{filteredCopy=shown.copy(Bitmap.Config.ARGB_8888,false);}catch(OutOfMemoryError e){filteredCopy=null;toast("Memória insuficiente para a imagem filtrada; o relatório usará a original.");}
+        final Bitmap exportedFiltered=filteredCopy;
         File source=photoFile;String mime=photoMime;PelletDetector.Result result=photoResult;PelletDetector.Parameters cfg=photoParameters;
         Granulometry.Distribution exportedDistribution=distribution;CrackAnalysis exportedCracks=photoCracks;final ReportVisuals exportedVisuals=visuals;final CrackClassifierChoice.Resolution exportedChoice=crackResolution;final MobileNetCrackModel net=crackNetwork;final String exportedNetwork=net==null?null:net.id;
         InterestRegion exportedRegion=interestRegion;int outside=regionExcludedCount();final boolean exportedCrop=cropRoiReport;final DetailedAnalysis.Report exportedDetail=photoDetailReport;final LowLightInfo exportedLight=photoLowLight;
@@ -471,15 +479,15 @@ public final class MainActivity extends ComponentActivity {
         setBusy(Mode.SAVING,"Salvando…");
         worker.execute(()-> {
             try {
-                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork,exportedLight);
+                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork,exportedLight,exportedFiltered);
                 runOnUiThread(()-> {if(!isDestroyed()){
                     mode=Mode.PHOTO;updateControls();hint.setText(saved.pdf!=null?"Relatório PDF salvo em Downloads / PelotaVision.":"Histograma salvo no arquivo _resultado.png. Dados em Downloads / PelotaVision.");
                     new AlertDialog.Builder(this).setTitle("Resultado salvo")
-                        .setMessage((saved.pdf!=null?"Relatório PDF: Downloads/PelotaVision/"+saved.base+"_relatorio.pdf (resumo, iluminação, modelos, classes e imagens).\n\n":"O PDF não pôde ser gerado; os demais arquivos foram salvos.\n\n")+"O relatório "+saved.base+"_resultado.png contém a imagem sem marcações, a imagem com elipses e possíveis trincas e o histograma (todas × trincadas). O mapa granulométrico com legenda fica em "+saved.base+"_mapa.png. Quando selecionada, a ROI é ampliada nos dois painéis. O arquivo _original preserva os bytes da entrada.")
+                        .setMessage((saved.pdf!=null?"Relatório PDF: Downloads/PelotaVision/"+saved.base+"_relatorio.pdf (resumo, iluminação, modelos, classes e uma figura por imagem: original, filtrada, segmentada, mapa e histograma).\n\n":"O PDF não pôde ser gerado; os demais arquivos foram salvos.\n\n")+"O relatório "+saved.base+"_resultado.png contém a imagem sem marcações, a imagem com elipses e possíveis trincas e o histograma (todas × trincadas). O mapa granulométrico com legenda fica em "+saved.base+"_mapa.png. Quando selecionada, a ROI é ampliada nos dois painéis. O arquivo _original preserva os bytes da entrada."+(exportedFiltered!=null?"\n\nFiltro de iluminação aplicado: a imagem filtrada está em "+saved.base+"_filtrada.png e a segmentação e o mapa foram desenhados sobre ela. As medidas seguem nos pixels originais.":""))
                         .setNegativeButton("Fechar",null).setNeutralButton("Abrir imagem",(d,w)->openSavedImage(saved.image)).setPositiveButton(saved.pdf!=null?"Abrir PDF":"OK",(d,w)->{if(saved.pdf!=null)openSavedPdf(saved.pdf);}).show();
                 }});
             } catch(Exception|OutOfMemoryError e) {runOnUiThread(()-> {if(!isDestroyed()){mode=Mode.PHOTO;updateControls();toast("Falha ao salvar: "+e.getMessage());}});}
-            finally {copy.recycle();if(isDestroyed())source.delete();}
+            finally {copy.recycle();if(exportedFiltered!=null)exportedFiltered.recycle();if(isDestroyed())source.delete();}
         });
     }
     private void openSavedPdf(Uri pdf) {
@@ -497,7 +505,8 @@ public final class MainActivity extends ComponentActivity {
     }
     private void releasePreviousPhoto() {
         frozen.setImageDrawable(null);
-        if(displayBitmap!=null&&displayBitmap!=photoBitmap&&!displayBitmap.isRecycled())displayBitmap.recycle();displayBitmap=displaySource=null;displayWindow=photoAnalysisWindow=suggestionWindow=null;roiNeedsAnalysis=false;photoDetailReport=null;detailMode=false;
+        if(displayBitmap!=null&&displayBitmap!=photoBitmap&&displayBitmap!=photoFiltered&&!displayBitmap.isRecycled())displayBitmap.recycle();displayBitmap=displaySource=null;
+        if(photoFiltered!=null){if(!photoFiltered.isRecycled())photoFiltered.recycle();photoFiltered=null;}displayWindow=photoAnalysisWindow=suggestionWindow=null;roiNeedsAnalysis=false;photoDetailReport=null;detailMode=false;
         if(overlay!=null)overlay.viewport(null);
         if(photoBitmap!=null){photoBitmap.recycle();photoBitmap=null;}
         if(photoFile!=null){photoFile.delete();photoFile=null;}
@@ -614,10 +623,21 @@ public final class MainActivity extends ComponentActivity {
     }
     private void updateActivePhotoDisplay(){
         if(photoBitmap==null)return;AnalysisWindow wanted=new AnalysisWindow(photoBitmap.getWidth(),photoBitmap.getHeight(),interestRegion);
-        if(displaySource==photoBitmap&&wanted.sameScope(displayWindow)&&displayBitmap!=null&&!displayBitmap.isRecycled())return;
-        Bitmap next=ActivePhoto.render(photoBitmap,wanted);frozen.setImageBitmap(next);
-        if(displayBitmap!=null&&displayBitmap!=photoBitmap&&displayBitmap!=next&&!displayBitmap.isRecycled())displayBitmap.recycle();
-        displayBitmap=next;displaySource=photoBitmap;displayWindow=wanted;
+        Bitmap source=shownPhoto();
+        if(displaySource==source&&wanted.sameScope(displayWindow)&&displayBitmap!=null&&!displayBitmap.isRecycled())return;
+        Bitmap next=ActivePhoto.render(source,wanted);frozen.setImageBitmap(next);
+        if(displayBitmap!=null&&displayBitmap!=photoBitmap&&displayBitmap!=photoFiltered&&displayBitmap!=next&&!displayBitmap.isRecycled())displayBitmap.recycle();
+        displayBitmap=next;displaySource=source;displayWindow=wanted;
+    }
+    /**
+     * 0.15.2: imagem mostrada na tela e usada na segmentação/mapa do relatório. É a filtrada quando houve realce
+     * e a ROI na tela ainda é a mesma da análise; senão, a original. Nunca é usada para medir.
+     */
+    private Bitmap shownPhoto(){
+        if(photoBitmap==null)return null;
+        if(photoFiltered==null||photoFiltered.isRecycled()||roiNeedsAnalysis||photoAnalysisWindow==null)return photoBitmap;
+        AnalysisWindow current=new AnalysisWindow(photoBitmap.getWidth(),photoBitmap.getHeight(),interestRegion);
+        return current.sameScope(photoAnalysisWindow)?photoFiltered:photoBitmap;
     }
     private void activateRoi(InterestRegion region){
         if(photoBitmap==null)return;AnalysisWindow wanted=new AnalysisWindow(photoBitmap.getWidth(),photoBitmap.getHeight(),region);
@@ -824,7 +844,7 @@ public final class MainActivity extends ComponentActivity {
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(12),dp(12),dp(12),dp(12));root.setBackgroundColor(Color.rgb(16,26,35));
         root.addView(text("ROI ampliada",22,Color.WHITE));root.addView(text("Aproxime com dois dedos e arraste para inspecionar. O relatório usa a ROI inteira selecionada, com a mesma escala física.",13,Color.LTGRAY));
         java.util.List<Integer> indices=roiNeedsAnalysis?new java.util.ArrayList<>():ObjectCalibration.sampleIndices(photoAllResult,roi,activeReference());
-        RoiZoomView zoom=new RoiZoomView(this,photoBitmap,InterestRegion.select(photoAllResult,indices),photoAllCracks==null?null:photoAllCracks.select(indices),roi,activeReference());root.addView(zoom,new LinearLayout.LayoutParams(-1,0,1));
+        RoiZoomView zoom=new RoiZoomView(this,shownPhoto(),InterestRegion.select(photoAllResult,indices),photoAllCracks==null?null:photoAllCracks.select(indices),roi,activeReference());root.addView(zoom,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout actions=row();Button reset=button("Enquadrar ROI",false),close=button("Voltar",true);actions.addView(reset,new LinearLayout.LayoutParams(0,dp(48),1));actions.addView(close,new LinearLayout.LayoutParams(0,dp(48),1));root.addView(actions);reset.setOnClickListener(v->zoom.reset());close.setOnClickListener(v->dialog.dismiss());
         dialog.setContentView(root);dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);
     }

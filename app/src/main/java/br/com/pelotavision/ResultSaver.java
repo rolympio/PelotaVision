@@ -22,7 +22,7 @@ import java.util.Locale;
 
 final class ResultSaver {
     private ResultSaver() {}
-    static final String APP_VERSION="0.15.1";
+    static final String APP_VERSION="0.15.2";
     static final class SavedResult {
         final String base;final Uri image;
         /** 0.15.0: relatório PDF; null quando a geração falhou (os demais arquivos continuam válidos). */
@@ -62,6 +62,17 @@ final class ResultSaver {
     }
     /** 0.15.0: also the PDF report and the low-light treatment block (JSON schema unchanged, additive key low_light). */
     static SavedResult save(Context context,Bitmap photo,File original,String originalMime,PelletDetector.Result result,PelletDetector.Parameters parameters,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,DetectionTuner.Report suggestions,DetectionTuner.Option applied,boolean cropRoi,DetailedAnalysis.Report detailed,ReportVisuals visuals,CrackClassifierChoice.Resolution crackChoice,String networkId,LowLightInfo lowLight) throws Exception {
+        return save(context,photo,original,originalMime,result,parameters,cracks,distribution,region,excludedByRegion,suggestions,applied,cropRoi,detailed,visuals,crackChoice,networkId,lowLight,null);
+    }
+    /**
+     * 0.15.2: filtered = foto com o filtro de iluminação aplicado (null sem realce). Quando presente, a imagem
+     * segmentada e o mapa são desenhados sobre ela, o arquivo _filtrada.png é gravado e o PDF traz original,
+     * filtrada, segmentada e mapa como figuras separadas. As medidas continuam nos pixels originais.
+     */
+    static SavedResult save(Context context,Bitmap photo,File original,String originalMime,PelletDetector.Result result,PelletDetector.Parameters parameters,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,DetectionTuner.Report suggestions,DetectionTuner.Option applied,boolean cropRoi,DetailedAnalysis.Report detailed,ReportVisuals visuals,CrackClassifierChoice.Resolution crackChoice,String networkId,LowLightInfo lowLight,Bitmap filtered) throws Exception {
+        if(filtered!=null&&(lowLight==null||!lowLight.enhanced()))filtered=null;
+        if(filtered!=null&&(filtered.getWidth()!=photo.getWidth()||filtered.getHeight()!=photo.getHeight()))throw new IllegalArgumentException("Imagem filtrada incompatível com a foto.");
+        Bitmap shown=filtered!=null?filtered:photo;
         if(distribution==null)distribution=PhotoComposer.pixelHistogram(result);
         if(visuals==null)visuals=ReportVisuals.defaults();
         java.util.List<Granulometry.Item> histogramItems=new ArrayList<>();for(PelletDetector.Detection d:result.circles)histogramItems.add(new Granulometry.Item(2*d.radius,d.partial,d.needsReview));
@@ -69,7 +80,7 @@ final class ResultSaver {
         boolean physical=!distribution.settings.pixelsOnly();
         ContentResolver resolver=context.getContentResolver();List<Uri> pending=new ArrayList<>();
         String base="PelotaVision_"+new SimpleDateFormat("yyyyMMdd_HHmmss_SSS",Locale.ROOT).format(new Date());
-        Bitmap annotated=null,map=null;
+        Bitmap annotated=null,map=null,filteredPanel=null;
         try {
             String extension="image/png".equals(originalMime)?"png":"image/webp".equals(originalMime)?"webp":"jpg";
             Uri source=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
@@ -77,12 +88,19 @@ final class ResultSaver {
             try(InputStream input=new FileInputStream(original);OutputStream output=stream(resolver,source)) {
                 byte[] bytes=new byte[65536];int count;while((count=input.read(bytes))!=-1)output.write(bytes,0,count);
             }
-            annotated=PhotoComposer.compose(photo,result,cracks,distribution,region,excludedByRegion,cropRoi,crackHistogram,visuals);
+            annotated=PhotoComposer.compose(photo,result,cracks,distribution,region,excludedByRegion,cropRoi,crackHistogram,visuals,filtered);
             Uri image=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                     base+"_resultado.png","image/png","Pictures/PelotaVision");pending.add(image);
             try(OutputStream output=stream(resolver,image)) {if(!annotated.compress(Bitmap.CompressFormat.PNG,100,output))throw new IOException("Falha ao gravar a imagem.");}
+            String filteredFile=null;
+            if(filtered!=null){
+                try{filteredPanel=PhotoComposer.panel(filtered,result,cracks,distribution,region,cropRoi,false);
+                    Uri filteredUri=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,base+"_filtrada.png","image/png","Pictures/PelotaVision");pending.add(filteredUri);
+                    try(OutputStream output=stream(resolver,filteredUri)){if(!filteredPanel.compress(Bitmap.CompressFormat.PNG,100,output))throw new IOException("Falha ao gravar a imagem filtrada.");}filteredFile=base+"_filtrada.png";
+                }catch(OutOfMemoryError e){if(filteredPanel!=null){filteredPanel.recycle();filteredPanel=null;}}
+            }
             String mapFile=null;
-            try{map=MapComposer.compose(photo,result,distribution,visuals,region,cropRoi);
+            try{map=MapComposer.compose(shown,result,distribution,visuals,region,cropRoi);
                 if(map!=null){Uri mapUri=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,base+"_mapa.png","image/png","Pictures/PelotaVision");pending.add(mapUri);
                     try(OutputStream output=stream(resolver,mapUri)){if(!map.compress(Bitmap.CompressFormat.PNG,100,output))throw new IOException("Falha ao gravar o mapa.");}mapFile=base+"_mapa.png";}
             }catch(OutOfMemoryError e){mapFile=null;if(map!=null){map.recycle();map=null;}}
@@ -92,6 +110,8 @@ final class ResultSaver {
             Object mapJson=ReportJson.mapJson(distribution,visuals);if(mapJson instanceof JSONObject)((JSONObject)mapJson).put("file",mapFile==null?JSONObject.NULL:mapFile);json.put("granulometric_map",mapJson);
             JSONObject display=new JSONObject();display.put("histogram_show_all",visuals.showAll);display.put("histogram_show_cracked",visuals.showCracked);display.put("histogram_values_on_bars",visuals.showValues);display.put("histogram_normalization",visuals.normalization.name());display.put("all_color","#268CAB alpha 0.55");display.put("cracked_color","#FF8C1A alpha 0.65");json.put("visualization",display);
             json.put("region_of_interest",ReportJson.regionJson(region,excludedByRegion));json.put("detection_suggestion",ReportJson.suggestionJson(suggestions,applied));json.put("neural_model",ReportJson.neuralModelJson(applied));json.put("scene",ReportJson.sceneJson(applied));json.put("low_light",lowLight==null?JSONObject.NULL:lowLight.toJson());
+            JSONObject imagery=new JSONObject();imagery.put("filtered_file",filteredFile==null?JSONObject.NULL:filteredFile);imagery.put("segmented_base",filtered!=null?"filtered":"original");imagery.put("map_base",filtered!=null?"filtered":"original");
+            imagery.put("note","filtered image is for display and object proposal only; ellipses, diameters and crack crops use ORIGINAL pixels");json.put("report_images",imagery);
             JSONObject processing=ReportJson.processingScopeJson(new AnalysisWindow(result.width,result.height,result.method.contains("active_roi_crop_v1")?region:null));
             if(detailed!=null){processing.put("input_width",detailed.geometry.width);processing.put("input_height",detailed.geometry.height);processing.put("crop_resizes_input",detailed.geometry.sample>1);processing.put("coordinate_mapping","detailed_analysis.local_to_preview; detections retain preview coordinates");processing.put("outside_roi_original_pixels_analyzed",region==null);}
             json.put("processing_scope",processing);json.put("detailed_analysis",ReportJson.detailJson(detailed));
@@ -165,7 +185,8 @@ final class ResultSaver {
             Uri pdfUri=null,candidate=null;
             try{
                 json.put("pdf_file",base+"_relatorio.pdf");
-                byte[] pdf=PdfReport.render(json,annotated,map);
+                List<Bitmap> owned=new ArrayList<>();byte[] pdf;
+                try{pdf=PdfReport.render(json,PdfReport.figures(json,annotated,filteredPanel,map,owned));}finally{for(Bitmap b:owned)b.recycle();}
                 candidate=create(resolver,MediaStore.Downloads.EXTERNAL_CONTENT_URI,base+"_relatorio.pdf","application/pdf","Download/PelotaVision");
                 try(OutputStream output=stream(resolver,candidate)){output.write(pdf);}
                 pending.add(candidate);pdfUri=candidate;
@@ -180,7 +201,7 @@ final class ResultSaver {
             for(Uri uri:pending)if(resolver.update(uri,visible,null,null)!=1)throw new IOException("Não foi possível concluir a gravação.");
             return new SavedResult(base,image,pdfUri);
         } catch(Exception|OutOfMemoryError e) {for(Uri uri:pending)try{resolver.delete(uri,null,null);}catch(Exception ignored){}throw e;}
-        finally {if(annotated!=null)annotated.recycle();if(map!=null)map.recycle();}
+        finally {if(annotated!=null)annotated.recycle();if(map!=null)map.recycle();if(filteredPanel!=null)filteredPanel.recycle();}
     }
     // Repasses: os blocos do JSON ficam em core/ReportJson (comum a Android e Windows).
     static Object detailJson(DetailedAnalysis.Report d)throws Exception{return ReportJson.detailJson(d);}
