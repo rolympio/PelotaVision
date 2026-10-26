@@ -126,7 +126,7 @@ public class VisualsDemoTest {
             AlertDialog map = ObjectCalibrationTest.dialog();
             android.widget.SeekBar opacity = ObjectCalibrationTest.tag(map, "map_opacity");
             assertEquals(90, opacity.getMax());
-            assertEquals(25, opacity.getProgress());
+            assertEquals(55, opacity.getProgress());
             dialogShot(map, new File(dir, "Tela_5_opcoes_do_mapa.png"));
             map.dismiss();
             ObjectCalibrationTest.call(a, "showHistogramOptions", new Class[]{});
@@ -140,7 +140,7 @@ public class VisualsDemoTest {
             report.recycle();
             Bitmap mapped = MapComposer.compose(photo, all, d, v, null, false);
             assertNotNull(mapped);
-            // fundo da foto preservado fora das pelotas; dentro, cor a 25%
+            // fundo da foto preservado fora das pelotas; dentro, cor na opacidade padrão (55%)
             PelletDetector.Detection first = null;
             for (PelletDetector.Detection p : all.circles) if (GranulometryColorScale.colored(d, new Granulometry.Item(2 * p.radius, p.partial, p.needsReview))) { first = p; break; }
             assertNotNull(first);
