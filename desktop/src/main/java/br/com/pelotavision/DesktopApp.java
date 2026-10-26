@@ -72,7 +72,12 @@ public final class DesktopApp {
             log.append("files=").append(files.size()).append('\n');
             log.append("json_android_keys=").append(jsonOk).append('\n');
             if (session.active().circles.isEmpty() || out.result.circles.isEmpty() || !pending || !jsonOk) code = 3;
-            if (DesktopAnalysis.crackModel() == null || files.size() != 6 || !files.get(5).getName().endsWith("_mapa.png")) code = 2;
+            // 0.5.2: + _filtrada.png (só com realce) e _relatorio.pdf no fim; o PDF prova que o PDFBox está no pacote.
+            File last = files.get(files.size() - 1);
+            log.append("pdf=").append(last.getName().endsWith("_relatorio.pdf") ? last.getName() + " " + last.length() + " bytes" : "ausente").append('\n');
+            if (!last.getName().endsWith("_relatorio.pdf")) log.append("pdf_error=").append(new org.json.JSONObject(json).opt("pdf_error")).append('\n');
+            if (DesktopAnalysis.crackModel() == null || files.size() < 7 || files.size() > 8 || !files.get(5).getName().endsWith("_mapa.png")
+                    || !last.getName().endsWith("_relatorio.pdf")) code = 2;
         } catch (Throwable e) {
             log.append("error=").append(e).append('\n');
             code = 1;
