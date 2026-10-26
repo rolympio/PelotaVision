@@ -177,14 +177,28 @@ final class PdfReport {
             float x=M;for(int c=0;c<r.length;c++){float cw=frac[c]*total;String s=r[c];float tx=c==0?x:x+cw-p.measureText(s)-6;canvas.drawText(s,tx,y+11,p);x+=cw;}
             Paint rule=paint(1,false,RULE);rule.setStrokeWidth(.5f);canvas.drawLine(M-4,y+h,W-M+4,y+h,rule);y+=h;
         }
+        static List<String> chunks(String word,Paint p,float width){
+            List<String> out=new ArrayList<>();
+            if(p.measureText(word)<=width||word.length()<2){out.add(word);return out;}
+            int start=0;
+            while(start<word.length()){
+                int end=start+1;
+                while(end<word.length()&&p.measureText(word,start,end+1)<=width)end++;
+                out.add(word.substring(start,end));start=end;
+            }
+            return out;
+        }
         static List<String> split(String s,Paint p,float width){
             List<String> out=new ArrayList<>();if(s==null)s="";
             for(String para:s.split("\n")){
                 StringBuilder line=new StringBuilder();
-                for(String word:para.split(" ")){
+                for(String whole:para.split(" ")){
+                  // 0.15.2: palavra maior que a linha (ex.: método registrado) é quebrada em pedaços que cabem.
+                  for(String word:chunks(whole,p,width)){
                     String trial=line.length()==0?word:line+" "+word;
                     if(p.measureText(trial)<=width||line.length()==0){line.setLength(0);line.append(trial);}
                     else{out.add(line.toString());line.setLength(0);line.append(word);}
+                  }
                 }
                 out.add(line.toString());
             }

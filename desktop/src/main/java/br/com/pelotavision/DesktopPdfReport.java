@@ -200,15 +200,29 @@ final class DesktopPdfReport {
             hline(M - 4, W - M + 4, y + h, .5f, RULE);
             y += h;
         }
+        List<String> chunks(String word, float size, boolean isBold, float maxWidth) throws IOException {
+            List<String> out = new ArrayList<>();
+            if (word.length() < 2 || width(word, size, isBold) <= maxWidth) { out.add(word); return out; }
+            int start = 0;
+            while (start < word.length()) {
+                int end = start + 1;
+                while (end < word.length() && width(word.substring(start, end + 1), size, isBold) <= maxWidth) end++;
+                out.add(word.substring(start, end));
+                start = end;
+            }
+            return out;
+        }
         List<String> split(String s, float size, boolean isBold, float maxWidth) throws IOException {
             List<String> out = new ArrayList<>();
             if (s == null) s = "";
             for (String para : s.split("\n")) {
                 StringBuilder line = new StringBuilder();
-                for (String word : para.split(" ")) {
-                    String trial = line.length() == 0 ? word : line + " " + word;
-                    if (width(trial, size, isBold) <= maxWidth || line.length() == 0) { line.setLength(0); line.append(trial); }
-                    else { out.add(line.toString()); line.setLength(0); line.append(word); }
+                for (String whole : para.split(" ")) {
+                    for (String word : chunks(whole, size, isBold, maxWidth)) { // palavra maior que a linha é quebrada
+                        String trial = line.length() == 0 ? word : line + " " + word;
+                        if (width(trial, size, isBold) <= maxWidth || line.length() == 0) { line.setLength(0); line.append(trial); }
+                        else { out.add(line.toString()); line.setLength(0); line.append(word); }
+                    }
                 }
                 out.add(line.toString());
             }
