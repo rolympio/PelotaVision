@@ -1,4 +1,4 @@
-# PelotaVision — Android 0.14.0 · Windows 0.5.0
+# PelotaVision — Android 0.14.1 · Windows 0.5.0
 
 Análise de imagens de pelotas de minério de ferro: localização e ajuste elíptico, forma 2D b/a, granulometria por número, mapa granulométrico e triagem de possíveis trincas. Android (ARM64) e Windows 11 compartilham o mesmo núcleo em `core/`.
 
@@ -14,7 +14,7 @@ Releases: `v0.14.0-build34` (APK) e `windows-v0.5.0-build33` (pacote portátil).
 - **Exportação:** 6 arquivos por análise; JSON com `report_schema_version: 2` (campos só aditivos); CSV de granulometria ganha `count_cracked;percent_cracked_of_all` no fim.
 - **YOLO11-seg não implementado:** faltam máscaras com rótulo humano e a licença AGPL-3.0 exige revisão jurídica.
 
-Na `main` depois do build 34 (ainda sem novo número de versão): a câmera Android pede a maior resolução JPEG do sensor traseiro, modo de qualidade máxima e JPEG 95%, e mostra a resolução efetiva da última foto (toque no rótulo para detalhes). A prévia e a análise ao vivo continuam em 640×480.
+**Android 0.14.1:** a câmera pede a maior resolução JPEG do sensor traseiro, modo de qualidade máxima e JPEG 95%, e mostra a resolução efetiva da última foto (toque no rótulo para detalhes). A prévia e a análise ao vivo continuam em 640×480.
 
 Detalhes, métricas, licenças e limitações: [`docs/redes-neurais-mapa-histograma.md`](docs/redes-neurais-mapa-histograma.md). Capturas: `verification/visuals-0.14.0/`.
 

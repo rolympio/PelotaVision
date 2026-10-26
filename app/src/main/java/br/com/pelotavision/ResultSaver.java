@@ -78,7 +78,7 @@ final class ResultSaver {
                 if(map!=null){try{Uri mapUri=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,base+"_mapa.png","image/png","Pictures/PelotaVision");pending.add(mapUri);
                     try(OutputStream output=stream(resolver,mapUri)){if(!map.compress(Bitmap.CompressFormat.PNG,100,output))throw new IOException("Falha ao gravar o mapa.");}mapFile=base+"_mapa.png";}finally{map.recycle();}}
             }catch(OutOfMemoryError e){mapFile=null;}
-            JSONObject json=new JSONObject();json.put("app","PelotaVision 0.14.0");json.put("report_schema_version",ReportJson.SCHEMA_VERSION);json.put("created_at_epoch_ms",System.currentTimeMillis());
+            JSONObject json=new JSONObject();json.put("app","PelotaVision 0.14.1");json.put("report_schema_version",ReportJson.SCHEMA_VERSION);json.put("created_at_epoch_ms",System.currentTimeMillis());
             json.put("analysis_models",ReportJson.analysisModelsJson(applied,crackChoice,networkId));
             json.put("crack_histogram",ReportJson.crackHistogramJson(crackHistogram,visuals));
             Object mapJson=ReportJson.mapJson(distribution,visuals);if(mapJson instanceof JSONObject)((JSONObject)mapJson).put("file",mapFile==null?JSONObject.NULL:mapFile);json.put("granulometric_map",mapJson);
