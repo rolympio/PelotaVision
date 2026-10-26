@@ -102,4 +102,4 @@ ok     RegionTest.filteringAndRevisitingPreserveCrackReviewAndDiameters
 ok     RegionTest.allRectangleHandlesResizeAndClamp
 ok     RegionTest.exampleReportsFromProvidedPhoto
 ok     VisualsDemoTest.beltPhotoWith404PelletsKeepsMapLegible
-FALHOU VisualsDemoTest.benchPhotoWithCracksShowsOverlaidHistogramMapAndModelsSection :: java.lang.AssertionError: expected:<70> but was:<90>
+FALHOU VisualsDemoTest.benchPhotoWithCracksShowsOverlaidHistogramMapAndModelsSection :: java.lang.AssertionError: expected:<25> but was:<55>
