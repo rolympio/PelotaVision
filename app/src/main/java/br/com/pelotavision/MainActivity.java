@@ -398,6 +398,7 @@ public final class MainActivity extends ComponentActivity {
                 boolean referenceInvalidated=previousScale!=null&&previousScale.selectedObject!=null&&!window.keepsReference(previousScale.selectedObject,result,sourceSize[0],sourceSize[1]);
                 if(referenceInvalidated)previousScale=null;
                 if(previousScale!=null&&previousScale.beltReference!=null&&!previousScale.beltReference.matches(sourceSize[0],sourceSize[1],result.width,result.height))previousScale=null;
+                if(previousScale!=null&&previousScale.containerReference!=null&&!previousScale.containerReference.matches(sourceSize[0],sourceSize[1],result.width,result.height))previousScale=null;
                 if(replacingCurrent)photoFile=null;
                 releasePreviousPhoto();photoBitmap=ready;photoFiltered=filteredReady;photoFile=file;photoMime=mime;photoResult=result;photoCracks=cracks;photoParameters=selectedOption.parameters;photoOption=selectedOption;photoSuggestions=searchReport;
                 photoAnalysisWindow=window;suggestionWindow=searchReport==null?null:window;roiNeedsAnalysis=false;
@@ -601,7 +602,7 @@ public final class MainActivity extends ComponentActivity {
         try {
             distribution=Granulometry.compute(measurementItems(),scaleSettings,originalWidth,originalHeight,photoResult.width,photoResult.height);
             scaleSettings=distribution.settings;
-            scaleLabel.setText((scaleSettings.beltReference!=null?"Correia · ":scaleSettings.selectedObject!=null?"REF · ":scaleSettings.estimated()?"Estimativa · ":"")+HistogramView.number(scaleSettings.originalPixelsPerMm)+" px/mm · classe "+HistogramView.number(distribution.settings.binWidthMm)+" mm");
+            scaleLabel.setText((scaleSettings.beltReference!=null?"Correia · ":scaleSettings.containerReference!=null?"Recipiente · ":scaleSettings.selectedObject!=null?"REF · ":scaleSettings.estimated()?"Estimativa · ":"")+HistogramView.number(scaleSettings.originalPixelsPerMm)+" px/mm · classe "+HistogramView.number(distribution.settings.binWidthMm)+" mm");
             showHistogram();histogram.setVisibility(View.VISIBLE);
             if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.visuals(visuals);colorMap.viewport(displayWindow);}applyViewMode();
             hint.setText(scaleSettings.selectedObject!=null?"Escala pela referência escolhida. Toque em REF para editar a medida.":scaleSettings.estimated()?"Escala estimada pela média informada. Use uma referência para medir em mm.":
@@ -651,13 +652,14 @@ public final class MainActivity extends ComponentActivity {
         File file=photoFile;String mime=photoMime;PelletDetector.Parameters cfg=photoParameters;
         setBusy(Mode.PROCESSING,(search?"Buscando ajuste pela iluminação da ":"Segmentando ")+(interestRegion==null?"foto…":"ROI…"));worker.execute(()->processPhoto(file,mime,cfg,search,null));
     }
-    private void showRegionEditor(){
+    private void showRegionEditor(){showRegionEditor(interestRegion);}
+    private void showRegionEditor(InterestRegion initial){
         if(mode!=Mode.PHOTO||photoBitmap==null||photoAllResult==null)return;
         android.app.Dialog dialog=new android.app.Dialog(this);dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(12),dp(12),dp(12),dp(12));root.setBackgroundColor(Color.rgb(16,26,35));
         root.addView(text("Área de interesse",22,Color.WHITE));
         root.addView(text("Arraste dentro para mover. Use as alças nos lados/cantos ou dois dedos para redimensionar. Pelotas que cruzam o limite ficam fora da análise.",13,Color.LTGRAY));
-        RegionEditorView editor=new RegionEditorView(this,photoBitmap,interestRegion);
+        RegionEditorView editor=new RegionEditorView(this,photoBitmap,initial);
         LinearLayout shapes=row();Button rectangle=button("Retângulo",false),circle=button("Círculo",false),reset=button("Restaurar",false);
         shapes.addView(rectangle,new LinearLayout.LayoutParams(0,dp(44),1));shapes.addView(circle,new LinearLayout.LayoutParams(0,dp(44),1));shapes.addView(reset,new LinearLayout.LayoutParams(0,dp(44),1));root.addView(shapes);
         rectangle.setOnClickListener(v->editor.shape(InterestRegion.Shape.RECTANGLE));circle.setOnClickListener(v->editor.shape(InterestRegion.Shape.CIRCLE));reset.setOnClickListener(v->editor.reset());
@@ -774,10 +776,11 @@ public final class MainActivity extends ComponentActivity {
         TextView note=text("Toque numa pelota na foto e use Calibrar para informar a medida real. A escala converte pixels em mm. A classe apenas agrupa diâmetros: 1 mm gera barras como 8–9, 9–10 mm. Use pixels da foto ORIGINAL ("+originalWidth+" × "+originalHeight+" px), não pixels da tela. O redimensionamento interno é corrigido.",13,Color.LTGRAY);content.addView(note);
         if(activeReference()!=null){Button edit=button("Editar referência selecionada",false);edit.setTag("edit_selected_reference");edit.setOnClickListener(v->{ObjectCalibration.Reference ref=activeReference();if(ref!=null)showObjectCalibrationForGeometry(ref.geometry,ref.fullImageId,ref.displayIdAtSelection);});content.addView(edit);}
         Button belt=button("Calibrar pela largura da correia",false);belt.setTag("belt_calibration");content.addView(belt);
+        Button container=button("Calibrar pelo diâmetro interno do recipiente",false);container.setTag("container_calibration");content.addView(container);
         android.widget.RadioGroup methods=new android.widget.RadioGroup(this);
-        int[] ids={View.generateViewId(),View.generateViewId(),View.generateViewId(),View.generateViewId(),View.generateViewId()};
-        String[] labels={"Informar escala em px/mm","Calcular por referência de comprimento","Estimar por média conhecida (mm)","Usar objeto selecionado na foto","Usar largura da correia confirmada"};
-        for(int i=0;i<ids.length;i++){android.widget.RadioButton option=new android.widget.RadioButton(this);option.setId(ids[i]);option.setText(labels[i]);option.setTextColor(Color.WHITE);option.setTextSize(13);if(i==3)option.setEnabled(activeReference()!=null);if(i==4)option.setEnabled(scaleSettings!=null&&scaleSettings.beltReference!=null);methods.addView(option);}
+        int[] ids={View.generateViewId(),View.generateViewId(),View.generateViewId(),View.generateViewId(),View.generateViewId(),View.generateViewId()};
+        String[] labels={"Informar escala em px/mm","Calcular por referência de comprimento","Estimar por média conhecida (mm)","Usar objeto selecionado na foto","Usar largura da correia confirmada","Usar diâmetro do recipiente confirmado"};
+        for(int i=0;i<ids.length;i++){android.widget.RadioButton option=new android.widget.RadioButton(this);option.setId(ids[i]);option.setText(labels[i]);option.setTextColor(Color.WHITE);option.setTextSize(13);if(i==3)option.setEnabled(activeReference()!=null);if(i==4)option.setEnabled(scaleSettings!=null&&scaleSettings.beltReference!=null);if(i==5)option.setEnabled(scaleSettings!=null&&scaleSettings.containerReference!=null);methods.addView(option);}
         content.addView(methods);
         TextView valueLabel=text("Pixels por milímetro (px/mm)",14,Color.WHITE);content.addView(valueLabel);
         EditText pixels=new EditText(this);pixels.setSingleLine();pixels.setTextColor(Color.WHITE);pixels.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);content.addView(pixels);
@@ -795,7 +798,7 @@ public final class MainActivity extends ComponentActivity {
         TextView error=text("",13,Color.rgb(255,146,146));error.setPadding(0,dp(8),0,dp(8));error.setVisibility(View.GONE);content.addView(error);
         java.util.function.Supplier<Granulometry.Settings> input=()-> {
             double bin=parsePositive(classes.getText().toString());
-            if((methods.getCheckedRadioButtonId()==ids[3]&&activeReference()!=null)||(methods.getCheckedRadioButtonId()==ids[4]&&scaleSettings!=null&&scaleSettings.beltReference!=null))return scaleSettings.withHistogram(bin,edges.isChecked(),review.isChecked());
+            if((methods.getCheckedRadioButtonId()==ids[3]&&activeReference()!=null)||(methods.getCheckedRadioButtonId()==ids[4]&&scaleSettings!=null&&scaleSettings.beltReference!=null)||(methods.getCheckedRadioButtonId()==ids[5]&&scaleSettings!=null&&scaleSettings.containerReference!=null))return scaleSettings.withHistogram(bin,edges.isChecked(),review.isChecked());
             double value=parsePositive(pixels.getText().toString());
             if(methods.getCheckedRadioButtonId()==ids[1])return Granulometry.Settings.reference(value,parsePositive(length.getText().toString()),bin,edges.isChecked(),review.isChecked());
             if(methods.getCheckedRadioButtonId()==ids[2])return Granulometry.Settings.estimatedMean(value,bin,edges.isChecked(),review.isChecked());
@@ -811,21 +814,22 @@ public final class MainActivity extends ComponentActivity {
         pixels.addTextChangedListener(watcher);length.addTextChangedListener(watcher);classes.addTextChangedListener(watcher);
         edges.setOnCheckedChangeListener((v,checked)->updatePreview.run());review.setOnCheckedChangeListener((v,checked)->updatePreview.run());
         methods.setOnCheckedChangeListener((group,checked)-> {
-            boolean reference=checked==ids[1],estimate=checked==ids[2],selected=checked==ids[3]||checked==ids[4];
+            boolean reference=checked==ids[1],estimate=checked==ids[2],selected=checked==ids[3]||checked==ids[4]||checked==ids[5];
             valueLabel.setVisibility(selected?View.GONE:View.VISIBLE);pixels.setVisibility(selected?View.GONE:View.VISIBLE);
             lengthLabel.setVisibility(reference?View.VISIBLE:View.GONE);length.setVisibility(reference?View.VISIBLE:View.GONE);
             valueLabel.setText(reference?"Comprimento da referência na foto original (px)":estimate?"Média conhecida das pelotas incluídas (mm)":"Pixels por milímetro (px/mm)");
             pixels.setHint(reference?"Ex.: 192":estimate?"Ex.: 12":"Ex.: 16 ou 16,5");
-            methodNote.setText(checked==ids[4]&&scaleSettings!=null&&scaleSettings.beltReference!=null?"Largura confirmada: "+HistogramView.number(scaleSettings.beltReference.realWidthMm)+" mm. Use o botão da correia para editar as bordas.":selected&&activeReference()!=null?"REF: "+activeReference().summary()+". Para trocar, toque no objeto na foto.":reference?"Ex.: 192 px / 12 mm = 16 px/mm. Meça uma referência no mesmo plano das pelotas.":estimate?"Use somente se a média desta amostra foi obtida externamente. A média informada define a escala; não será uma medição independente. A faixa não será forçada a 8–16 mm.":"px/mm = comprimento em pixels / comprimento real em mm. Não informe o diâmetro médio neste campo.");
+            methodNote.setText(checked==ids[5]&&scaleSettings!=null&&scaleSettings.containerReference!=null?"Recipiente confirmado: "+scaleSettings.containerReference.summary()+". Use o botão do recipiente para editar a borda.":checked==ids[4]&&scaleSettings!=null&&scaleSettings.beltReference!=null?"Largura confirmada: "+HistogramView.number(scaleSettings.beltReference.realWidthMm)+" mm. Use o botão da correia para editar as bordas.":selected&&activeReference()!=null?"REF: "+activeReference().summary()+". Para trocar, toque no objeto na foto.":reference?"Ex.: 192 px / 12 mm = 16 px/mm. Meça uma referência no mesmo plano das pelotas.":estimate?"Use somente se a média desta amostra foi obtida externamente. A média informada define a escala; não será uma medição independente. A faixa não será forçada a 8–16 mm.":"px/mm = comprimento em pixels / comprimento real em mm. Não informe o diâmetro médio neste campo.");
             boolean match=scaleSettings!=null&&(reference?"reference_length".equals(scaleSettings.calibrationSource):estimate?scaleSettings.estimated():"pixels_per_mm".equals(scaleSettings.calibrationSource));
             pixels.setText(match?Double.toString(reference?scaleSettings.referencePixels:estimate?scaleSettings.knownMeanMm:scaleSettings.originalPixelsPerMm):"");
             length.setText(match&&reference?Double.toString(scaleSettings.referenceMm):"");updatePreview.run();
         });
-        methods.check(ids[scaleSettings==null?0:scaleSettings.beltReference!=null?4:scaleSettings.selectedObject!=null?3:scaleSettings.estimated()?2:"reference_length".equals(scaleSettings.calibrationSource)?1:0]);
+        methods.check(ids[scaleSettings==null?0:scaleSettings.containerReference!=null?5:scaleSettings.beltReference!=null?4:scaleSettings.selectedObject!=null?3:scaleSettings.estimated()?2:"reference_length".equals(scaleSettings.calibrationSource)?1:0]);
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Escala e granulometria").setView(scroll)
             .setNegativeButton("Cancelar",null).setNeutralButton("Remover escala",(d,w)->commitScale(null))
             .setPositiveButton("Aplicar",null).create();
         belt.setOnClickListener(v->{dialog.dismiss();showBeltCalibration();});
+        container.setOnClickListener(v->{dialog.dismiss();showContainerCalibration();});
         dialog.setOnShowListener(ignored->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             try {
                 Granulometry.Settings prospective=input.get();Granulometry.Distribution measured=Granulometry.compute(measurementItems(prospective),prospective,originalWidth,originalHeight,photoResult.width,photoResult.height);
@@ -878,6 +882,63 @@ public final class MainActivity extends ComponentActivity {
         });
         cancel.setOnClickListener(v->dialog.dismiss());apply.setOnClickListener(v->{try{if(!confirmed.isChecked())return;BeltCalibration.Reference ref=BeltCalibration.select(editor.edges(),parsePositive(real.getText().toString()),ow,oh,w,h);Granulometry.Settings cfg=Granulometry.Settings.belt(ref,parsePositive(bin.getText().toString()),scaleSettings==null||scaleSettings.excludePartial,scaleSettings!=null&&scaleSettings.excludeReview);Granulometry.compute(measurementItems(cfg),cfg,ow,oh,w,h);commitScale(cfg);dialog.dismiss();showRegionEditor();}catch(IllegalArgumentException e){status.setText(e.getMessage());}});
         dialog.setContentView(root);dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);update.run();if(previous==null)automatic.performClick();
+    }
+
+    /** Escala pelo diâmetro interno conhecido de um recipiente redondo; a borda é sugerida automaticamente e confirmada pelo usuário. */
+    private void showContainerCalibration(){
+        if(mode!=Mode.PHOTO||photoBitmap==null||photoAllResult==null)return;
+        final Bitmap snapshot=photoBitmap;final int ow=originalWidth,oh=originalHeight,w=snapshot.getWidth(),h=snapshot.getHeight();
+        ContainerCalibration.Reference previous=scaleSettings==null?null:scaleSettings.containerReference;
+        final ContainerCalibration.Detection[] detection={previous==null?null:previous.detection};
+        final ContainerCalibration.Circle[] circles=new ContainerCalibration.Circle[2];
+        final ContainerCalibration.Plane[] plane={previous==null?ContainerCalibration.Plane.RIM:previous.plane};
+        if(detection[0]!=null){circles[0]=detection[0].rim;circles[1]=detection[0].pelletLevel;}
+        if(previous!=null)circles[previous.plane.ordinal()]=previous.circle;
+        android.app.Dialog dialog=new android.app.Dialog(this);dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        LinearLayout root=new LinearLayout(this);root.setTag("container_dialog");root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(12),dp(12),dp(12),dp(12));root.setBackgroundColor(Color.rgb(16,26,35));
+        root.addView(text("Diâmetro interno do recipiente",22,Color.WHITE));
+        root.addView(text("A borda é detectada automaticamente. Confira o círculo amarelo; arraste a linha ou as alças para o raio e a cruz central para mover. Dois dedos ampliam.",12,Color.LTGRAY));
+        LinearLayout labels=row();labels.addView(text("Diâmetro interno (mm)",13,Color.WHITE),new LinearLayout.LayoutParams(0,-2,1));labels.addView(text("Classe (mm)",13,Color.WHITE),new LinearLayout.LayoutParams(0,-2,1));root.addView(labels);
+        LinearLayout values=row();EditText real=new EditText(this),bin=new EditText(this);real.setTag("container_diameter_mm");bin.setTag("container_bin_mm");
+        for(EditText input:new EditText[]{real,bin}){input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);input.setOnEditorActionListener((v,action,event)->{android.view.inputmethod.InputMethodManager keyboard=(android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);if(keyboard!=null)keyboard.hideSoftInputFromWindow(v.getWindowToken(),0);v.clearFocus();return true;});input.setTextColor(Color.WHITE);input.setSingleLine();input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);values.addView(input,new LinearLayout.LayoutParams(0,dp(46),1));}root.addView(values);
+        real.setHint("Medido por dentro");if(previous!=null)real.setText(Double.toString(previous.realInnerDiameterMm));bin.setText(scaleSettings==null?"1":Double.toString(scaleSettings.binWidthMm));
+        android.widget.RadioGroup planes=new android.widget.RadioGroup(this);planes.setOrientation(LinearLayout.HORIZONTAL);
+        android.widget.RadioButton level=new android.widget.RadioButton(this),rim=new android.widget.RadioButton(this);level.setId(View.generateViewId());rim.setId(View.generateViewId());level.setTag("container_plane_level");rim.setTag("container_plane_rim");
+        level.setText("Nível das pelotas");rim.setText("Borda superior");for(android.widget.RadioButton b:new android.widget.RadioButton[]{level,rim}){b.setTextColor(Color.WHITE);b.setTextSize(12);planes.addView(b,new android.widget.RadioGroup.LayoutParams(0,-2,1f));}root.addView(planes);
+        ContainerCalibration.Circle start=circles[plane[0].ordinal()]!=null?circles[plane[0].ordinal()]:ContainerCalibration.initial(w,h);
+        ContainerEditorView editor=new ContainerEditorView(this,snapshot,start);editor.setTag("container_editor");
+        LinearLayout tools=row();Button automatic=button("Detectar borda",false),fit=button("Enquadrar",false);automatic.setTag("container_auto");for(Button b:new Button[]{automatic,fit})tools.addView(b,new LinearLayout.LayoutParams(0,dp(44),1));root.addView(tools);root.addView(editor,new LinearLayout.LayoutParams(-1,0,1));
+        TextView status=text("",12,Color.rgb(82,216,190));status.setTag("container_status");root.addView(status);
+        TextView warning=text("",12,Color.rgb(255,196,92));warning.setTag("container_warning");root.addView(warning);
+        CheckBox confirmed=new CheckBox(this);confirmed.setTag("container_confirm");confirmed.setText("Conferi o círculo, o plano e o diâmetro interno real");confirmed.setTextColor(Color.WHITE);confirmed.setTextSize(12);root.addView(confirmed);
+        root.addView(text("A escala só vale no plano do círculo. Recipiente fundo: a borda fica mais perto da câmera que as pelotas, que sairiam menores. Use câmera paralela à boca, camada nivelada e recipiente cilíndrico. Borda ovalizada acima de 6% bloqueia a calibração.",11,Color.LTGRAY));
+        LinearLayout actions=row();Button cancel=button("Cancelar",false),apply=button("Aplicar diâmetro",true);apply.setTag("container_apply");actions.addView(cancel,new LinearLayout.LayoutParams(0,dp(48),1));actions.addView(apply,new LinearLayout.LayoutParams(0,dp(48),1));root.addView(actions);
+        final boolean[] quiet={false};
+        Runnable update=()->{
+            ContainerCalibration.Detection d=detection[0];double bias=d==null?Double.NaN:d.rimOverPelletScale();
+            warning.setText(Double.isFinite(bias)?(plane[0]==ContainerCalibration.Plane.RIM&&bias>.02?"Atenção: na borda a escala é "+HistogramView.number(100*bias)+"% maior que no nível das pelotas; as pelotas sairiam cerca de "+HistogramView.number(100*bias/(1+bias))+"% menores.":"Diferença de escala borda/nível das pelotas: "+HistogramView.number(100*bias)+"%."+(plane[0]==ContainerCalibration.Plane.PELLET_LEVEL?" Supõe parede cilíndrica e pelotas encostadas nela.":"")):plane[0]==ContainerCalibration.Plane.PELLET_LEVEL&&d!=null?d.pelletNote:"");
+            try{ContainerCalibration.Reference ref=ContainerCalibration.select(editor.circle(),plane[0],parsePositive(real.getText().toString()),d,ow,oh,w,h);parsePositive(bin.getText().toString());status.setText("Ø "+HistogramView.number(ref.originalDiameterPixels)+" px na original / "+HistogramView.number(ref.realInnerDiameterMm)+" mm = "+HistogramView.number(ref.originalPixelsPerMm)+" px/mm"+(Double.isFinite(ref.rimOvality)?" · ovalização "+HistogramView.number(100*ref.rimOvality)+"%":""));apply.setEnabled(confirmed.isChecked());}catch(IllegalArgumentException e){status.setText(e.getMessage());apply.setEnabled(false);}
+        };
+        editor.changed(()->{circles[plane[0].ordinal()]=editor.circle();if(!quiet[0])confirmed.setChecked(false);update.run();});confirmed.setOnCheckedChangeListener((v,c)->update.run());
+        android.text.TextWatcher watcher=new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int f){}public void onTextChanged(CharSequence s,int a,int b,int c){confirmed.setChecked(false);update.run();}public void afterTextChanged(android.text.Editable e){}};real.addTextChangedListener(watcher);bin.addTextChangedListener(watcher);
+        Runnable showPlane=()->{ContainerCalibration.Plane p=plane[0];ContainerCalibration.Circle active=circles[p.ordinal()];if(active==null){ContainerCalibration.Circle o=circles[1-p.ordinal()];active=o==null?ContainerCalibration.initial(w,h):o.manual();circles[p.ordinal()]=active;}editor.circles(active,circles[1-p.ordinal()]);};
+        planes.setOnCheckedChangeListener((g,id)->{plane[0]=id==rim.getId()?ContainerCalibration.Plane.RIM:ContainerCalibration.Plane.PELLET_LEVEL;confirmed.setChecked(false);showPlane.run();});
+        fit.setOnClickListener(v->editor.resetZoom());
+        automatic.setOnClickListener(v->{
+            automatic.setEnabled(false);confirmed.setChecked(false);status.setText("Procurando a borda circular; confira a sugestão antes de aplicar.");
+            double k=Math.min(1,640./Math.max(w,h));int tw=Math.max(64,(int)Math.round(w*k)),th=Math.max(64,(int)Math.round(h*k));Bitmap small=Bitmap.createScaledBitmap(snapshot,tw,th,true);final Bitmap scan=small==snapshot?small.copy(Bitmap.Config.ARGB_8888,false):small;
+            worker.execute(()->{ContainerCalibration.Detection found=null;try{int[] pixels=new int[tw*th];scan.getPixels(pixels,0,tw,0,0,tw,th);byte[] gray=new byte[pixels.length];for(int i=0;i<pixels.length;i++){int c=pixels[i];gray[i]=(byte)((77*Color.red(c)+150*Color.green(c)+29*Color.blue(c))>>8);}ContainerCalibration.Detection d=ContainerRimDetector.detect(gray,tw,th);if(d!=null)found=d.scaled((w-1)/(tw-1.),(h-1)/(th-1.));}catch(RuntimeException ignored){}finally{scan.recycle();}final ContainerCalibration.Detection suggestion=found;
+                runOnUiThread(()->{if(!dialog.isShowing()||isDestroyed()||photoBitmap!=snapshot)return;automatic.setEnabled(true);
+                    if(suggestion==null){status.setText("Borda não encontrada. Enquadre o recipiente inteiro ou ajuste o círculo manualmente.");return;}
+                    detection[0]=suggestion;circles[0]=suggestion.rim;circles[1]=suggestion.pelletLevel;plane[0]=ContainerCalibration.suggestedPlane(suggestion);
+                    quiet[0]=true;planes.check(plane[0]==ContainerCalibration.Plane.RIM?rim.getId():level.getId());showPlane.run();quiet[0]=false;update.run();
+                    status.setText((suggestion.pelletLevel==null?"Borda detectada; nível das pelotas não encontrado, confira o plano.":"Borda e nível das pelotas detectados. Amarelo: plano em uso; tracejado: o outro.")+"\n"+status.getText());});});
+        });
+        cancel.setOnClickListener(v->dialog.dismiss());
+        apply.setOnClickListener(v->{try{if(!confirmed.isChecked())return;ContainerCalibration.Reference ref=ContainerCalibration.select(editor.circle(),plane[0],parsePositive(real.getText().toString()),detection[0],ow,oh,w,h);Granulometry.Settings cfg=Granulometry.Settings.container(ref,parsePositive(bin.getText().toString()),scaleSettings==null||scaleSettings.excludePartial,scaleSettings!=null&&scaleSettings.excludeReview);Granulometry.compute(measurementItems(cfg),cfg,ow,oh,w,h);commitScale(cfg);dialog.dismiss();
+            ContainerCalibration.Circle inner=circles[0]!=null?circles[0]:editor.circle();showRegionEditor(interestRegion==null?ContainerCalibration.interiorRegion(inner,w,h):interestRegion);}catch(IllegalArgumentException e){status.setText(e.getMessage());}});
+        dialog.setContentView(root);dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);
+        quiet[0]=true;planes.check(plane[0]==ContainerCalibration.Plane.RIM?rim.getId():level.getId());quiet[0]=false;update.run();if(previous==null)automatic.performClick();
     }
     private static double parsePositive(String value) {
         try {double result=Double.parseDouble(value.trim().replace(',','.'));

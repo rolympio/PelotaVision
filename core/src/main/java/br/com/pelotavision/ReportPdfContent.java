@@ -90,6 +90,13 @@ public final class ReportPdfContent {
         JSONObject s = j.optJSONObject("physical_scale");
         if (s != null) rows.add(new String[]{"Escala", num(s.opt("original_pixels_per_mm")) + " px/mm · " + s.optString("source", "—") + (s.optBoolean("estimated") ? " (estimada)" : "")});
         else rows.add(new String[]{"Escala", "sem calibração física — valores em pixels"});
+        JSONObject box = s == null ? null : s.optJSONObject("container_reference");
+        if (box != null) {
+            boolean rim = "rim_inner_edge".equals(box.optString("measurement_plane"));
+            Object bias = box.opt("rim_over_pellet_level_scale_ratio_minus_1");
+            rows.add(new String[]{"Recipiente", "Ø interno " + num(box.opt("real_inner_diameter_mm")) + " mm · " + (rim ? "plano da borda" : "nível das pelotas")
+                    + (bias instanceof Number ? " · borda/nível " + num(100 * ((Number) bias).doubleValue()) + "%" : "")});
+        }
         JSONObject c = j.optJSONObject("cracks");
         if (c == null || "not_analyzed".equals(c.optString("status"))) rows.add(new String[]{"Trincas", "não analisadas"});
         else {

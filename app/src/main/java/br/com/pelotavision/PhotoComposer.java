@@ -59,6 +59,10 @@ final class PhotoComposer {
     BeltCalibration.Reference belt=distribution.settings.beltReference;
     canvas.drawText("Correia: "+HistogramView.number(belt.realWidthMm)+" mm · bordas confirmadas pelo usuário",12*s,layout.summaryTop+123*s,label);
     canvas.drawText("Escala original: "+HistogramView.number(belt.originalPixelsPerMm)+" px/mm · "+(viewport.cropped?"ROI ampliada; medidas preservadas":"imagem inteira"),12*s,layout.summaryTop+138*s,label);
+   }else if(distribution.settings.containerReference!=null){
+    ContainerCalibration.Reference box=distribution.settings.containerReference;
+    canvas.drawText("Recipiente: Ø interno "+HistogramView.number(box.realInnerDiameterMm)+" mm · "+(box.plane==ContainerCalibration.Plane.RIM?"plano da borda":"nível das pelotas")+" · confirmado pelo usuário",12*s,layout.summaryTop+123*s,label);
+    canvas.drawText("Escala original: "+HistogramView.number(box.originalPixelsPerMm)+" px/mm"+(Double.isFinite(box.rimOverPelletScale)?" · borda/nível "+HistogramView.number(100*box.rimOverPelletScale)+"%":"")+" · "+(viewport.cropped?"ROI ampliada; medidas preservadas":"imagem inteira"),12*s,layout.summaryTop+138*s,label);
    }else{
     canvas.drawText(distribution.settings.pixelsOnly()?"Calibre em Escala / mm: correia ou referência.":"Escala informada: "+HistogramView.number(distribution.settings.originalPixelsPerMm)+" px/mm (original)",12*s,layout.summaryTop+123*s,label);
     canvas.drawText(distribution.settings.pixelsOnly()?"Sem referência física; histograma em pixels.":distribution.settings.estimated()?"Estimativa pela média informada; não é referência independente.":"Sem referência de objeto selecionada nesta foto.",12*s,layout.summaryTop+138*s,label);
@@ -86,6 +90,7 @@ final class PhotoComposer {
    CircleOverlay.draw(canvas,result,0,0,1,true,stroke,text,outline);CrackOverlay.draw(canvas,result,cracks,0,0,1);
    RegionOverlay.draw(canvas,region,0,0,1,result.width,result.height,false);ReferenceOverlay.draw(canvas,distribution.settings.selectedObject,0,0,1);
    if(!viewport.cropped&&distribution.settings.beltReference!=null)BeltEditorView.drawEdges(canvas,distribution.settings.beltReference.edges,0,0,1,false,1);
+   if(!viewport.cropped&&distribution.settings.containerReference!=null)ContainerEditorView.drawCircles(canvas,distribution.settings.containerReference.circle,null,0,0,1,false,Math.max(1,photo.getWidth()/600f));
   }canvas.restore();
  }
 

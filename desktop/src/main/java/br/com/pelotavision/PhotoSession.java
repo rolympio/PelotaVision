@@ -118,6 +118,10 @@ final class PhotoSession {
             scale = null;
             warning = "A referencia da correia pertence a outra imagem. Recalibre.";
         }
+        if (scale != null && scale.containerReference != null && !scale.containerReference.matches(originalWidth, originalHeight, width, height)) {
+            scale = null;
+            warning = "A borda do recipiente pertence a outra imagem. Recalibre.";
+        }
         all = out;
         allCracks = out.cracks;
         needsAnalysis = !new AnalysisWindow(width, height, region).sameScope(out.window);

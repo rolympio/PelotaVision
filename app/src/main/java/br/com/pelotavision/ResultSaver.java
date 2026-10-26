@@ -135,6 +135,7 @@ final class ResultSaver {
                 scale.put("source",distribution.settings.calibrationSource);
                 scale.put("estimated",distribution.settings.estimated());
                 scale.put("belt_reference",ReportJson.beltReferenceJson(distribution.settings.beltReference));
+                scale.put("container_reference",ReportJson.containerReferenceJson(distribution.settings.containerReference));
                 scale.put("selected_object",ReportJson.objectReferenceJson(distribution.settings.selectedObject,region));
                 scale.put("assumed_mean_mm",Double.isFinite(distribution.settings.knownMeanMm)?distribution.settings.knownMeanMm:JSONObject.NULL);
                 scale.put("reference_pixels",Double.isFinite(distribution.settings.referencePixels)?distribution.settings.referencePixels:JSONObject.NULL);
@@ -208,6 +209,7 @@ final class ResultSaver {
     static JSONObject processingScopeJson(AnalysisWindow w)throws Exception{return ReportJson.processingScopeJson(w);}
     static JSONObject viewportJson(ReportViewport v)throws Exception{return ReportJson.viewportJson(v);}
     static Object beltReferenceJson(BeltCalibration.Reference ref)throws Exception{return ReportJson.beltReferenceJson(ref);}
+    static Object containerReferenceJson(ContainerCalibration.Reference ref)throws Exception{return ReportJson.containerReferenceJson(ref);}
     static Object suggestionScopeJson(DetectionTuner.Report report)throws Exception{return ReportJson.suggestionScopeJson(report);}
     static Object suggestionJson(DetectionTuner.Report report,DetectionTuner.Option applied)throws Exception{return ReportJson.suggestionJson(report,applied);}
     static Object objectReferenceJson(ObjectCalibration.Reference ref,InterestRegion region)throws Exception{return ReportJson.objectReferenceJson(ref,region);}

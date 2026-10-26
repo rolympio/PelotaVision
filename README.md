@@ -11,7 +11,7 @@ O **PelotaVision** é um software de pesquisa e desenvolvimento para análise de
 - **Detecção e segmentação individual:** métodos clássicos de bordas e LoG, além de alternativas neurais experimentais, com parâmetros ajustáveis para cenas de bancada e correia.
 - **Granulometria:** estimativa de dimensões projetadas, distribuição de tamanhos, histogramas e sobreposição de cores translúcidas por faixa granulométrica.
 - **Inspeção de trincas:** identificação assistida de possíveis trincas, revisão visual e distribuição granulométrica específica das pelotas classificadas como trincadas.
-- **Calibração:** escala em pixel/mm, referência dimensional e largura conhecida da correia, com ajuste manual das bordas.
+- **Calibração:** escala em pixel/mm, referência dimensional, largura conhecida da correia e diâmetro interno de recipiente redondo com borda detectada automaticamente ([detalhes](docs/calibracao-recipiente.md)), sempre com confirmação do usuário.
 - **ROI:** seleção e processamento de região de interesse, preservando a fotografia original.
 - **Qualidade de imagem:** ajustes de contraste e iluminação, análise detalhada em blocos e super-resolução FSRCNN 2× opcional e experimental.
 - **Rastreabilidade:** exportações e registros de configurações, parâmetros, medidas e evidências visuais, conforme o suporte de cada versão.

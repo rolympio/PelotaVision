@@ -13,6 +13,7 @@ public final class Granulometry {
         public final String calibrationSource;
         public final ObjectCalibration.Reference selectedObject;
         public final BeltCalibration.Reference beltReference;
+        public final ContainerCalibration.Reference containerReference;
         public Settings(double pixelsPerMm,double binWidth,boolean partial,boolean review) {
             this(pixelsPerMm,binWidth,partial,review,"pixels_per_mm",Double.NaN,Double.NaN,Double.NaN);
         }
@@ -21,7 +22,10 @@ public final class Granulometry {
             this(scale,binWidth,partial,review,source,mean,pixels,mm,selectedObject,null);
         }
         private Settings(double scale,double binWidth,boolean partial,boolean review,String source,double mean,double pixels,double mm,ObjectCalibration.Reference selectedObject,BeltCalibration.Reference beltReference) {
-            this.selectedObject=selectedObject;this.beltReference=beltReference;
+            this(scale,binWidth,partial,review,source,mean,pixels,mm,selectedObject,beltReference,null);
+        }
+        private Settings(double scale,double binWidth,boolean partial,boolean review,String source,double mean,double pixels,double mm,ObjectCalibration.Reference selectedObject,BeltCalibration.Reference beltReference,ContainerCalibration.Reference containerReference) {
+            this.selectedObject=selectedObject;this.beltReference=beltReference;this.containerReference=containerReference;
             positive(scale);positive(binWidth);
             originalPixelsPerMm=scale;binWidthMm=binWidth;excludePartial=partial;excludeReview=review;
             calibrationSource=source;knownMeanMm=mean;referencePixels=pixels;referenceMm=mm;
@@ -30,10 +34,14 @@ public final class Granulometry {
             if(reference==null)throw new IllegalArgumentException("Selecione a referência na foto.");
             return new Settings(reference.originalPixelsPerMm,binWidth,partial,review,"user_selected_object",Double.NaN,reference.originalReferencePixels,reference.realMm,reference);
         }
-        public Settings withHistogram(double binWidth,boolean partial,boolean review){return new Settings(originalPixelsPerMm,binWidth,partial,review,calibrationSource,knownMeanMm,referencePixels,referenceMm,selectedObject,beltReference);}
+        public Settings withHistogram(double binWidth,boolean partial,boolean review){return new Settings(originalPixelsPerMm,binWidth,partial,review,calibrationSource,knownMeanMm,referencePixels,referenceMm,selectedObject,beltReference,containerReference);}
         public static Settings belt(BeltCalibration.Reference reference,double binWidth,boolean partial,boolean review){
             if(reference==null)throw new IllegalArgumentException("Marque as bordas da correia.");
             return new Settings(reference.originalPixelsPerMm,binWidth,partial,review,"belt_width_user_confirmed",Double.NaN,reference.originalWidthPixels,reference.realWidthMm,null,reference);
+        }
+        public static Settings container(ContainerCalibration.Reference reference,double binWidth,boolean partial,boolean review){
+            if(reference==null)throw new IllegalArgumentException("Marque a borda do recipiente.");
+            return new Settings(reference.originalPixelsPerMm,binWidth,partial,review,"container_inner_diameter_user_confirmed",Double.NaN,reference.originalDiameterPixels,reference.realInnerDiameterMm,null,null,reference);
         }
         public static Settings reference(double pixels,double mm,double binWidth,boolean partial,boolean review) {
             positive(pixels);positive(mm);
@@ -49,6 +57,7 @@ public final class Granulometry {
         public boolean estimated(){return calibrationSource.startsWith("assumed_mean");}
         public double analyzedPixelsPerMm(int ow,int oh,int width,int height) {
             if(beltReference!=null&&!beltReference.matches(ow,oh,width,height))throw new IllegalArgumentException("A referência da correia pertence a outra imagem. Recalibre.");
+            if(containerReference!=null&&!containerReference.matches(ow,oh,width,height))throw new IllegalArgumentException("A borda do recipiente pertence a outra imagem. Recalibre.");
             double value=pixelsOnly()?1:originalPixelsPerMm*resizeRatio(ow,oh,width,height);positive(value);return value;
         }
     }

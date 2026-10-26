@@ -224,6 +224,8 @@ final class DesktopExport {
         ObjectCalibration.Reference r = d.settings.selectedObject;
         if (r != null) return "REF do usuario · " + r.summary();
         if (d.settings.beltReference != null) return "Correia: " + HistogramView.fmt(d.settings.beltReference.realWidthMm) + " mm · bordas confirmadas pelo usuario";
+        ContainerCalibration.Reference c = d.settings.containerReference;
+        if (c != null) return "Recipiente: Ø interno " + HistogramView.fmt(c.realInnerDiameterMm) + " mm · " + (c.plane == ContainerCalibration.Plane.RIM ? "plano da borda" : "nivel das pelotas") + " · confirmado pelo usuario";
         return d.settings.pixelsOnly() ? "Calibre: correia, referencia ou px/mm." : "Escala informada: " + HistogramView.fmt4(d.settings.originalPixelsPerMm) + " px/mm (original)";
     }
 
@@ -231,6 +233,8 @@ final class DesktopExport {
         ObjectCalibration.Reference r = d.settings.selectedObject;
         if (r != null) return "Escala: " + HistogramView.fmt4(d.settings.originalPixelsPerMm) + " px/mm (original) · " + (r.excludeFromStatistics ? "REF fora da amostra" : "REF incluida na amostra");
         if (d.settings.beltReference != null) return "Escala original: " + HistogramView.fmt4(d.settings.beltReference.originalPixelsPerMm) + " px/mm · " + (v.cropped ? "ROI ampliada; medidas preservadas" : "imagem inteira");
+        ContainerCalibration.Reference c = d.settings.containerReference;
+        if (c != null) return "Escala original: " + HistogramView.fmt4(c.originalPixelsPerMm) + " px/mm" + (Double.isFinite(c.rimOverPelletScale) ? " · borda/nivel " + HistogramView.fmt(100 * c.rimOverPelletScale) + "%" : "") + " · " + (v.cropped ? "ROI ampliada; medidas preservadas" : "imagem inteira");
         return d.settings.pixelsOnly() ? "Sem referencia fisica; histograma em pixels." : d.settings.estimated() ? "ESTIMATIVA pela media informada; nao e referencia independente." : "Sem referencia de objeto selecionada nesta foto.";
     }
 
@@ -268,6 +272,7 @@ final class DesktopExport {
             Granulometry.Distribution d = s.distribution();
             if (d.settings.selectedObject != null) ImageView.drawReference(g, d.settings.selectedObject, w);
             if (!v.cropped && d.settings.beltReference != null) drawBelt(g, d.settings.beltReference.edges, w);
+            if (!v.cropped && d.settings.containerReference != null) drawContainer(g, d.settings.containerReference.circle, null, w);
         }
         g.dispose();
     }
@@ -277,6 +282,20 @@ final class DesktopExport {
         g.setStroke(new BasicStroke(w * 1.5f));
         g.draw(new Line2D.Double(e.x(0), e.y(0), e.x(1), e.y(1)));
         g.draw(new Line2D.Double(e.x(2), e.y(2), e.x(3), e.y(3)));
+    }
+
+    static void drawContainer(Graphics2D g, ContainerCalibration.Circle active, ContainerCalibration.Circle other, float w) {
+        if (other != null) {
+            g.setColor(new Color(190, 190, 190));
+            g.setStroke(new BasicStroke(w * 1.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10, new float[]{w * 6, w * 4}, 0));
+            g.draw(new Ellipse2D.Double(other.cx - other.r, other.cy - other.r, 2 * other.r, 2 * other.r));
+        }
+        if (active == null) return;
+        g.setColor(new Color(255, 210, 0));
+        g.setStroke(new BasicStroke(w * 1.5f));
+        g.draw(new Ellipse2D.Double(active.cx - active.r, active.cy - active.r, 2 * active.r, 2 * active.r));
+        g.setStroke(new BasicStroke(w, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10, new float[]{w * 4, w * 3}, 0));
+        g.draw(new Line2D.Double(active.cx - active.r, active.cy, active.cx + active.r, active.cy));
     }
 
     /** Linhas do resumo na tela. */
@@ -365,6 +384,7 @@ final class DesktopExport {
             scale.put("source", distribution.settings.calibrationSource);
             scale.put("estimated", distribution.settings.estimated());
             scale.put("belt_reference", ReportJson.beltReferenceJson(distribution.settings.beltReference));
+            scale.put("container_reference", ReportJson.containerReferenceJson(distribution.settings.containerReference));
             scale.put("selected_object", ReportJson.objectReferenceJson(distribution.settings.selectedObject, region));
             scale.put("assumed_mean_mm", Double.isFinite(distribution.settings.knownMeanMm) ? distribution.settings.knownMeanMm : JSONObject.NULL);
             scale.put("reference_pixels", Double.isFinite(distribution.settings.referencePixels) ? distribution.settings.referencePixels : JSONObject.NULL);

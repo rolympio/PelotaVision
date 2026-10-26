@@ -622,6 +622,8 @@ final class MainFrame extends JFrame {
     double prefsMinimum() { return prefs.getDouble("minimumMm", 5); }
     void savePrefsMinimum(double v) { prefs.putDouble("minimumMm", v); }
     void editRegionPublic() { editRegion(); }
+    /** Abre o editor de ROI com uma proposta (ex.: interior do recipiente); nada muda sem Aplicar. */
+    void editRegionPublic(InterestRegion proposal) { editRegion(proposal); }
 
     /** Ganchos do roteiro de capturas do manual (DesktopManual): mesmas ações dos botões, sem seletor de arquivo. */
     void manual(String action) {
@@ -638,10 +640,12 @@ final class MainFrame extends JFrame {
     }
     void manualLoad(PhotoSession s) { loadPhoto(s); }
 
-    private void editRegion() {
+    private void editRegion() { editRegion(session == null ? null : session.region()); }
+
+    private void editRegion(InterestRegion initial) {
         PhotoSession s = session;
         if (s == null || mode != Mode.PHOTO) return;
-        RegionEditorDialog d = new RegionEditorDialog(this, s.analyzedImage, s.region());
+        RegionEditorDialog d = new RegionEditorDialog(this, s.analyzedImage, initial);
         d.setVisible(true);
         if (!d.applied) return;
         try {
@@ -766,7 +770,7 @@ final class MainFrame extends JFrame {
     private void refreshScaleLabel() {
         Granulometry.Settings s = session == null ? null : session.scale();
         if (s == null) { scaleLabel.setText("Sem escala fisica · valores em px"); return; }
-        String source = s.beltReference != null ? "Correia" : s.selectedObject != null ? "REF " + s.selectedObject.summary()
+        String source = s.beltReference != null ? "Correia" : s.containerReference != null ? s.containerReference.summary() : s.selectedObject != null ? "REF " + s.selectedObject.summary()
                 : s.estimated() ? "ESTIMATIVA pela media informada (hipotese)" : "reference_length".equals(s.calibrationSource) ? "referencia de comprimento" : "digitado";
         scaleLabel.setText(String.format(Locale.ROOT, "<html>%.4f px/mm · %s<br>classe %s mm</html>", s.originalPixelsPerMm, source, HistogramView.fmt(s.binWidthMm)));
     }
