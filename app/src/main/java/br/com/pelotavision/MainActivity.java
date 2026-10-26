@@ -515,7 +515,7 @@ public final class MainActivity extends ComponentActivity {
         back.setVisibility(photo?View.VISIBLE:View.GONE);back.setEnabled(!busy);
         open.setVisibility(photo?View.GONE:View.VISIBLE);open.setEnabled(!busy&&nativeReady);
         profileLabel.setEnabled(!busy&&mode==Mode.PHOTO);
-        adjust.setEnabled(!busy);torch.setEnabled(!busy&&!photo&&camera!=null&&camera.getCameraInfo().hasFlashUnit());
+        adjust.setEnabled(!busy);torch.setEnabled(!busy&&(photo||(camera!=null&&camera.getCameraInfo().hasFlashUnit())));torch.setText(photo?"Luz/ROI":torchOn?"Luz ✓":"Luz");
         calibration.setEnabled(!busy&&photoResult!=null&&mode==Mode.PHOTO);
         if(regionButton!=null){regionButton.setEnabled(!busy&&mode==Mode.PHOTO&&photoBitmap!=null);regionButton.setText(interestRegion==null?"Área":"Área ✓");}
         if(roiActions!=null){roiActions.setVisibility(photo?View.VISIBLE:View.GONE);segmentRoi.setEnabled(!busy&&mode==Mode.PHOTO&&photoBitmap!=null);searchRoi.setEnabled(segmentRoi.isEnabled());segmentRoi.setText(interestRegion==null?"Segmentar foto":"Segmentar ROI");searchRoi.setText(interestRegion==null?"Buscar melhor ajuste":"Buscar ajuste na ROI");}
