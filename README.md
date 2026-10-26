@@ -46,6 +46,12 @@ Análise de imagens de pelotas de minério de ferro: localização e ajuste elí
 
 Releases: `v0.14.0-build34` (APK) e `windows-v0.5.0-build33` (pacote portátil).
 
+## Novo na 0.15.0 (Android)
+
+- **Relatório PDF** (`_relatorio.pdf` em Downloads / PelotaVision), gerado a partir do mesmo JSON salvo: resumo (contagem, média, D10/D50/D90, escala, trincas, ROI), bloco de **iluminação e tratamento de imagem escura**, método e modelos, tabela de classes, limitações, imagem de resultado e mapa granulométrico. Falha no PDF não impede a gravação dos demais arquivos (`pdf_error` no JSON).
+- **Imagem escura**: inclui a visualização e a escolha manual do realce em "Luz" (PR #14) sobre a recuperação adaptativa de ROI da 0.14.2. O JSON ganha o bloco aditivo `low_light` (seleção automática/manual, modo, nível médio de cinza, contraste, saturação e escores heurísticos).
+- versionCode 20. Windows continua na 0.5.1, ainda sem PDF.
+
 ## Novo na 0.14.0 / Windows 0.5.0
 - **Histograma todas × trincadas:** série laranja sobreposta (mesmas classes e eixos), com modos absoluto, % do total e condicional. Sem classificação, o app mostra "classificação indisponível", nunca zero.
 - **Mapa granulométrico reescrito no núcleo:** colore só as elipses incluídas no histograma; opacidade 0–70% (padrão 25%), escala relativa ou fixa em mm, rótulos de diâmetro sem sobreposição, legenda contínua. Agora também no Windows e exportado como `_mapa.png`.

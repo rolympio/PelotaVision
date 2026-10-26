@@ -58,9 +58,16 @@ public class CrackExportTest {
   PelletDetector.Result pellets=new PelletDetector.Result(Arrays.asList(new PelletDetector.Detection(100,100,40,Math.PI*1600,1,false,false)),380,300,1,1,false);
   CrackAnalysis cracks=new CrackAnalysis(380,300,50,1,Arrays.asList(new CrackAnalysis.Entry(1,CrackAnalysis.Status.POSSIBLE,new float[]{80,85,120,85})));
   ResultSaver.SavedResult saved=ResultSaver.save(context,photo,source,"image/png",pellets,PelletDetector.Parameters.medium(),cracks,null);
-  // 0.14.0: original, resultado, mapa, granulometria, json, csv
-  assertEquals(6,provider.files.size());assertEquals(6,provider.published);assertTrue(new File(root,saved.base+"_mapa.png").isFile());
+  // 0.15.0: original, resultado, mapa, granulometria, json, csv, relatorio.pdf
   JSONObject json=new JSONObject(new String(Files.readAllBytes(new File(root,saved.base+".json").toPath()),java.nio.charset.StandardCharsets.UTF_8));
+  assertTrue("PDF nao gerado: "+json.optString("pdf_error"),json.has("pdf_file")&&!json.isNull("pdf_file"));
+  assertEquals(7,provider.files.size());assertEquals(7,provider.published);assertTrue(new File(root,saved.base+"_mapa.png").isFile());assertNotNull(saved.pdf);
+  byte[] pdf=Files.readAllBytes(new File(root,saved.base+"_relatorio.pdf").toPath());assertTrue(pdf.length>1000);
+  assertEquals("%PDF",new String(pdf,0,4,java.nio.charset.StandardCharsets.US_ASCII));
+  // resumo + imagem de resultado + mapa = ao menos 3 paginas
+  android.graphics.pdf.PdfRenderer renderer=new android.graphics.pdf.PdfRenderer(android.os.ParcelFileDescriptor.open(new File(root,saved.base+"_relatorio.pdf"),android.os.ParcelFileDescriptor.MODE_READ_ONLY));
+  try{assertTrue(renderer.getPageCount()>=3);}finally{renderer.close();}
+  assertTrue(json.isNull("low_light"));assertEquals("PelotaVision 0.15.0",json.getString("app"));
   assertEquals(2,json.getInt("report_schema_version"));assertEquals(saved.base+"_mapa.png",json.getJSONObject("granulometric_map").getString("file"));assertTrue(json.getJSONObject("crack_histogram").getBoolean("available"));
   assertTrue(json.isNull("physical_scale"));assertEquals("px",json.getJSONObject("histogram").getString("unit"));assertEquals(1,json.getJSONObject("cracks").getInt("possible_crack_pellets"));
   String grain=new String(Files.readAllBytes(new File(root,saved.base+"_granulometria.csv").toPath()),java.nio.charset.StandardCharsets.UTF_8);assertTrue(grain.contains("lower_px;upper_px"));assertFalse(grain.contains("lower_mm"));
@@ -68,6 +75,15 @@ public class CrackExportTest {
   Bitmap output=BitmapFactory.decodeFile(new File(root,saved.base+"_resultado.png").getAbsolutePath());assertNotNull(output);assertEquals(Color.rgb(255,72,83),output.getPixel(90,json.getInt("annotated_panel_top")+85));
   assertArrayEquals(Files.readAllBytes(source.toPath()),Files.readAllBytes(new File(root,saved.base+"_original.png").toPath()));
   output.recycle();photo.recycle();
+ }
+ @Test public void lowLightBlockRecordsSelectionModeAndIllumination()throws Exception {
+  {
+   LowLightPreprocessor.Quality q=new LowLightPreprocessor.Quality(20,5,.3,0);assertTrue(q.needsCorrection());
+   JSONObject j=LowLightInfo.manual(LowLightPreprocessor.Mode.RETINEX,q).toJson();
+   assertEquals("manual",j.getString("selection"));assertEquals("RETINEX",j.getString("mode"));assertTrue(j.getBoolean("enhanced"));
+   assertEquals(20,j.getJSONObject("illumination").getDouble("mean_gray"),1e-6);assertTrue(j.isNull("original_score"));
+   JSONObject n=LowLightInfo.notApplied(q,"x").toJson();assertFalse(n.getBoolean("enhanced"));assertEquals("not_applied",n.getString("selection"));
+  }
  }
  @SuppressWarnings({"rawtypes","unchecked"})
  @Test public void tappingPelletAndClassifyingChangesActualActivityCount()throws Exception {

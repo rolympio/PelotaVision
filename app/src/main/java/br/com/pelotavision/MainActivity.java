@@ -118,6 +118,7 @@ public final class MainActivity extends ComponentActivity {
     private boolean roiNeedsAnalysis;
     private boolean detailMode,detailCompare=true,detailSr;
     private DetailedAnalysis.Report photoDetailReport;
+    private LowLightInfo photoLowLight; // 0.15.0: tratamento de baixa iluminação usado na análise atual (relatório PDF/JSON)
     private LinearLayout roiActions;
     private Button segmentRoi,searchRoi;
     private File photoFile;
@@ -366,12 +367,15 @@ public final class MainActivity extends ComponentActivity {
             }else local=DetectionTuner.detect(gray,current,window);
             // Adaptive low-light proposals only on a user-selected ROI; original pixels remain
             // the sole source for final ellipse fitting and crack classification.
-            if(cached==null&&window.region!=null&&(selectedLowLightMode!=null||LowLightPreprocessor.assess(gray).needsCorrection())){
+            LowLightPreprocessor.Quality lightQuality=LowLightPreprocessor.assess(gray);
+            LowLightInfo lightInfo=LowLightInfo.notApplied(lightQuality,cached!=null?"result reused from suggestion search":window.region==null?"low-light recovery runs only on a selected ROI":"illumination adequate; original kept");
+            if(cached==null&&window.region!=null&&(selectedLowLightMode!=null||lightQuality.needsCorrection())){
                 DetectionAssessment.Context lowContext=new DetectionAssessment.Context(replacingCurrent?scaleSettings:null,sourceSize[0],sourceSize[1],null,minimumExpectedMm,window);
                 if(selectedLowLightMode==null){
                     LowLightRecovery.Result recovered=LowLightRecovery.analyze(gray,selected,window,lowContext);
-                    local=recovered.pellets;
-                }else if(selectedLowLightMode!=LowLightPreprocessor.Mode.ORIGINAL){
+                    local=recovered.pellets;lightInfo=LowLightInfo.automatic(recovered);
+                }else if(selectedLowLightMode==LowLightPreprocessor.Mode.ORIGINAL){lightInfo=LowLightInfo.manual(LowLightPreprocessor.Mode.ORIGINAL,lightQuality);
+                }else if(selectedLowLightMode!=LowLightPreprocessor.Mode.ORIGINAL){lightInfo=LowLightInfo.manual(selectedLowLightMode,lightQuality);
                     Mat enhanced=LowLightPreprocessor.apply(gray,selectedLowLightMode);
                     try {
                         PelletDetector.Result seeds=DetectionTuner.seeds(enhanced,selected,selected.parameters.workSide(1024),12);
@@ -381,7 +385,7 @@ public final class MainActivity extends ComponentActivity {
             }
             CrackAnalysis cracks=window.toGlobal(crackDetector().detect(gray,local,crackSensitivity));
             PelletDetector.Result result=window.toGlobal(local);Bitmap ready=bitmap;
-            final DetectionTuner.Report searchReport=suggestions;final DetectionTuner.Option selectedOption=selected;
+            final DetectionTuner.Report searchReport=suggestions;final DetectionTuner.Option selectedOption=selected;final LowLightInfo analyzedLight=lightInfo;
             runOnUiThread(()-> {
                 closeTuneProgress();
                 if(isDestroyed()||isFinishing()){ready.recycle();if(!replacingCurrent)file.delete();return;}
@@ -393,7 +397,7 @@ public final class MainActivity extends ComponentActivity {
                 releasePreviousPhoto();photoBitmap=ready;photoFile=file;photoMime=mime;photoResult=result;photoCracks=cracks;photoParameters=selectedOption.parameters;photoOption=selectedOption;photoSuggestions=searchReport;
                 photoAnalysisWindow=window;suggestionWindow=searchReport==null?null:window;roiNeedsAnalysis=false;
                 originalWidth=sourceSize[0];originalHeight=sourceSize[1];scaleSettings=previousScale;
-                photoAllResult=result;photoAllCracks=cracks;interestRegion=window.region;cropRoiReport=interestRegion!=null;
+                photoAllResult=result;photoAllCracks=cracks;photoLowLight=analyzedLight;interestRegion=window.region;cropRoiReport=interestRegion!=null;
                 frozen.setVisibility(View.VISIBLE);mode=Mode.PHOTO;applyRegion(interestRegion);
                 if(searchReport!=null)hint.setText((window.region==null?"Foto":"ROI")+": "+(searchReport.cancelled?"busca cancelada; aplicado o ajuste atual.":searchReport.weak()?"sugestão com pouca evidência; confira os contornos.":"ajuste sugerido aplicado. Toque em Sugestão para comparar.")+(minimumExpectedMm>0&&scaleSettings==null?" Calibre pela medida real para verificar "+HistogramView.number(minimumExpectedMm)+" mm.":""));
                 if(referenceInvalidated){hint.setText("O contorno da referência mudou. Toque novamente no objeto para calibrar.");toast("Referência alterada pela reanálise; escala removida.");}
@@ -446,7 +450,7 @@ public final class MainActivity extends ComponentActivity {
             DetailedAnalysis.Output analyzed=DetailedAnalysis.run(input.gray,input.geometry,selected,compare,upscaler,scaleSettings,source[0],source[1],minimumExpectedMm,crackDetector(),crackSensitivity,()->cancel.get()||isDestroyed(),(done,total,label)->runOnUiThread(()->updateTuneProgress(done,total,label)));
             final Bitmap displayed=ready;final DetailedAnalysis.Report detailedReport=analyzed.report.withSearch(report);final DetectionTuner.Option chosen=selected;
             runOnUiThread(()->{closeTuneProgress();if(isDestroyed()||isFinishing()){displayed.recycle();return;}if(cancel.get()){displayed.recycle();mode=Mode.PHOTO;applyRegion(interestRegion);hint.setText("Processamento cancelado; resultado anterior preservado.");return;}Granulometry.Settings previous=scaleSettings;boolean changed=previous!=null&&previous.selectedObject!=null&&!scope.keepsReference(previous.selectedObject,analyzed.result,source[0],source[1]);if(changed)previous=null;
-                photoFile=null;releasePreviousPhoto();photoBitmap=displayed;photoFile=file;photoMime=mime;originalWidth=source[0];originalHeight=source[1];scaleSettings=previous;photoAllResult=analyzed.result;photoAllCracks=analyzed.cracks;photoParameters=chosen.parameters;photoOption=chosen;photoSuggestions=null;suggestionWindow=null;photoAnalysisWindow=scope;photoDetailReport=detailedReport;detailMode=true;detailCompare=compare;detailSr=sr;interestRegion=scope.region;cropRoiReport=scope.region!=null;roiNeedsAnalysis=false;frozen.setVisibility(View.VISIBLE);mode=Mode.PHOTO;applyRegion(interestRegion);
+                photoFile=null;releasePreviousPhoto();photoBitmap=displayed;photoFile=file;photoMime=mime;originalWidth=source[0];originalHeight=source[1];scaleSettings=previous;photoAllResult=analyzed.result;photoAllCracks=analyzed.cracks;photoParameters=chosen.parameters;photoOption=chosen;photoSuggestions=null;suggestionWindow=null;photoAnalysisWindow=scope;photoDetailReport=detailedReport;photoLowLight=null;detailMode=true;detailCompare=compare;detailSr=sr;interestRegion=scope.region;cropRoiReport=scope.region!=null;roiNeedsAnalysis=false;frozen.setVisibility(View.VISIBLE);mode=Mode.PHOTO;applyRegion(interestRegion);
                 hint.setText(analyzed.report.summary()+". Toque em Detalhada para comparar. "+(changed?"O contorno da referência mudou; calibre novamente.":"Confira os contornos antes de salvar."));if(changed)toast("Referência alterada; escala removida.");
             });
         }catch(Exception|OutOfMemoryError e){if(ready!=null)ready.recycle();final String reason=e instanceof java.util.concurrent.CancellationException?"Processamento cancelado; resultado anterior preservado.":e instanceof IllegalArgumentException&&e.getMessage()!=null?e.getMessage():"Não foi possível concluir a análise detalhada. Reduza a ROI ou desative SR e tente novamente.";runOnUiThread(()->{if(!isDestroyed()){closeTuneProgress();mode=Mode.PHOTO;applyRegion(interestRegion);hint.setText(reason);toast(reason);}});
@@ -462,21 +466,25 @@ public final class MainActivity extends ComponentActivity {
         catch(OutOfMemoryError e){toast("Memória insuficiente para salvar. Feche outros aplicativos.");return;}
         File source=photoFile;String mime=photoMime;PelletDetector.Result result=photoResult;PelletDetector.Parameters cfg=photoParameters;
         Granulometry.Distribution exportedDistribution=distribution;CrackAnalysis exportedCracks=photoCracks;final ReportVisuals exportedVisuals=visuals;final CrackClassifierChoice.Resolution exportedChoice=crackResolution;final MobileNetCrackModel net=crackNetwork;final String exportedNetwork=net==null?null:net.id;
-        InterestRegion exportedRegion=interestRegion;int outside=regionExcludedCount();final boolean exportedCrop=cropRoiReport;final DetailedAnalysis.Report exportedDetail=photoDetailReport;
+        InterestRegion exportedRegion=interestRegion;int outside=regionExcludedCount();final boolean exportedCrop=cropRoiReport;final DetailedAnalysis.Report exportedDetail=photoDetailReport;final LowLightInfo exportedLight=photoLowLight;
         DetectionTuner.Report exportedSuggestions=rankedSuggestions();DetectionTuner.Option exportedOption=photoOption;
         setBusy(Mode.SAVING,"Salvando…");
         worker.execute(()-> {
             try {
-                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork);
+                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork,exportedLight);
                 runOnUiThread(()-> {if(!isDestroyed()){
-                    mode=Mode.PHOTO;updateControls();hint.setText("Histograma salvo no arquivo _resultado.png. Dados em Downloads / PelotaVision.");
+                    mode=Mode.PHOTO;updateControls();hint.setText(saved.pdf!=null?"Relatório PDF salvo em Downloads / PelotaVision.":"Histograma salvo no arquivo _resultado.png. Dados em Downloads / PelotaVision.");
                     new AlertDialog.Builder(this).setTitle("Resultado salvo")
-                        .setMessage("O relatório "+saved.base+"_resultado.png contém a imagem sem marcações, a imagem com elipses e possíveis trincas e o histograma (todas × trincadas). O mapa granulométrico com legenda fica em "+saved.base+"_mapa.png. Quando selecionada, a ROI é ampliada nos dois painéis. O arquivo _original preserva os bytes da entrada.")
-                        .setNegativeButton("Fechar",null).setPositiveButton("Abrir imagem",(d,w)->openSavedImage(saved.image)).show();
+                        .setMessage((saved.pdf!=null?"Relatório PDF: Downloads/PelotaVision/"+saved.base+"_relatorio.pdf (resumo, iluminação, modelos, classes e imagens).\n\n":"O PDF não pôde ser gerado; os demais arquivos foram salvos.\n\n")+"O relatório "+saved.base+"_resultado.png contém a imagem sem marcações, a imagem com elipses e possíveis trincas e o histograma (todas × trincadas). O mapa granulométrico com legenda fica em "+saved.base+"_mapa.png. Quando selecionada, a ROI é ampliada nos dois painéis. O arquivo _original preserva os bytes da entrada.")
+                        .setNegativeButton("Fechar",null).setNeutralButton("Abrir imagem",(d,w)->openSavedImage(saved.image)).setPositiveButton(saved.pdf!=null?"Abrir PDF":"OK",(d,w)->{if(saved.pdf!=null)openSavedPdf(saved.pdf);}).show();
                 }});
             } catch(Exception|OutOfMemoryError e) {runOnUiThread(()-> {if(!isDestroyed()){mode=Mode.PHOTO;updateControls();toast("Falha ao salvar: "+e.getMessage());}});}
             finally {copy.recycle();if(isDestroyed())source.delete();}
         });
+    }
+    private void openSavedPdf(Uri pdf) {
+        Intent intent=new Intent(Intent.ACTION_VIEW).setDataAndType(pdf,"application/pdf").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try{startActivity(intent);}catch(android.content.ActivityNotFoundException e){toast("Nenhum leitor de PDF instalado. O arquivo está em Downloads / PelotaVision.");}
     }
     private void openSavedImage(Uri image) {
         Intent intent=new Intent(Intent.ACTION_VIEW).setDataAndType(image,"image/png").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
