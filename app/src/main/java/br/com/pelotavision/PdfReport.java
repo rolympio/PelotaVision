@@ -28,21 +28,31 @@ final class PdfReport {
     static final int W=595,H=842,M=40;
     private static final int INK=Color.rgb(28,38,46),MUTED=Color.rgb(96,110,120),ACCENT=Color.rgb(0,122,135),RULE=Color.rgb(205,214,220),BAND=Color.rgb(238,243,245);
 
+    /** Destino das páginas: PdfDocument no aparelho; bitmaps nos testes (o Robolectric não implementa PdfDocument). */
+    interface Sink { Canvas begin(int number); void end(); }
+
     static byte[] render(JSONObject json,Bitmap annotated,Bitmap map) throws Exception {
-        PdfDocument doc=new PdfDocument();
+        final PdfDocument doc=new PdfDocument();
         try {
-            Writer w=new Writer(doc,json.optString("pdf_file",""));
-            header(w,json);
-            summary(w,json);
-            lowLight(w,json);
-            models(w,json);
-            bins(w,json);
-            notes(w,json);
-            w.finish();
-            if(annotated!=null)imagePage(doc,w,annotated,"Resultado da análise","Original sem marcações, elipses ajustadas, possíveis trincas e histograma (todas × trincadas).");
-            if(map!=null)imagePage(doc,w,map,"Mapa granulométrico","Cores pela classe de diâmetro equivalente; legenda na própria imagem.");
+            draw(new Sink(){PdfDocument.Page page;
+                public Canvas begin(int n){page=doc.startPage(new PdfDocument.PageInfo.Builder(W,H,n).create());return page.getCanvas();}
+                public void end(){doc.finishPage(page);page=null;}},json,annotated,map);
             ByteArrayOutputStream out=new ByteArrayOutputStream();doc.writeTo(out);return out.toByteArray();
         } finally {doc.close();}
+    }
+    /** Desenha todas as páginas no destino; devolve o número de páginas. */
+    static int draw(Sink sink,JSONObject json,Bitmap annotated,Bitmap map) throws Exception {
+        Writer w=new Writer(sink,json.optString("pdf_file",""));
+        header(w,json);
+        summary(w,json);
+        lowLight(w,json);
+        models(w,json);
+        bins(w,json);
+        notes(w,json);
+        w.finish();
+        if(annotated!=null)imagePage(sink,w,annotated,"Resultado da análise","Original sem marcações, elipses ajustadas, possíveis trincas e histograma (todas × trincadas).");
+        if(map!=null)imagePage(sink,w,map,"Mapa granulométrico","Cores pela classe de diâmetro equivalente; legenda na própria imagem.");
+        return w.pageNo;
     }
 
     // ---------- seções ----------
@@ -127,9 +137,8 @@ final class PdfReport {
         w.wrap("Distribuição por número de objetos visíveis em imagem 2D; não substitui peneiramento nem ensaio validado. Diâmetro equivalente da elipse = 2·√(a·b). Triagem de trincas pela superfície visível: \"sem indício\" não prova ausência de trinca. Modelos experimentais não foram validados com amostras reais de produção. O JSON e o CSV de mesmo nome contêm todos os valores por pelota.",8,MUTED);
     }
 
-    private static void imagePage(PdfDocument doc,Writer w,Bitmap image,String title,String caption) {
-        PdfDocument.Page page=doc.startPage(new PdfDocument.PageInfo.Builder(W,H,++w.pageNo).create());
-        Canvas c=page.getCanvas();
+    private static void imagePage(Sink sink,Writer w,Bitmap image,String title,String caption) {
+        Canvas c=sink.begin(++w.pageNo);
         Paint t=w.paint(14,true,INK);c.drawText(title,M,M+14,t);
         Paint cap=w.paint(9,false,MUTED);c.drawText(caption,M,M+30,cap);
         float top=M+42,maxW=W-2*M,maxH=H-top-M-16;
@@ -142,7 +151,7 @@ final class PdfReport {
         try{c.drawBitmap(draw,new Rect(0,0,draw.getWidth(),draw.getHeight()),new RectF(left,top,left+dw,top+dh),p);}
         finally{if(draw!=image)draw.recycle();}
         footer(c,w);
-        doc.finishPage(page);
+        sink.end();
     }
     private static void footer(Canvas c,Writer w) {
         Paint f=w.paint(7.5f,false,MUTED);
@@ -160,10 +169,10 @@ final class PdfReport {
 
     /** Cursor de texto com quebra automática de página. */
     private static final class Writer {
-        final PdfDocument doc;final String file;PdfDocument.Page page;Canvas canvas;float y;int pageNo;
-        Writer(PdfDocument doc,String file){this.doc=doc;this.file=file;newPage();}
-        void newPage(){if(page!=null){footer(canvas,this);doc.finishPage(page);}page=doc.startPage(new PdfDocument.PageInfo.Builder(W,H,++pageNo).create());canvas=page.getCanvas();y=M;}
-        void finish(){if(page!=null){footer(canvas,this);doc.finishPage(page);page=null;}}
+        final Sink sink;final String file;Canvas canvas;float y;int pageNo;
+        Writer(Sink sink,String file){this.sink=sink;this.file=file;newPage();}
+        void newPage(){if(canvas!=null){footer(canvas,this);sink.end();}canvas=sink.begin(++pageNo);y=M;}
+        void finish(){if(canvas!=null){footer(canvas,this);sink.end();canvas=null;}}
         void ensure(float h){if(y+h>H-M-20)newPage();}
         Paint paint(float size,boolean bold,int color){Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);p.setTextSize(size);p.setColor(color);p.setTypeface(bold?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);return p;}
         void line(String s,float size,boolean bold,int color){ensure(size+4);Paint p=paint(size,bold,color);canvas.drawText(s,M,y+size,p);y+=size+4;}
