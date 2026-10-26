@@ -1,12 +1,31 @@
-# PelotaVision — Android 0.13.0 · Windows 0.4.0
+# PelotaVision — Android 0.14.0 · Windows 0.5.0
+
+Análise de imagens de pelotas de minério de ferro: localização e ajuste elíptico, forma 2D b/a, granulometria por número, mapa granulométrico e triagem de possíveis trincas. Android (ARM64) e Windows 11 compartilham o mesmo núcleo em `core/`.
+
+**Estado:** protótipo de P&D. Nenhuma versão foi validada em fotos da usina com verdade-terreno nem testada em telefone físico; os números abaixo servem ao desenvolvimento, não à metrologia.
+
+Releases: `v0.14.0-build34` (APK) e `windows-v0.5.0-build33` (pacote portátil).
+
+## Novo na 0.14.0 / Windows 0.5.0
+- **Histograma todas × trincadas:** série laranja sobreposta (mesmas classes e eixos), com modos absoluto, % do total e condicional. Sem classificação, o app mostra "classificação indisponível", nunca zero.
+- **Mapa granulométrico reescrito no núcleo:** colore só as elipses incluídas no histograma; opacidade 0–70% (padrão 25%), escala relativa ou fixa em mm, rótulos de diâmetro sem sobreposição, legenda contínua. Agora também no Windows e exportado como `_mapa.png`.
+- **Seletor "Modelos de análise":** segmentação Clássica (Bordas/LoG) ou Neural (StarDist); classificador de trincas RF (padrão), **MobileNetV3-Small (experimental)** ou Comparação. Trocar o classificador refaz a triagem.
+- **MobileNetV3-Small:** treinada no CI, ONNX via OpenCV DNN. No único holdout real, AUC 0,96 contra 0,49 do RF, mas com 1 foto e 7 trincas. **O RF continua o padrão** até haver validação em fotos independentes.
+- **Exportação:** 6 arquivos por análise; JSON com `report_schema_version: 2` (campos só aditivos); CSV de granulometria ganha `count_cracked;percent_cracked_of_all` no fim.
+- **YOLO11-seg não implementado:** faltam máscaras com rótulo humano e a licença AGPL-3.0 exige revisão jurídica.
+
+Na `main` depois do build 34 (ainda sem novo número de versão): a câmera Android pede a maior resolução JPEG do sensor traseiro, modo de qualidade máxima e JPEG 95%, e mostra a resolução efetiva da última foto (toque no rótulo para detalhes). A prévia e a análise ao vivo continuam em 640×480.
+
+Detalhes, métricas, licenças e limitações: [`docs/redes-neurais-mapa-histograma.md`](docs/redes-neurais-mapa-histograma.md). Capturas: `verification/visuals-0.14.0/`.
 
 ## Integração 0.13.0
-Versão que reúne num único build o que estava em branches separados:
+Reuniu num único build:
 - Rede neural StarDist e cena Bancada/Correia (PR #1, antes 0.12.0);
 - Mapa granulométrico colorido, botão **Mapa** no Android (PR #7);
-- Correção da circularidade após escala anisotrópica e autoteste Windows mais rígido (PR #3).
+- Correção da circularidade após escala anisotrópica e autoteste Windows mais rígido (PR #3);
+- Importador de datasets externos com bloqueio de licença e pipeline de recortes de trincas (PR #6, sem alterar o modelo do app).
 
-Ficam de fora até validação: trincas sintéticas (PRs #2 e #4) e datasets externos (PR #6).
+Continuam fora da `main`: trincas sintéticas (PRs #2 e #4).
 
 ## Cena Bancada / Correia — novo na 0.12.0
 
@@ -94,7 +113,7 @@ A área de interesse passa a ser a **imagem ativa na tela e a entrada efetiva da
 
 ## Instalação
 
-Android 10 ou superior, ARM64. Extraia o ZIP de instalação e abra o APK. O pacote e o certificado de desenvolvimento continuam os mesmos, permitindo atualizar a 0.10.0. O projeto inclui também a compilação x86_64 para testes. Esta entrega não atualiza o iPhone.
+Android 10 ou superior, ARM64. Extraia o ZIP de instalação e abra o APK. O pacote e o certificado de desenvolvimento continuam os mesmos, permitindo atualizar instalações a partir da 0.11.0. O projeto inclui também a compilação x86_64 para testes. Esta entrega não atualiza o iPhone.
 
 ## Fluxo recomendado: correia, ROI e segmentação
 
@@ -127,11 +146,11 @@ A sugestão usa os mesmos métodos de bordas e LoG, com correção de iluminaç�
 | `app/` | Android. Compila `core/` junto (`sourceSets`), mantendo pacote, versão e assinatura. |
 | `desktop/` | Windows 11 (Java Swing + OpenCV oficial 4.12.0 x64), webcam e arquivos. Build independente: `gradlew -p desktop test jar -PopencvJava=C:/opencv/build/java`. |
 
-Workflows: `android.yml` (APK assinado) e `windows.yml` (pacote portátil .zip, testes do núcleo com OpenCV nativo e autoteste do pacote montado). Releases publicadas por *Run workflow* com "publicar" marcado.
+Workflows principais: `android.yml` (APK assinado) e `windows.yml` (pacote portátil .zip, testes do núcleo com OpenCV nativo e autoteste do pacote montado). Releases publicadas por *Run workflow* com "publicar" marcado. Auxiliares: `stardist-train.yml` e `mobilenet-cracks.yml` (treino no CI), `crack-pipeline.yml`, `visual-captures.yml` (capturas de tela) e `import-external-pellets.yml` (importação manual com revisão de licença).
 
-## Pipeline experimental de trincas (não altera o app)
+## Pipeline experimental de trincas
 
-`tools/cracks/` e `tools/train_cracks.py` fazem recorte por pelota, manifesto com rótulos `cracked`/`intact`/`uncertain`, sintéticos apenas no treino, validação agrupada por foto e comparação com o RF embarcado, com paridade PVF1 Python × `CrackModel.java`. A auditoria de fontes externas está em `docs/datasets/fontes.json`. Todas estão bloqueadas, e o importador recusa fontes não verificadas. Os resultados de 25/10/2026 estão em `verification/cracks-benchmark-20261025/RELATORIO.md`. O RF 0.5.0 continua no app: nenhum candidato demonstrou melhoria em fotos reais independentes. Testes: `python -m pytest tools/tests -q`.
+`tools/cracks/` e `tools/train_cracks.py` fazem recorte por pelota, manifesto com rótulos `cracked`/`intact`/`uncertain`, sintéticos apenas no treino, validação agrupada por foto e comparação com o RF embarcado, com paridade PVF1 Python × `CrackModel.java`. A auditoria de fontes externas está em `docs/datasets/fontes.json`. Todas estão bloqueadas, e o importador recusa fontes não verificadas. Os resultados de 25/10/2026 estão em `verification/cracks-benchmark-20261025/RELATORIO.md`. O RF 0.5.0 continua o classificador padrão do app. Desde a 0.14.0, a MobileNetV3-Small (`tools/cracks/train_mobilenet.py`, workflow `mobilenet-cracks.yml`) está disponível como opção experimental; nenhum candidato demonstrou melhoria em fotos reais independentes. Testes: `python -m pytest tools/tests -q`.
 
 ## Projeto e compilação
 
@@ -203,7 +222,7 @@ Objetos sem ajuste confiável retêm a estimativa anterior de localização/áre
 
 ## Método e limites
 
-O detector anterior localiza candidatos com gradientes/Hough e CLAHE, com alternativa LoG. Para cenas esparsas, contornos de objetos isolados ajudam quando pelotas alongadas não geram candidatos circulares. Ao redor de cada candidato, o ajuste busca gradientes de borda em 96 direções, seleciona observações na vizinhança esperada e usa ajuste robusto de elipse com amostragem determinística, refinamento e gates de cobertura, resíduo e coerência de polaridade. Não é segmentação neural, não corrige perspectiva e não garante contorno correto em pelotas sobrepostas. Propostas circulares internas são apenas sementes de localização; a elipse final é medida a partir de bordas observadas.
+O detector anterior localiza candidatos com gradientes/Hough e CLAHE, com alternativa LoG. Para cenas esparsas, contornos de objetos isolados ajudam quando pelotas alongadas não geram candidatos circulares. Ao redor de cada candidato, o ajuste busca gradientes de borda em 96 direções, seleciona observações na vizinhança esperada e usa ajuste robusto de elipse com amostragem determinística, refinamento e gates de cobertura, resíduo e coerência de polaridade. Este método clássico não é segmentação neural (a opção neural é o StarDist, acima), não corrige perspectiva e não garante contorno correto em pelotas sobrepostas. Propostas circulares internas são apenas sementes de localização; a elipse final é medida a partir de bordas observadas.
 
 Os gates incluem cobertura ≥55% das direções, pelo menos sete dos oito setores, resíduo normalizado RMS ≤0,055 e ≥70% de coerência de polaridade entre bordas usadas. São parâmetros experimentais, não uma probabilidade de acerto. Elipses muito alongadas, fora da faixa inicial, ou sem borda suficiente podem ficar inconclusivas.
 
@@ -211,7 +230,7 @@ O modelo de trincas usa o mesmo recorte circular de referência da versão 0.5.0
 
 ## Saída e dados
 
-O PNG conserva a sequência: original sem marcações → imagem com elipses/trincas/ROI → resumo com média b/a e n → histograma. O arquivo original separado permanece inalterado. CSV e JSON preservam os campos anteriores e acrescentam eixos maior/menor, orientação, b/a, validade do ajuste, inclusão na média, eixos em mm e indicadores de ajuste. Valores de forma sem ajuste são vazios/null, não 1.
+O PNG conserva a sequência: original sem marcações → imagem com elipses/trincas/ROI → resumo com média b/a e n → histograma (desde a 0.14.0, com a série de trincadas). O mapa granulométrico sai em `_mapa.png`, separado. O arquivo original separado permanece inalterado. CSV e JSON preservam os campos anteriores e acrescentam eixos maior/menor, orientação, b/a, validade do ajuste, inclusão na média, eixos em mm e indicadores de ajuste. Valores de forma sem ajuste são vazios/null, não 1.
 
 O JSON `shape_analysis` registra fórmula, média, população, exclusões e `true_3d_sphericity:false`. O campo `radius_px` é o raio equivalente à área; não é o semieixo maior. `ellipse_major_axis_px` e `ellipse_minor_axis_px` são diâmetros completos. A orientação é a do semieixo maior em graus [0,180), a partir do eixo x da foto, no sentido horário em coordenadas com y crescente para baixo. A circularidade `roundness` de elipses ajustadas é derivada do perímetro aproximado da elipse, não do perímetro real segmentado.
 

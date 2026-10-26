@@ -1,6 +1,6 @@
 # PelotaVision 0.14.0 (Android) / 0.5.0 (Windows) — redes neurais, mapa granulométrico e histograma de trincadas
 
-Branch `feature/redes-neurais-mapa-histograma`, criada sobre `integracao/0.13.0` (PR #8) + `feature/external-pellet-datasets` (PR #6). Nada foi mesclado na `main`.
+Branch `feature/redes-neurais-mapa-histograma`, criada sobre `integracao/0.13.0` (PR #8) + `feature/external-pellet-datasets` (PR #6). Incorporada à `main` em 25/10/2026 (release `v0.14.0-build34` / `windows-v0.5.0-build33`).
 
 ## 1. Auditoria: o que já existia e o que faltava (25/10/2026)
 
