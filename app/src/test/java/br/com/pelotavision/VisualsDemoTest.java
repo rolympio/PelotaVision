@@ -125,7 +125,7 @@ public class VisualsDemoTest {
             ObjectCalibrationTest.call(a, "showMapOptions", new Class[]{});
             AlertDialog map = ObjectCalibrationTest.dialog();
             android.widget.SeekBar opacity = ObjectCalibrationTest.tag(map, "map_opacity");
-            assertEquals(70, opacity.getMax());
+            assertEquals(90, opacity.getMax());
             assertEquals(25, opacity.getProgress());
             dialogShot(map, new File(dir, "Tela_5_opcoes_do_mapa.png"));
             map.dismiss();

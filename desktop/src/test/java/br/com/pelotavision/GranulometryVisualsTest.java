@@ -243,9 +243,10 @@ public class GranulometryVisualsTest {
 
     // 0.15.1: escala relativa robusta D10–D90 com muitas pelotas; extremos saturam nas cores das pontas
     @Test public void manyPelletsUseRobustRelativeScale() {
-        List<Granulometry.Item> l = new ArrayList<>();
-        for (int i = 0; i < 100; i++) l.add(new Granulometry.Item(12 + (i % 9), false, false));
-        l.add(new Granulometry.Item(3, false, false)); l.add(new Granulometry.Item(40, false, false));
+        double[] mm = new double[102];
+        for (int i = 0; i < 100; i++) mm[i] = 12 + (i % 9);
+        mm[100] = 3; mm[101] = 40;
+        List<Granulometry.Item> l = items(mm);
         Granulometry.Distribution d = dist(l, 1, true, false);
         GranulometryColorScale s = GranulometryColorScale.relative(d);
         assertEquals("d10_d90", s.basis);
