@@ -105,8 +105,8 @@ public class CrackExportTest {
   InterestRegion roi=new InterestRegion(InterestRegion.Shape.RECTANGLE,60,50,300,250);AnalysisWindow window=new AnalysisWindow(380,300,roi);
   byte[] gray=new byte[window.width*window.height];Arrays.fill(gray,(byte)200);Bitmap filtered=FilteredPhoto.compose(photo,gray,window);
   PelletDetector.Result pellets=new PelletDetector.Result(Arrays.asList(new PelletDetector.Detection(180,150,40,Math.PI*1600,1,false,false)),380,300,1,1,false,"test+active_roi_crop_v1");
-  LowLightInfo light=LowLightInfo.manual(LowLightPreprocessor.Mode.DENOISE_CLAHE,new LowLightPreprocessor.Quality(40,15,.12,0));
-  ResultSaver.SavedResult saved=ResultSaver.save(context,photo,source,"image/png",pellets,PelletDetector.Parameters.medium(),null,null,roi,0,null,null,true,null,ReportVisuals.defaults(),null,null,light,filtered);
+  LowLightInfo lowLight=LowLightInfo.manual(LowLightPreprocessor.Mode.DENOISE_CLAHE,new LowLightPreprocessor.Quality(40,15,.12,0));
+  ResultSaver.SavedResult saved=ResultSaver.save(context,photo,source,"image/png",pellets,PelletDetector.Parameters.medium(),null,null,roi,0,null,null,true,null,ReportVisuals.defaults(),null,null,lowLight,filtered);
   JSONObject json=new JSONObject(new String(Files.readAllBytes(new File(root,saved.base+".json").toPath()),java.nio.charset.StandardCharsets.UTF_8));
   JSONObject images=json.getJSONObject("report_images");
   assertEquals(saved.base+"_filtrada.png",images.getString("filtered_file"));assertEquals("filtered",images.getString("segmented_base"));assertEquals("filtered",images.getString("map_base"));
