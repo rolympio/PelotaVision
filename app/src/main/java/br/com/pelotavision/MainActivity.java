@@ -70,6 +70,7 @@ public final class MainActivity extends ComponentActivity {
     private volatile int detectionMethod=DetectionTuner.GRADIENT;
     /** Cena: bancada (padrão) ou correia (pelotas pequenas e numerosas). */
     private volatile boolean beltScene=false;
+    private volatile LowLightPreprocessor.Mode selectedLowLightMode=null; // null = automatic
     private int method(){return detectionMethod==DetectionTuner.NEURAL&&!NeuralPelletDetector.available(beltScene)?DetectionTuner.GRADIENT:detectionMethod;}
     private volatile PelletDetector.Parameters parameters=PelletDetector.Parameters.automatic();
     private volatile Mode mode=Mode.LIVE;
@@ -219,7 +220,7 @@ public final class MainActivity extends ComponentActivity {
         CheckBox numberBox=new CheckBox(this);numberBox.setText("Números");numberBox.setTextSize(11);numberBox.setTextColor(Color.WHITE);numberBox.setChecked(true);
         numberBox.setOnCheckedChangeListener((button,checked)-> {numbers=checked;if(mode==Mode.PHOTO&&photoResult!=null)overlay.display(photoResult,numbers);else if(mode==Mode.LIVE&&lastLiveResult!=null)overlay.display(lastLiveResult,numbers);});tools.addView(numberBox);
         Button mapBtn=button("Seg.",false);mapBtn.setTag("view_mode");mapBtn.setTextSize(11);mapBtn.setOnClickListener(v->toggleColorMap());mapBtn.setOnLongClickListener(v->{showMapOptions();return true;});mapButton=mapBtn;tools.addView(mapBtn,new LinearLayout.LayoutParams(dp(64),dp(40)));
-        torch=button("Luz",false);torch.setTextSize(11);torch.setOnClickListener(v->toggleTorch());tools.addView(torch,new LinearLayout.LayoutParams(dp(58),dp(40)));
+        torch=button("Luz",false);torch.setTextSize(11);torch.setOnClickListener(v->{if(mode==Mode.PHOTO)showLowLightDialog();else toggleTorch();});tools.addView(torch,new LinearLayout.LayoutParams(dp(58),dp(40)));
         adjust=button("Ajustes",false);adjust.setTextSize(11);adjust.setOnClickListener(v->showAdjustments());tools.addView(adjust,new LinearLayout.LayoutParams(dp(77),dp(40)));
         cameraResolutionLabel=text("Câmera: verificando resolução…",11,Color.rgb(151,174,187));
         cameraResolutionLabel.setOnClickListener(v->showCameraSettings());root.addView(cameraResolutionLabel);
@@ -365,10 +366,18 @@ public final class MainActivity extends ComponentActivity {
             }else local=DetectionTuner.detect(gray,current,window);
             // Adaptive low-light proposals only on a user-selected ROI; original pixels remain
             // the sole source for final ellipse fitting and crack classification.
-            if(cached==null&&window.region!=null&&LowLightPreprocessor.assess(gray).needsCorrection()){
+            if(cached==null&&window.region!=null&&(selectedLowLightMode!=null||LowLightPreprocessor.assess(gray).needsCorrection())){
                 DetectionAssessment.Context lowContext=new DetectionAssessment.Context(replacingCurrent?scaleSettings:null,sourceSize[0],sourceSize[1],null,minimumExpectedMm,window);
-                LowLightRecovery.Result recovered=LowLightRecovery.analyze(gray,selected,window,lowContext);
-                local=recovered.pellets;
+                if(selectedLowLightMode==null){
+                    LowLightRecovery.Result recovered=LowLightRecovery.analyze(gray,selected,window,lowContext);
+                    local=recovered.pellets;
+                }else if(selectedLowLightMode!=LowLightPreprocessor.Mode.ORIGINAL){
+                    Mat enhanced=LowLightPreprocessor.apply(gray,selectedLowLightMode);
+                    try {
+                        PelletDetector.Result seeds=DetectionTuner.seeds(enhanced,selected,selected.parameters.workSide(1024),12);
+                        local=window.filterLocal(new EllipseFitter().refine(gray,seeds,selected.belt));
+                    } finally {enhanced.release();}
+                }
             }
             CrackAnalysis cracks=window.toGlobal(crackDetector().detect(gray,local,crackSensitivity));
             PelletDetector.Result result=window.toGlobal(local);Bitmap ready=bitmap;
@@ -512,6 +521,45 @@ public final class MainActivity extends ComponentActivity {
         if(roiActions!=null){roiActions.setVisibility(photo?View.VISIBLE:View.GONE);segmentRoi.setEnabled(!busy&&mode==Mode.PHOTO&&photoBitmap!=null);searchRoi.setEnabled(segmentRoi.isEnabled());segmentRoi.setText(interestRegion==null?"Segmentar foto":"Segmentar ROI");searchRoi.setText(interestRegion==null?"Buscar melhor ajuste":"Buscar ajuste na ROI");}
         if(mode==Mode.PHOTO)badge.setText(interestRegion==null?"FOTO":"ROI");
     }
+    /** Preview is illustrative: only the selected ROI is used for final segmentation. */
+    private void showLowLightDialog() {
+        if(photoBitmap==null){toast("Abra uma fotografia primeiro.");return;}
+        final LowLightPreprocessor.Mode[] modes=LowLightPreprocessor.Mode.values();
+        final String[] names={"Original (sem filtro)","Gamma + CLAHE","Redução de ruído + CLAHE","Retinex"};
+        final String[] choices={"Automático","Original (sem filtro)","Gamma + CLAHE","Redução de ruído + CLAHE","Retinex"};
+        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(12),dp(8),dp(12),dp(8));
+        TextView info=text("Prévia de iluminação. A segmentação usa a ROI selecionada e refina as medidas na imagem original.",13,Color.DKGRAY);body.addView(info);
+        ImageView previewImage=new ImageView(this);previewImage.setAdjustViewBounds(true);body.addView(previewImage,new LinearLayout.LayoutParams(-1,dp(300)));
+        final int[] choice={selectedLowLightMode==null?0:selectedLowLightMode.ordinal()+1};
+        android.widget.Spinner spinner=new android.widget.Spinner(this);
+        android.widget.ArrayAdapter<String> adapter=new android.widget.ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,choices);
+        spinner.setAdapter(adapter);spinner.setSelection(choice[0]);body.addView(spinner);
+        final Runnable render=()->{
+            Bitmap previewBitmap=Bitmap.createScaledBitmap(photoBitmap,Math.min(900,photoBitmap.getWidth()),Math.max(1,(int)(photoBitmap.getHeight()*Math.min(900,photoBitmap.getWidth())/(double)photoBitmap.getWidth())),true);
+            Mat source=new Mat(),out=null;
+            try {
+                org.opencv.android.Utils.bitmapToMat(previewBitmap,source);
+                int index=spinner.getSelectedItemPosition();
+                out=LowLightPreprocessor.apply(source,index<=1?LowLightPreprocessor.Mode.ORIGINAL:modes[index-1]);
+                Bitmap shown=Bitmap.createBitmap(out.cols(),out.rows(),Bitmap.Config.ARGB_8888);
+                org.opencv.android.Utils.matToBitmap(out,shown);
+                previewImage.setImageBitmap(shown);
+            }catch(Exception ex){toast("Não foi possível gerar a prévia.");}
+            finally {source.release();if(out!=null)out.release();previewBitmap.recycle();}
+        };
+        spinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){choice[0]=pos;render.run();}
+            public void onNothingSelected(android.widget.AdapterView<?> p){}
+        });
+        new AlertDialog.Builder(this).setTitle("Recuperação de imagem escura").setView(body)
+          .setNegativeButton("Cancelar",(d,w)->{})
+          .setPositiveButton("Aplicar e analisar",(d,w)->{
+              if(interestRegion==null){toast("Selecione primeiro uma ROI em Área.");return;}
+              selectedLowLightMode=choice[0]==0?null:modes[choice[0]-1];
+              startActiveAnalysis(false);
+          }).show();
+    }
+
     private void toggleTorch() {
         if(camera==null||!camera.getCameraInfo().hasFlashUnit())return;
         torchOn=!torchOn;camera.getCameraControl().enableTorch(torchOn);torch.setText(torchOn?"Luz ✓":"Luz");
