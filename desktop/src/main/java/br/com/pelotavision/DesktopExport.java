@@ -208,7 +208,7 @@ final class DesktopExport {
                 String.format(Locale.ROOT, "Esfericidade aparente 2D (b/a): %s · n=%d", Double.isFinite(shape.mean) ? String.format(Locale.ROOT, "%.3f", shape.mean) : "—", shape.included),
                 "Excluidas da forma: " + shape.excluded + " · media por numero · nao mede esfericidade 3D",
                 "Vermelho: possivel trinca · amarelo: revisao · tracejado: forma sem ajuste",
-                s.region() == null ? "Sem indicacao nao garante ausencia de trinca." : "ROI ativa · somente recorte analisado · exige revisao",
+                s.region() == null ? "Sem indicacao nao garante ausencia de trinca." : result.method.contains("detail_original_tiles_v1") ? "ROI detalhada · medidas na original · exige revisao" : "ROI ativa · somente recorte analisado · exige revisao",
                 scaleLine1(d), scaleLine2(d, v)};
         float[] offsets = {50, 65, 79, 93, 108, 123, 138};
         for (int i = 0; i < lines.length; i++) g.drawString(lines[i], 12 * sc, y + offsets[i] * sc);
@@ -333,8 +333,16 @@ final class DesktopExport {
         json.put("detection_suggestion", ReportJson.suggestionJson(s.rankedSuggestions(), out.applied));
         json.put("neural_model", ReportJson.neuralModelJson(out.applied));
         json.put("scene", ReportJson.sceneJson(out.applied));
-        json.put("processing_scope", ReportJson.processingScopeJson(out.window));
-        json.put("detailed_analysis", JSONObject.NULL);
+        JSONObject processing = ReportJson.processingScopeJson(out.window);
+        DetailedAnalysis.Report detailed = out.detailed;
+        if (detailed != null) { // 0.5.2: mesmos campos do Android (ResultSaver)
+            processing.put("input_width", detailed.geometry.width); processing.put("input_height", detailed.geometry.height);
+            processing.put("crop_resizes_input", detailed.geometry.sample > 1);
+            processing.put("coordinate_mapping", "detailed_analysis.local_to_preview; detections retain preview coordinates");
+            processing.put("outside_roi_original_pixels_analyzed", region == null);
+        }
+        json.put("processing_scope", processing);
+        json.put("detailed_analysis", ReportJson.detailJson(detailed));
         json.put("method", result.method);
         json.put("shape_analysis", ReportJson.shapeJson(result));
         json.put("count", result.circles.size());

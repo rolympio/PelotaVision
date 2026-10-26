@@ -26,6 +26,8 @@ final class DesktopAnalysis {
         Granulometry.Settings scale; // escala vigente (entra no contexto da busca, como no Android)
         CrackClassifierChoice crackChoice = CrackClassifierChoice.RANDOM_FOREST; // Modelos de analise
         ReportVisuals visuals = HistogramView.DEFAULTS; // mapa e grafico (gravados no relatorio)
+        /** 0.5.2: realce de imagem escura escolhido em "Luz / imagem escura…"; null = automático (como no Android). */
+        LowLightPreprocessor.Mode lowLightMode;
 
         /** O metodo neural so vale com o modelo instalado; sem ele, volta para bordas. */
         int effectiveMethod() { return method == DetectionTuner.NEURAL && !NeuralPelletDetector.available(belt) ? DetectionTuner.GRADIENT : method; }
@@ -45,6 +47,8 @@ final class DesktopAnalysis {
         final LowLightInfo lowLight;
         /** 0.5.2: janela analisada já filtrada (window.width × window.height, 8 bits), só com realce; senão null. */
         final byte[] filteredGray;
+        /** 0.5.2: relatório da segmentação detalhada (blocos nos pixels originais), ou null na análise rápida. */
+        final DetailedAnalysis.Report detailed;
 
         Output(PelletDetector.Result result, CrackAnalysis cracks, DetectionTuner.Option applied, DetectionTuner.Report suggestions,
                AnalysisWindow window, int ow, int oh, int sample, long ms, String note) {
@@ -52,13 +56,18 @@ final class DesktopAnalysis {
         }
         Output(PelletDetector.Result result, CrackAnalysis cracks, DetectionTuner.Option applied, DetectionTuner.Report suggestions,
                AnalysisWindow window, int ow, int oh, int sample, long ms, String note, LowLightInfo lowLight, byte[] filteredGray) {
+            this(result, cracks, applied, suggestions, window, ow, oh, sample, ms, note, lowLight, filteredGray, null);
+        }
+        Output(PelletDetector.Result result, CrackAnalysis cracks, DetectionTuner.Option applied, DetectionTuner.Report suggestions,
+               AnalysisWindow window, int ow, int oh, int sample, long ms, String note, LowLightInfo lowLight, byte[] filteredGray, DetailedAnalysis.Report detailed) {
+            this.detailed = detailed;
             this.result = result; this.cracks = cracks; this.applied = applied; this.suggestions = suggestions; this.window = window;
             originalWidth = ow; originalHeight = oh; this.sample = sample; durationMs = ms; crackModelNote = note;
             this.lowLight = lowLight; this.filteredGray = lowLight != null && lowLight.enhanced() ? filteredGray : null;
         }
 
         Output withSuggestions(DetectionTuner.Report report) {
-            return new Output(result, cracks, applied, report, window, originalWidth, originalHeight, sample, durationMs, crackModelNote, lowLight, filteredGray);
+            return new Output(result, cracks, applied, report, window, originalWidth, originalHeight, sample, durationMs, crackModelNote, lowLight, filteredGray, detailed);
         }
     }
 
@@ -147,11 +156,25 @@ final class DesktopAnalysis {
             }
             LowLightPreprocessor.Quality quality = LowLightPreprocessor.assess(gray);
             LowLightInfo light = LowLightInfo.notApplied(quality, region == null ? "low-light recovery runs only on a selected ROI" : "illumination adequate; original kept");
-            if (region != null && quality.needsCorrection()) {
-                DetectionAssessment.Context lowContext = new DetectionAssessment.Context(cfg.scale, ow, oh, null, cfg.minimumExpectedMm, window);
-                LowLightRecovery.Result recovered = LowLightRecovery.analyze(gray, selected, window, lowContext);
-                local = recovered.pellets;
-                light = LowLightInfo.automatic(recovered);
+            // Igual ao Android: só numa ROI; automático quando a imagem precisa, ou a escolha manual do usuário.
+            if (region != null && (cfg.lowLightMode != null || quality.needsCorrection())) {
+                if (cfg.lowLightMode == null) {
+                    DetectionAssessment.Context lowContext = new DetectionAssessment.Context(cfg.scale, ow, oh, null, cfg.minimumExpectedMm, window);
+                    LowLightRecovery.Result recovered = LowLightRecovery.analyze(gray, selected, window, lowContext);
+                    local = recovered.pellets;
+                    light = LowLightInfo.automatic(recovered);
+                } else if (cfg.lowLightMode == LowLightPreprocessor.Mode.ORIGINAL) {
+                    light = LowLightInfo.manual(LowLightPreprocessor.Mode.ORIGINAL, quality);
+                } else {
+                    light = LowLightInfo.manual(cfg.lowLightMode, quality);
+                    Mat enhanced = LowLightPreprocessor.apply(gray, cfg.lowLightMode);
+                    try {
+                        PelletDetector.Result seeds = DetectionTuner.seeds(enhanced, selected, selected.parameters.workSide(1024), 12);
+                        local = window.filterLocal(new EllipseFitter().refine(gray, seeds, selected.belt));
+                    } finally {
+                        enhanced.release();
+                    }
+                }
             }
             CrackAnalysis cracks = window.toGlobal(crackDetector(cfg.crackChoice).detect(gray, local, cfg.crackSensitivity));
             PelletDetector.Result result = window.toGlobal(local);

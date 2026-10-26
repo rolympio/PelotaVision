@@ -126,7 +126,7 @@ jobs:
           set +e
           JP_OUT=$("$JH/bin/jpackage" --type app-image --name PelotaVision --app-version "$VN" \
             --input "$IN" --main-jar pelotavision-desktop.jar --main-class br.com.pelotavision.DesktopApp \
-            --java-options "-Xmx3g" --vendor "PelotaVision" --description "PelotaVision Windows $VN (nucleo Android 0.13.0)" \
+            --java-options "-Xmx3g" --vendor "PelotaVision" --description "PelotaVision Windows $VN (nucleo Android 0.15.2)" \
             --dest pkg/dist 2>&1); JP_RC=$?
           set -e
           echo "$JP_OUT"
@@ -168,7 +168,7 @@ jobs:
           TAG="windows-v${PV_DESKTOP_VERSION}-build${GITHUB_RUN_NUMBER}"
           SHORT=$(echo "$GITHUB_SHA" | cut -c1-7)
           {
-            echo "PelotaVision Windows ${PV_DESKTOP_VERSION} - nucleo de analise do Android 0.14.0 - commit ${SHORT}."
+            echo "PelotaVision Windows ${PV_DESKTOP_VERSION} - nucleo de analise do Android 0.15.2 - commit ${SHORT}."
             echo
             echo "**Como usar:** baixe \`${PV_ZIP}\`, extraia para uma pasta (ex.: Documentos\\PelotaVision) e abra \`PelotaVision.exe\`. Nao precisa instalar nem de administrador."
             echo
