@@ -76,6 +76,25 @@ public class ManualCapturesTest {
         d.dismiss();
     }
 
+    /** A prévia é a ImageView alta (300 dp), não o ícone do título do diálogo. */
+    static android.widget.ImageView previewImage(View v) {
+        if (v instanceof android.widget.ImageView && v.getLayoutParams() != null && v.getLayoutParams().height > 200) return (android.widget.ImageView) v;
+        if (v instanceof android.view.ViewGroup) {
+            android.view.ViewGroup g = (android.view.ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) { android.widget.ImageView t = previewImage(g.getChildAt(i)); if (t != null) return t; }
+        }
+        return null;
+    }
+
+    static <T> T find(View v, Class<T> type) {
+        if (type.isInstance(v)) return type.cast(v);
+        if (v instanceof android.view.ViewGroup) {
+            android.view.ViewGroup g = (android.view.ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) { T t = find(g.getChildAt(i), type); if (t != null) return t; }
+        }
+        return null;
+    }
+
     private static void load(MainActivity a, Bitmap photo, PelletDetector.Result all, CrackAnalysis cracks) throws Exception {
         ObjectCalibrationTest.setup(a);
         Bitmap dummy = (Bitmap) ObjectCalibrationTest.get(a, "photoBitmap");
@@ -173,7 +192,19 @@ public class ManualCapturesTest {
             });
             shot("16_zoom_da_area", () -> { ObjectCalibrationTest.call(a, "showRoiZoom", new Class[]{InterestRegion.class}, roi); dialog("16_zoom_da_area", true); });
             shot("17_como_segmentar", () -> { ObjectCalibrationTest.call(a, "showSegmentationOptions", new Class[]{}); dialog("17_como_segmentar", false); });
-            shot("18_luz_imagem_escura", () -> { ObjectCalibrationTest.call(a, "showLowLightDialog", new Class[]{}); dialog("18_luz_imagem_escura", false); });
+            shot("18_luz_imagem_escura", () -> {
+                ObjectCalibrationTest.call(a, "showLowLightDialog", new Class[]{});
+                // O Robolectric não tem a biblioteca nativa do OpenCV: a prévia usa a saída real do mesmo filtro
+                // (Redução de ruído + CLAHE, OpenCV) gravada como fixture pelo roteiro do manual.
+                Dialog d = ShadowDialog.getLatestDialog();
+                android.widget.Spinner spinner = find(d.getWindow().getDecorView(), android.widget.Spinner.class);
+                if (spinner != null) spinner.setSelection(3);
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+                File preview = new File(root, "manual-0.15.2/fixtures/crack_example_previa_ruido_clahe.png");
+                android.widget.ImageView image = previewImage(d.getWindow().getDecorView());
+                if (image != null && preview.isFile()) image.setImageBitmap(BitmapFactory.decodeFile(preview.toString()));
+                dialog("18_luz_imagem_escura", false);
+            });
         }
 
         // Correia: foto real com 404 pelotas, calibração pela largura e mapa.

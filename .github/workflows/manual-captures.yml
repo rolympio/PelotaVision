@@ -83,7 +83,7 @@ jobs:
           set +e
           java -Xmx3g -Djava.library.path=desktop/opencv-java/x64 -Dpelotavision.modelDir=app/src/main/assets \
             -cp "desktop/build/libs/pelotavision-desktop.jar;desktop/build/runtime-libs/*" br.com.pelotavision.DesktopApp \
-            --capturas verification/fixtures/1000411645.jpg verification/manual-0.15.2/windows
+            --capturas verification/fixtures/crack_example.png verification/manual-0.15.2/windows
           echo "saida=$?"
           cat verification/manual-0.15.2/windows/capturas.txt || true
           rm -rf verification/manual-0.15.2/windows/saida

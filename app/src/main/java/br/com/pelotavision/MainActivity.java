@@ -545,7 +545,7 @@ public final class MainActivity extends ComponentActivity {
         final String[] names={"Original (sem filtro)","Gamma + CLAHE","Redução de ruído + CLAHE","Retinex"};
         final String[] choices={"Automático","Original (sem filtro)","Gamma + CLAHE","Redução de ruído + CLAHE","Retinex"};
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(12),dp(8),dp(12),dp(8));
-        TextView info=text("Prévia de iluminação. A segmentação usa a ROI selecionada e refina as medidas na imagem original.",13,Color.DKGRAY);body.addView(info);
+        TextView info=text("Prévia de iluminação. A segmentação usa a ROI selecionada e refina as medidas na imagem original.",13,Color.LTGRAY);body.addView(info);
         ImageView previewImage=new ImageView(this);previewImage.setAdjustViewBounds(true);body.addView(previewImage,new LinearLayout.LayoutParams(-1,dp(300)));
         final int[] choice={selectedLowLightMode==null?0:selectedLowLightMode.ordinal()+1};
         android.widget.Spinner spinner=new android.widget.Spinner(this);

@@ -47,7 +47,7 @@ final class DesktopManual {
             onEdt(() -> {
                 try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); } catch (Exception ignored) {}
                 frame = new MainFrame();
-                frame.setSize(1500, 960);
+                frame.setSize(SHOT_W, SHOT_H);
                 frame.setLocation(0, 0);
                 frame.setVisible(true);
             });
@@ -178,13 +178,23 @@ final class DesktopManual {
         ImageIO.write(img.get(), "png", new File(out, name + ".png"));
     }
 
+    /** Tamanho da janela principal nas capturas, independente da resolução da tela do runner. */
+    static final int SHOT_W = 1600, SHOT_H = 1000;
+
     private static BufferedImage paint(Window w) {
         Component c = w instanceof javax.swing.RootPaneContainer ? ((javax.swing.RootPaneContainer) w).getRootPane() : w;
-        BufferedImage img = new BufferedImage(Math.max(1, c.getWidth()), Math.max(1, c.getHeight()), BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = img.createGraphics();
-        c.printAll(g);
-        g.dispose();
-        return img;
+        java.awt.Dimension old = c.getSize();
+        boolean main = w == frame;
+        if (main) { c.setSize(SHOT_W, SHOT_H); c.invalidate(); ((Container) c).validate(); }
+        try {
+            BufferedImage img = new BufferedImage(Math.max(1, c.getWidth()), Math.max(1, c.getHeight()), BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = img.createGraphics();
+            c.printAll(g);
+            g.dispose();
+            return img;
+        } finally {
+            if (main) { c.setSize(old); c.invalidate(); ((Container) c).validate(); }
+        }
     }
 
     /**
