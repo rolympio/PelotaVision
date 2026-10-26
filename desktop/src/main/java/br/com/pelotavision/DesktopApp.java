@@ -18,6 +18,7 @@ public final class DesktopApp {
 
     public static void main(String[] args) {
         if (args.length >= 3 && "--autoteste".equals(args[0])) { System.exit(selfTest(new File(args[1]), new File(args[2]))); return; }
+        if (args.length >= 3 && "--capturas".equals(args[0])) { System.exit(DesktopManual.run(new File(args[1]), new File(args[2]))); return; }
         try {
             loadOpenCv();
         } catch (Throwable e) {

@@ -623,6 +623,21 @@ final class MainFrame extends JFrame {
     void savePrefsMinimum(double v) { prefs.putDouble("minimumMm", v); }
     void editRegionPublic() { editRegion(); }
 
+    /** Ganchos do roteiro de capturas do manual (DesktopManual): mesmas ações dos botões, sem seletor de arquivo. */
+    void manual(String action) {
+        switch (action) {
+            case "detalhada": detailed(); break;
+            case "luz": lowLightDialog(); break;
+            case "roi": editRegion(); break;
+            case "grafico": chartOptions(); break;
+            case "mapa": viewBox.setSelectedIndex(2); break;
+            case "original": viewBox.setSelectedIndex(0); break;
+            case "segmentacao": viewBox.setSelectedIndex(1); break;
+            default: throw new IllegalArgumentException(action);
+        }
+    }
+    void manualLoad(PhotoSession s) { loadPhoto(s); }
+
     private void editRegion() {
         PhotoSession s = session;
         if (s == null || mode != Mode.PHOTO) return;

@@ -553,16 +553,17 @@ public final class MainActivity extends ComponentActivity {
         spinner.setAdapter(adapter);spinner.setSelection(choice[0]);body.addView(spinner);
         final Runnable render=()->{
             Bitmap previewBitmap=Bitmap.createScaledBitmap(photoBitmap,Math.min(900,photoBitmap.getWidth()),Math.max(1,(int)(photoBitmap.getHeight()*Math.min(900,photoBitmap.getWidth())/(double)photoBitmap.getWidth())),true);
-            Mat source=new Mat(),out=null;
+            Mat source=null,out=null;
             try {
+                source=new Mat();
                 org.opencv.android.Utils.bitmapToMat(previewBitmap,source);
                 int index=spinner.getSelectedItemPosition();
                 out=LowLightPreprocessor.apply(source,index<=1?LowLightPreprocessor.Mode.ORIGINAL:modes[index-1]);
                 Bitmap shown=Bitmap.createBitmap(out.cols(),out.rows(),Bitmap.Config.ARGB_8888);
                 org.opencv.android.Utils.matToBitmap(out,shown);
                 previewImage.setImageBitmap(shown);
-            }catch(Exception ex){toast("Não foi possível gerar a prévia.");}
-            finally {source.release();if(out!=null)out.release();previewBitmap.recycle();}
+            }catch(Exception|LinkageError ex){toast("Não foi possível gerar a prévia.");}
+            finally {try{if(source!=null)source.release();if(out!=null)out.release();}catch(LinkageError ignored){}previewBitmap.recycle();}
         };
         spinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
             public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){choice[0]=pos;render.run();}

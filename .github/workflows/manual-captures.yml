@@ -1,0 +1,114 @@
+name: Capturas do manual (Android e Windows)
+
+# Gera as imagens reais do manual 0.15.2 / Windows 0.5.2:
+# - Android: telas e dialogos renderizados pela propria Activity (Robolectric, graficos nativos) - ManualCapturesTest.
+# - Windows: a janela real do PelotaVision aberta no runner Windows, percorrendo o fluxo (DesktopManual, --capturas).
+# As imagens sao gravadas no branch em verification/manual-0.15.2/, porque artefatos do Actions nao sao legiveis
+# pela sessao de desenvolvimento.
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore: [main]
+    paths: ['app/src/test/java/br/com/pelotavision/ManualCapturesTest.java', 'desktop/src/main/java/br/com/pelotavision/DesktopManual.java', '.github/workflows/manual-captures.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: manual-captures-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  OPENCV_VERSION: 4.12.0
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: '17' }
+      - name: Android SDK 35
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "platform-tools" > /dev/null
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Capturas Android
+        run: |
+          set +e
+          ./gradlew :app:testDebugUnitTest --tests br.com.pelotavision.ManualCapturesTest --stacktrace > /tmp/t.txt 2>&1
+          s=$?; tail -n 40 /tmp/t.txt
+          cat verification/manual-0.15.2/android/capturas.txt || true
+          ls verification/manual-0.15.2/android || true
+          exit 0
+      - uses: actions/upload-artifact@v6
+        with: { name: capturas-android, path: verification/manual-0.15.2/android/ }
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash -eo pipefail {0}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: '17' }
+      - name: Cache do OpenCV oficial
+        id: ocv
+        uses: actions/cache@v5
+        with:
+          path: C:\opencv-4.12.0
+          key: opencv-${{ env.OPENCV_VERSION }}-windows-official
+      - name: Baixar OpenCV oficial
+        if: steps.ocv.outputs.cache-hit != 'true'
+        run: |
+          curl -sSL -o ocv.exe "https://github.com/opencv/opencv/releases/download/${OPENCV_VERSION}/opencv-${OPENCV_VERSION}-windows.exe"
+          7z x ocv.exe -o"C:/opencv-4.12.0" -y > /dev/null
+          rm ocv.exe
+      - name: Preparar OpenCV Java
+        run: |
+          J="C:/opencv-4.12.0/opencv/build/java"
+          mkdir -p desktop/opencv-java/x64
+          cp "$J/opencv-4120.jar" desktop/opencv-java/
+          cp "$J/x64/opencv_java4120.dll" desktop/opencv-java/x64/
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Compilar
+        shell: cmd
+        run: gradlew.bat -p desktop jar runtimeLibs --stacktrace
+      - name: Capturas Windows (janela real)
+        run: |
+          set +e
+          java -Xmx3g -Djava.library.path=desktop/opencv-java/x64 -Dpelotavision.modelDir=app/src/main/assets \
+            -cp "desktop/build/libs/pelotavision-desktop.jar;desktop/build/runtime-libs/*" br.com.pelotavision.DesktopApp \
+            --capturas verification/fixtures/1000411645.jpg verification/manual-0.15.2/windows
+          echo "saida=$?"
+          cat verification/manual-0.15.2/windows/capturas.txt || true
+          rm -rf verification/manual-0.15.2/windows/saida
+          ls verification/manual-0.15.2/windows || true
+          exit 0
+      - uses: actions/upload-artifact@v6
+        with: { name: capturas-windows, path: verification/manual-0.15.2/windows/ }
+
+  gravar:
+    needs: [android, windows]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with: { name: capturas-android, path: verification/manual-0.15.2/android }
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        with: { name: capturas-windows, path: verification/manual-0.15.2/windows }
+        continue-on-error: true
+      - name: Gravar no branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A verification/manual-0.15.2
+          git commit -m "Capturas do manual 0.15.2 / Windows 0.5.2 [skip ci]" || exit 0
+          ok=0; for i in 1 2 3 4; do git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && { ok=1; break; }; sleep 15; done
+          [ $ok = 1 ]
