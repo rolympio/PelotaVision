@@ -1,4 +1,4 @@
-testes=104 falhas=1 erros=0 ignorados=0
+testes=104 falhas=0 erros=0 ignorados=0
 ok     ActiveRoiDemoTest.realRoiIsTheOnlyPhotoOnMainScreenBeforeAndAfterSegmentation
 ok     ActiveRoiWorkflowTest.fractionalCropPreservesPixelScaleAndRejectsTinyAnalysis
 ok     ActiveRoiWorkflowTest.editorApplyShowsOnlyCropAndRequiresFreshSegmentation
@@ -102,4 +102,4 @@ ok     RegionTest.filteringAndRevisitingPreserveCrackReviewAndDiameters
 ok     RegionTest.allRectangleHandlesResizeAndClamp
 ok     RegionTest.exampleReportsFromProvidedPhoto
 ok     VisualsDemoTest.beltPhotoWith404PelletsKeepsMapLegible
-FALHOU VisualsDemoTest.benchPhotoWithCracksShowsOverlaidHistogramMapAndModelsSection :: java.lang.AssertionError: expected:<25> but was:<55>
+ok     VisualsDemoTest.benchPhotoWithCracksShowsOverlaidHistogramMapAndModelsSection

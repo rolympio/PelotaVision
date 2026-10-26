@@ -115,4 +115,4 @@
   }
  ]
 }
-{"palette":"continuous HSV hue 240->0 (blue, cyan, green, yellow, red), S=0.85 V=0.95","scale_mode":"relativa","min":54.725114,"max":152.737736,"unit":"px","equal_range_middle_color":false,"opacity":0.25,"photo_weight":0.75,"diameter_labels":false,"colored_region":"inside each fitted ellipse of pellets included in the histogram; nothing outside the ROI or on the belt background","diameter_basis":"equivalent diameter used by the histogram (same scale and classes)","fixed_range_requested":false}
+{"palette":"continuous HSV hue 240->0 (blue, cyan, green, yellow, red), S=0.85 V=0.95","scale_mode":"relativa","scale_basis":"d10_d90","rim_opacity":0.8500000000000001,"min":81.9528908,"max":132.148346,"unit":"px","equal_range_middle_color":false,"opacity":0.55,"photo_weight":0.44999999999999996,"diameter_labels":false,"colored_region":"inside each fitted ellipse of pellets included in the histogram; nothing outside the ROI or on the belt background","diameter_basis":"equivalent diameter used by the histogram (same scale and classes)","fixed_range_requested":false}
