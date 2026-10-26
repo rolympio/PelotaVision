@@ -1,3 +1,43 @@
+# PelotaVision — Visão computacional para análise de pelotas de minério de ferro
+
+**Android e Windows · Granulometria · Inspeção de trincas · Análise de imagens**
+
+O **PelotaVision** é um software de pesquisa e desenvolvimento para análise de fotografias de pelotas de minério de ferro. Combina processamento de imagens, segmentação de objetos e métodos de aprendizado de máquina para apoiar a caracterização granulométrica e a inspeção visual.
+
+> **Estado de desenvolvimento:** funcionalidades e modelos podem ser experimentais. Contagens, diâmetros e classificações não substituem ensaios de referência ou validação metrológica em condições reais de operação.
+
+## Principais recursos
+
+- **Detecção e segmentação individual:** métodos clássicos de bordas e LoG, além de alternativas neurais experimentais, com parâmetros ajustáveis para cenas de bancada e correia.
+- **Granulometria:** estimativa de dimensões projetadas, distribuição de tamanhos, histogramas e sobreposição de cores translúcidas por faixa granulométrica.
+- **Inspeção de trincas:** identificação assistida de possíveis trincas, revisão visual e distribuição granulométrica específica das pelotas classificadas como trincadas.
+- **Calibração:** escala em pixel/mm, referência dimensional e largura conhecida da correia, com ajuste manual das bordas.
+- **ROI:** seleção e processamento de região de interesse, preservando a fotografia original.
+- **Qualidade de imagem:** ajustes de contraste e iluminação, análise detalhada em blocos e super-resolução FSRCNN 2× opcional e experimental.
+- **Rastreabilidade:** exportações e registros de configurações, parâmetros, medidas e evidências visuais, conforme o suporte de cada versão.
+- **Plataformas:** aplicativo Android e aplicação Windows, com fluxos de captura, importação, análise e exportação.
+
+## Fluxo básico
+
+1. Capture ou importe uma fotografia e selecione a cena adequada.
+2. Defina a escala física e a região de interesse.
+3. Ajuste ou busque parâmetros de detecção e execute a segmentação.
+4. Inspecione os contornos, as possíveis trincas e os histogramas.
+5. Revise os resultados e exporte os dados e imagens disponíveis na versão instalada.
+
+## Limitações e validação
+
+Acurácia de segmentação, granulometria e detecção de trincas deve ser medida em **fotografias reais reservadas para teste**, com anotações independentes e, para dimensões, medições físicas de referência. Modelos treinados em imagens sintéticas ou conjuntos de demonstração **não estão automaticamente validados para uso industrial**. Super-resolução pode modificar a aparência sem melhorar a exatidão dimensional. Fotografias escuras, oclusões, perspectiva e iluminação heterogênea podem comprometer as estimativas.
+
+## Instalação e documentação
+
+Consulte os artefatos das execuções em **GitHub Actions** e as instruções de compilação abaixo. A disponibilidade de APK, executável Windows e PDF depende da versão e do resultado dos respectivos builds. Não se deve presumir que uma funcionalidade esteja distribuída apenas por ter sido desenvolvida em uma branch.
+
+---
+
+<details>
+<summary><strong>Documentação técnica e histórico de versões</strong></summary>
+
 # PelotaVision — Android 0.14.1 · Windows 0.5.0
 
 Análise de imagens de pelotas de minério de ferro: localização e ajuste elíptico, forma 2D b/a, granulometria por número, mapa granulométrico e triagem de possíveis trincas. Android (ARM64) e Windows 11 compartilham o mesmo núcleo em `core/`.
@@ -247,3 +287,6 @@ Cada envio para `main` executa `.github/workflows/android.yml`: `assembleDebug t
 Verificações da sugestão: `verification/autotune-0.8.0`. Verificações da calibração: `verification/reference-0.7.0`; histórico geométrico: `verification/ellipse-0.6.0`. Ensaios analíticos verificam eixos, razão e ângulo em 24 elipses de contraste/polaridade/orientação conhecidos; também testam região uniforme e objeto isolado alongado. Testes Android simulados cobrem ROI rotacionada/circular, média, exclusões, calibração de eixos, CSV/JSON e PNG sem alteração da original. Os relatórios PNG foram desenhados pelo compositor real do app em Robolectric com gráficos nativos; as detecções foram calculadas pelas mesmas classes Java em JNI desktop. Não são capturas da câmera de um telefone.
 
 O código e os dados do treino da versão 0.5.0 continuam em `ml_training`; documentação e validações anteriores foram preservadas como histórico. Não houve execução em celular físico nem validação metrológica em amostras reais com verdade-terreno de forma 3D.
+
+
+</details>
