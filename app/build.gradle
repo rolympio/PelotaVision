@@ -7,7 +7,8 @@ android {
         applicationId 'br.com.pelotavision'
         minSdk 29
         targetSdk 35
-        versionCode 22
+        // No Play cada envio precisa de versionCode maior; o workflow play.yml define PV_VERSION_CODE.
+        versionCode((System.getenv('PV_VERSION_CODE') ?: '22') as int)
         versionName '0.15.2'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
@@ -27,9 +28,19 @@ android {
                 logger.warn('PelotaVision: signing/prototype.keystore ausente; APK sera assinado com a chave debug local e NAO atualizara instalacoes existentes.')
             }
         }
+        // Chave de UPLOAD do Play (Play App Signing). Fora do repositorio; no CI vem dos segredos PLAY_UPLOAD_*.
+        def uploadKeystore = rootProject.file(System.getenv('PLAY_UPLOAD_KEYSTORE_FILE') ?: 'signing/upload.keystore')
+        if (uploadKeystore.exists()) {
+            release {
+                storeFile uploadKeystore
+                storePassword System.getenv('PLAY_UPLOAD_STORE_PASSWORD')
+                keyAlias System.getenv('PLAY_UPLOAD_KEY_ALIAS')
+                keyPassword System.getenv('PLAY_UPLOAD_KEY_PASSWORD')
+            }
+        }
     }
     splits { abi { enable true; reset(); include 'arm64-v8a', 'x86_64'; universalApk false } }
-    buildTypes { release { minifyEnabled false } }
+    buildTypes { release { minifyEnabled false; if (signingConfigs.findByName('release') != null) signingConfig signingConfigs.release } }
     testOptions { unitTests { includeAndroidResources = true } }
     // Nucleo de analise comum a Android e Windows (Java puro + OpenCV), em ../core.
     sourceSets { main { java.srcDirs += rootProject.file('core/src/main/java') } }
