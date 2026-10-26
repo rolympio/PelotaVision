@@ -80,13 +80,21 @@ final class MapComposer {
         }
     }
 
+    /** Reduz o tamanho da fonte até o texto caber na largura (nunca abaixo de 60% do tamanho pedido). */
+    static void fit(Paint p, String text, float width) {
+        float size = p.getTextSize(), min = size * 0.6f;
+        while (p.measureText(text) > width && p.getTextSize() > min) p.setTextSize(p.getTextSize() * 0.95f);
+    }
+
     static void drawLegend(Canvas c, GranulometryColorScale scale, ReportVisuals visuals, float x, float y, float width, float height) {
         float s = width / 380f;
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setColor(Color.WHITE);
         p.setTextSize(10 * s);
-        c.drawText(String.format(Locale.getDefault(), "Mapa granulométrico · escala %s · cor %d%% sobre foto %d%%", scale.label(),
-                Math.round(visuals.mapOpacity * 100), Math.round((1 - visuals.mapOpacity) * 100)), x + 12 * s, y + 16 * s, p);
+        String title = String.format(Locale.getDefault(), "Mapa granulométrico · escala %s · cor %d%% sobre foto %d%%", scale.label(),
+                Math.round(visuals.mapOpacity * 100), Math.round((1 - visuals.mapOpacity) * 100));
+        fit(p, title, width - 24 * s);
+        c.drawText(title, x + 12 * s, y + 16 * s, p);
         float bx = x + 12 * s, bw = width - 24 * s, by = y + 24 * s, bh = 12 * s;
         int[] colors = new int[9];
         for (int i = 0; i < colors.length; i++) colors[i] = 0xFF000000 | GranulometryColorScale.colorAt(i / (colors.length - 1.0));
@@ -102,7 +110,8 @@ final class MapComposer {
         p.setTextAlign(Paint.Align.LEFT);
         p.setColor(Color.rgb(151, 174, 187));
         p.setTextSize(8 * s);
-        c.drawText(scale.equalRange() ? "Todos os diâmetros iguais: cor intermediária." : scale.clipsEnds() ? "Escala sobre D10–D90: abaixo de D10 = azul, acima de D90 = vermelho. Fundo e área fora da ROI sem cor." : "Cor dentro da elipse ajustada de cada pelota incluída no histograma; fundo e área fora da ROI sem cor.",
-                bx, Math.min(y + height - 4 * s, by + bh + 24 * s), p);
+        String note = scale.equalRange() ? "Todos os diâmetros iguais: cor intermediária." : scale.clipsEnds() ? "Escala sobre D10–D90: abaixo de D10 = azul, acima de D90 = vermelho. Fundo e área fora da ROI sem cor." : "Cor dentro da elipse ajustada de cada pelota incluída no histograma; fundo e área fora da ROI sem cor.";
+        fit(p, note, bw); // 0.15.2: a nota não pode passar da borda direita do mapa exportado
+        c.drawText(note, bx, Math.min(y + height - 4 * s, by + bh + 24 * s), p);
     }
 }
