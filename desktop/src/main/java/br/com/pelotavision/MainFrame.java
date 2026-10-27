@@ -59,6 +59,11 @@ final class MainFrame extends JFrame {
     private final Preferences prefs = Preferences.userNodeForPackage(MainFrame.class);
     final ImageView view = new ImageView();
     private final HistogramView histogram = new HistogramView();
+    // 0.5.3: curva acumulada com ajuste Rosin–Rammler (mesmas pelotas e classes do histograma).
+    private final RosinRammlerView rrView = new RosinRammlerView();
+    private final JComboBox<String> rrBasisBox = new JComboBox<>(new String[]{RosinRammler.Basis.NUMBER.label, RosinRammler.Basis.MASS.label});
+    private final JButton scaleButton = new JButton("Escala e histograma…");
+    private javax.swing.JDialog scaleDialog;
     private final JTextArea summary = new JTextArea(10, 30);
     private final JLabel status = new JLabel(" ");
     private final JProgressBar progress = new JProgressBar();
@@ -166,15 +171,22 @@ final class MainFrame extends JFrame {
         side.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
         scalePanel = new JPanel();
         scalePanel.setLayout(new BoxLayout(scalePanel, BoxLayout.Y_AXIS));
-        scalePanel.setBorder(BorderFactory.createTitledBorder("Escala e histograma"));
+        scalePanel.setBorder(BorderFactory.createTitledBorder("Escala e classes do histograma"));
         scalePanel.add(row(new JLabel("px/mm (imagem original):"), pxPerMm));
         scalePanel.add(row(new JLabel("Classe (mm):"), binWidth));
         scalePanel.add(row(excludePartial));
         scalePanel.add(row(excludeReview));
         scalePanel.add(row(measureButton));
         scalePanel.add(row(applyScaleButton, clearScaleButton));
-        scalePanel.add(row(scaleLabel));
-        side.add(scalePanel);
+        // 0.5.3: o painel de escala abre por botão; o espaço lateral fica para histograma + Rosin–Rammler.
+        scaleButton.setToolTipText("px/mm, classe, exclusões, referência, correia, recipiente, objeto e média");
+        scaleButton.addActionListener(e -> showScaleDialog());
+        JPanel scaleRow = new JPanel(new BorderLayout(6, 0));
+        scaleRow.add(scaleButton, BorderLayout.WEST);
+        scaleRow.add(scaleLabel, BorderLayout.CENTER);
+        scaleRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        scaleRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        side.add(scaleRow);
         summary.setEditable(false);
         summary.setLineWrap(true); summary.setWrapStyleWord(true);
         summary.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
@@ -183,12 +195,20 @@ final class MainFrame extends JFrame {
         side.add(sp);
         histogram.setBorder(BorderFactory.createTitledBorder("Histograma por numero"));
         side.add(histogram);
+        rrBasisBox.setSelectedIndex(RosinRammler.Basis.fromId(prefs.get("rrBasis", "number")).ordinal());
+        rrBasisBox.setToolTipText("<html>Numero: o que a imagem mede (contagem de pelotas).<br>Massa estimada: pondera cada pelota por d³ (esferas de mesma densidade) — aproxima a base das curvas de peneira, sem substituir o peneiramento.</html>");
+        rrBasisBox.addActionListener(e -> { prefs.put("rrBasis", rrBasis().id); refreshCharts(session); });
+        JPanel rrPanel = new JPanel(new BorderLayout());
+        rrPanel.setBorder(BorderFactory.createTitledBorder("Curva acumulada · Rosin–Rammler"));
+        rrPanel.add(row(new JLabel("Base:"), rrBasisBox), BorderLayout.NORTH);
+        rrPanel.add(rrView, BorderLayout.CENTER);
+        side.add(rrPanel);
         JLabel legend = new JLabel("<html><b>Legenda:</b> verde = aceita · amarelo = revisar/inconclusivo · vermelho = possivel trinca · "
                 + "cinza = parcial na borda · tracejado = forma sem confianca · ciano = REF.<br>Clique numa pelota para revisar/calibrar. "
                 + "Roda = zoom · arrastar = mover · duplo clique = ajustar.</html>");
         legend.setBorder(BorderFactory.createEmptyBorder(6, 2, 2, 2));
         side.add(legend);
-        side.setPreferredSize(new Dimension(420, 600));
+        side.setPreferredSize(new Dimension(440, 600));
 
         JPanel bottom = new JPanel(new BorderLayout(8, 0));
         bottom.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
@@ -243,6 +263,33 @@ final class MainFrame extends JFrame {
         probeCameras();
     }
 
+    RosinRammler.Basis rrBasis() { return RosinRammler.Basis.values()[Math.max(0, rrBasisBox.getSelectedIndex())]; }
+
+    /** Curva RR da distribuição exibida (null = sem gráfico). */
+    private void refreshCharts(PhotoSession s) {
+        Granulometry.Distribution d = s == null ? null : s.distribution();
+        rrView.display(d == null ? null : RosinRammler.fit(d, rrBasis()));
+    }
+
+    /** Janela (não modal) com o antigo painel "Escala e histograma"; reaproveita os mesmos controles. */
+    private void showScaleDialog() {
+        if (scaleDialog == null) {
+            scaleDialog = new javax.swing.JDialog(this, "Escala e histograma", false);
+            JPanel content = new JPanel(new BorderLayout());
+            content.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            content.add(new JScrollPane(scalePanel), BorderLayout.CENTER);
+            JButton close = new JButton("Fechar");
+            close.addActionListener(e -> scaleDialog.setVisible(false));
+            content.add(row(close), BorderLayout.SOUTH);
+            scaleDialog.setContentPane(content);
+            scaleDialog.pack();
+            scaleDialog.setSize(Math.max(460, scaleDialog.getWidth()), Math.min(scaleDialog.getHeight(), 720));
+            scaleDialog.setLocationRelativeTo(scaleButton);
+        }
+        scaleDialog.setVisible(true);
+        scaleDialog.toFront();
+    }
+
     final JPanel extraToolbar;
     final JPanel scalePanel;
 
@@ -272,6 +319,7 @@ final class MainFrame extends JFrame {
     private void refreshVisuals() {
         if (session == null) return;
         histogram.display(session.distribution(), session.crackHistogram(), visuals);
+        refreshCharts(session);
         view.setMap(session.distribution(), visuals);
     }
 
@@ -443,6 +491,7 @@ final class MainFrame extends JFrame {
         c.autoSuggest = autoSuggest.isSelected();
         c.crackSensitivity = crackSensitivity;
         c.crackChoice = CrackClassifierChoice.values()[Math.max(0, crackBox.getSelectedIndex())];
+        c.rrBasis = rrBasis();
         c.visuals = visuals;
         c.scale = session == null ? null : session.scale();
         c.minimumExpectedMm = session == null ? 5 : session.minimumExpectedMm();
@@ -682,6 +731,7 @@ final class MainFrame extends JFrame {
         summary.setText(t.toString());
         summary.setCaretPosition(0);
         histogram.display(s.distribution(), s.crackHistogram(), visuals);
+        refreshCharts(s);
         view.setMap(s.distribution(), visuals);
         view.setViewMode(viewBox.getSelectedIndex());
         refreshScaleLabel();

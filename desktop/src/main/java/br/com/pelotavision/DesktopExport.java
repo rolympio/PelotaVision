@@ -92,6 +92,8 @@ final class DesktopExport {
         File json = new File(folder, base + ".json");
         JSONObject report = report(s, cfg, viewport, composite, base, extension);
         report.put("test_name", testName == null ? JSONObject.NULL : testName);
+        RosinRammler.Basis rrBasis = cfg.rrBasis == null ? RosinRammler.Basis.NUMBER : cfg.rrBasis;
+        report.put("rosin_rammler", RosinRammler.reportJson(d, rrBasis));
         report.put("output_folder", folder.getName());
         LowLightInfo light = s.lowLight();
         report.put("low_light", light == null ? JSONObject.NULL : light.toJson());
@@ -121,7 +123,10 @@ final class DesktopExport {
         boolean pdfOk = false;
         try {
             report.put("pdf_file", pdf.getName());
-            Files.write(pdf.toPath(), DesktopPdfReport.render(report, DesktopPdfReport.figures(report, composite, viewport.height, filteredPanel, map)));
+            List<DesktopPdfReport.Figure> figs = DesktopPdfReport.figures(report, composite, viewport.height, filteredPanel, map);
+            // 0.5.3: histograma + Rosin–Rammler numa página inteira, com a fórmula ajustada.
+            figs.add(DesktopPdfReport.Figure.fullPage(distributionFigure(s, visuals, rrBasis), ReportPdfContent.distributionFigure(report)));
+            Files.write(pdf.toPath(), DesktopPdfReport.render(report, figs));
             pdfOk = true;
         } catch (Exception | OutOfMemoryError | LinkageError e) {
             Files.deleteIfExists(pdf.toPath());
@@ -176,6 +181,29 @@ final class DesktopExport {
             titleHeight = Math.max(1, Math.round(w * 24f / 380)); originalTop = titleHeight; annotatedTop = originalTop + h + titleHeight;
             summaryTop = annotatedTop + h; histogramTop = summaryTop + Math.round(w * 152f / 380); height = histogramTop + Math.round(w * 216f / 380);
         }
+    }
+
+    /**
+     * Figura do relatório: histograma (em cima) e curva acumulada com ajuste Rosin–Rammler (embaixo),
+     * desenhada em 2× para o texto ficar nítido no PDF.
+     */
+    static BufferedImage distributionFigure(PhotoSession s, ReportVisuals visuals, RosinRammler.Basis basis) {
+        Granulometry.Distribution d = s.distribution();
+        int w = 560, hh = 300, rh = 470, gap = 14, k = 2;
+        BufferedImage img = new BufferedImage(w * k, (hh + gap + rh) * k, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g.scale(k, k);
+        g.setColor(Color.WHITE); g.fillRect(0, 0, w, hh + gap + rh);
+        HistogramView.paint(g, d, s.crackHistogram(), visuals, w, hh);
+        g.setColor(new Color(205, 214, 220)); g.drawLine(8, hh + gap / 2, w - 8, hh + gap / 2);
+        Graphics2D r = (Graphics2D) g.create();
+        r.translate(0, hh + gap);
+        RosinRammlerView.paint(r, d == null ? null : RosinRammler.fit(d, basis), w, rh, 1f, false);
+        r.dispose();
+        g.dispose();
+        return img;
     }
 
     static BufferedImage compose(PhotoSession s, ReportViewport v) { return compose(s, v, HistogramView.DEFAULTS); }

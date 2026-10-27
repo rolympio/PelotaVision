@@ -32,7 +32,11 @@ final class PdfReport {
     /** 0.15.2: uma imagem do relatório, com título e legenda próprios. A figura não é dona do bitmap. */
     static final class Figure {
         final Bitmap image;final String title,caption;
-        Figure(Bitmap image,String title,String caption){this.image=image;this.title=title;this.caption=caption;}
+        /** 0.15.3: ocupa até a página inteira (histograma + Rosin–Rammler); as demais usam meia página. */
+        final boolean fullPage;
+        Figure(Bitmap image,String title,String caption){this(image,title,caption,false);}
+        Figure(Bitmap image,String title,String caption,boolean fullPage){this.image=image;this.title=title;this.caption=caption;this.fullPage=fullPage;}
+        static Figure fullPage(Bitmap image,ReportPdfContent.FigureText t){return new Figure(image,t.title,t.caption,true);}
     }
 
     static byte[] render(JSONObject json,List<Figure> figures) throws Exception {
@@ -97,6 +101,17 @@ final class PdfReport {
     }
     private static Figure figure(Bitmap image,ReportPdfContent.FigureText t){return new Figure(image,t.title,t.caption);}
 
+    /** 0.15.3: histograma (em cima) e curva acumulada com ajuste Rosin–Rammler (embaixo), mesma página. Bitmap vai para owned. */
+    static Figure distributionFigure(JSONObject json,Granulometry.Distribution d,CrackHistogram cracks,ReportVisuals visuals,RosinRammler.Basis basis,List<Bitmap> owned){
+        if(d==null)return null;
+        int w=1120,hh=620,gap=24,rh=900;
+        Bitmap b=Bitmap.createBitmap(w,hh+gap+rh,Bitmap.Config.ARGB_8888);owned.add(b);
+        Canvas c=new Canvas(b);c.drawColor(RosinRammlerView.BG);
+        HistogramView.draw(c,new android.graphics.RectF(0,0,w,hh),d,cracks,visuals);
+        RosinRammlerView.draw(c,new android.graphics.RectF(0,hh+gap,w,hh+gap+rh),RosinRammler.fit(d,basis),false);
+        return Figure.fullPage(b,ReportPdfContent.distributionFigure(json));
+    }
+
     private static void footer(Canvas c,Writer w) {
         Paint f=w.paint(7.5f,false,MUTED);
         c.drawText("PelotaVision · "+w.file,M,H-22,f);
@@ -135,7 +150,7 @@ final class PdfReport {
         void figure(int number,Figure f){
             Paint t=paint(11,true,INK),cap=paint(8.5f,false,MUTED);
             List<String> lines=split(f.caption,cap,W-2*M);
-            float maxW=W-2*M,maxH=(H-2*M-20)/2f-26-lines.size()*11.5f;
+            float maxW=W-2*M,maxH=(H-2*M-20)/(f.fullPage?1f:2f)-26-lines.size()*11.5f;
             float s=Math.min(maxW/f.image.getWidth(),maxH/f.image.getHeight());
             float dw=f.image.getWidth()*s,dh=f.image.getHeight()*s;
             ensure(16+lines.size()*11.5f+4+dh+12);

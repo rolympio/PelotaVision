@@ -61,6 +61,7 @@ public final class ReportPdfContent {
         lowLight(out, j);
         models(out, j);
         bins(out, j);
+        rosinRammler(out, j);
         notes(out);
         return out;
     }
@@ -165,6 +166,31 @@ public final class ReportPdfContent {
         out.add(Block.grid(rows, new float[]{.5f, .25f, .25f}));
     }
 
+    /** 0.15.3 / 0.5.3: parâmetros do ajuste Rosin–Rammler nas duas bases (a escolhida na tela vem primeiro). */
+    private static void rosinRammler(List<Block> out, JSONObject j) {
+        JSONObject rr = j.optJSONObject("rosin_rammler");
+        if (rr == null) return;
+        out.add(Block.section("Ajuste Rosin–Rammler"));
+        out.add(Block.note("F(d) = 100·[1 − exp(−(d/d′)ⁿ)], F = % passante acumulado. Ajuste por máxima verossimilhança nas pelotas individuais; pontos nos limites superiores das classes do histograma.", 8.5f));
+        RosinRammler.Basis selected = RosinRammler.Basis.fromId(rr.optString("selected_basis", "number"));
+        List<RosinRammler.Basis> order = new ArrayList<>();
+        order.add(selected);
+        for (RosinRammler.Basis b : RosinRammler.Basis.values()) if (b != selected) order.add(b);
+        List<String[]> rows = new ArrayList<>();
+        for (RosinRammler.Basis b : order) {
+            JSONObject f = rr.optJSONObject(b.id);
+            if (f == null) continue;
+            String u = f.optString("unit", "");
+            String tag = b.label + (b == selected ? " (gráfico)" : "");
+            if (!f.optBoolean("available")) { rows.add(new String[]{tag, "indisponível: " + f.optString("reason", "—")}); continue; }
+            rows.add(new String[]{tag, f.optString("formula", "—")});
+            rows.add(new String[]{"   n · d′ · d50 ajustado", RosinRammler.fmt(f.optDouble("n")) + " · " + RosinRammler.fmt(f.optDouble("d_prime")) + " " + u + " · " + RosinRammler.fmt(f.optDouble("d50_fit")) + " " + u});
+            rows.add(new String[]{"   R² · RMSE · KS", RosinRammler.fmt4(f.optDouble("r2_at_class_limits")) + " · " + RosinRammler.fmt(f.optDouble("rmse_percent_points")) + " p.p. · " + RosinRammler.fmt4(f.optDouble("ks_individual"))});
+        }
+        out.add(Block.table(rows));
+        out.add(Block.note("R² de curva acumulada é sempre alto e não prova bom ajuste; RMSE (pontos percentuais) e KS são mais informativos. Base número não é comparável a parâmetros RR de peneiramento, que são em massa. Massa estimada supõe esferas de mesma densidade (∝ d³) a partir de diâmetros 2D: erros de diâmetro são elevados ao cubo.", 8));
+    }
+
     private static void notes(List<Block> out) {
         out.add(Block.section("Limitações"));
         out.add(Block.note("Distribuição por número de objetos visíveis em imagem 2D; não substitui peneiramento nem ensaio validado. Diâmetro equivalente da elipse = 2·√(a·b). Triagem de trincas pela superfície visível: \"sem indício\" não prova ausência de trinca. Modelos experimentais não foram validados com amostras reais de produção. O JSON e o CSV de mesmo nome contêm todos os valores por pelota.", 8));
@@ -189,6 +215,21 @@ public final class ReportPdfContent {
     public static FigureText map(boolean filtered) {
         return new FigureText("Mapa granulométrico", (filtered ? "Sobre a imagem filtrada. " : "") + "Cor pela classe de diâmetro equivalente de cada pelota incluída; legenda na própria imagem.");
     }
+    /** Figura de página inteira: histograma + curva acumulada com o ajuste RR e a fórmula. */
+    public static FigureText distributionFigure(JSONObject json) {
+        JSONObject rr = json.optJSONObject("rosin_rammler");
+        String formula = "";
+        String basis = "número";
+        if (rr != null) {
+            RosinRammler.Basis b = RosinRammler.Basis.fromId(rr.optString("selected_basis", "number"));
+            basis = b == RosinRammler.Basis.MASS ? "massa estimada (∝ d³)" : "número";
+            JSONObject f = rr.optJSONObject(b.id);
+            if (f != null) formula = " Ajuste: " + f.optString("formula", "—") + ".";
+        }
+        return new FigureText("Distribuição granulométrica · histograma e Rosin–Rammler",
+                "Em cima: histograma por número (todas × trincadas). Embaixo: % passante acumulado em " + basis + " nos limites das classes (pontos) e curva Rosin–Rammler ajustada (tracejada), eixo x logarítmico." + formula);
+    }
+
     public static FigureText summaryPanel() {
         return new FigureText("Resumo da imagem e histograma", "Contagem, triagem de trincas, forma aparente 2D e distribuição por número (todas × trincadas).");
     }

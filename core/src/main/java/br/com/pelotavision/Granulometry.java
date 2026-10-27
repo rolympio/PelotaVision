@@ -79,15 +79,20 @@ public final class Granulometry {
         public final int included,excluded,originalWidth,originalHeight;
         private final int[] counts;
         private final double firstIndex;
+        /** Diâmetros incluídos, ordenados (mesma unidade de d10/d50). Base do ajuste Rosin–Rammler. */
+        private final double[] sizes;
         private Distribution(Settings cfg,double scale,double first,int[] bins,List<Double> diameters,int excluded,int ow,int oh) {
             settings=cfg;analyzedPixelsPerMm=scale;counts=bins.clone();included=diameters.size();this.excluded=excluded;
             requestedBinWidthMm=cfg.binWidthMm;firstIndex=first;
             originalWidth=ow;originalHeight=oh;Collections.sort(diameters);
+            sizes=new double[diameters.size()];for(int i=0;i<sizes.length;i++)sizes[i]=diameters.get(i);
             d10=percentile(diameters,.10);d50=percentile(diameters,.50);d90=percentile(diameters,.90);
             minMm=included==0?Double.NaN:diameters.get(0);maxMm=included==0?Double.NaN:diameters.get(included-1);
             double mean=0;for(double v:diameters)mean+=v/included;meanMm=included==0?Double.NaN:mean;
         }
         public int binCount(){return counts.length;}
+        /** Cópia dos diâmetros incluídos, em ordem crescente. */
+        public double[] sizes(){return sizes.clone();}
         public int count(int index){return counts[index];}
         public double lower(int index){return (firstIndex+index)*settings.binWidthMm;}
         public double upper(int index){return lower(index+1);}

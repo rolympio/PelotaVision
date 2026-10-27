@@ -36,6 +36,7 @@ public class DesktopPdfReportTest {
         json.put("annotated_file", "PelotaVision_teste_resultado.png");
         json.put("files_location", "mesma pasta deste PDF");
         json.put("test_name", "Disco 3 · umidade 9,2%");
+        json.put("rosin_rammler", RosinRammler.reportJson(RosinRammlerTest.sample(400, 4.5, 12.5, 1, 7), RosinRammler.Basis.MASS));
         json.put("pdf_file", "PelotaVision_teste_relatorio.pdf");
         json.put("count", 12);
         json.put("method", "gradient+ellipse_boundary_v1");
@@ -59,13 +60,18 @@ public class DesktopPdfReportTest {
         assertEquals(new Color(40, 45, 50).getRGB(), figures.get(0).image.getRGB(10, 10));
         assertEquals(new Color(200, 200, 200).getRGB(), figures.get(2).image.getRGB(10, 10));
 
+        // 0.5.3: histograma + Rosin–Rammler numa figura de página inteira, com a fórmula na legenda.
+        figures.add(DesktopPdfReport.Figure.fullPage(new BufferedImage(1120, 1568, BufferedImage.TYPE_INT_RGB), ReportPdfContent.distributionFigure(json)));
+        assertTrue(figures.get(5).fullPage);
+        assertTrue(figures.get(5).caption.contains("massa estimada"));
         byte[] pdf = DesktopPdfReport.render(json, figures);
         assertEquals("%PDF", new String(pdf, 0, 4, java.nio.charset.StandardCharsets.US_ASCII));
         assertTrue(DesktopPdfReport.pages(pdf) >= 3);
         try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(pdf)) {
             String text = new org.apache.pdfbox.text.PDFTextStripper().getText(d);
             for (String s : new String[]{"Relatório de análise de pelotas", "ILUMINAÇÃO E TRATAMENTO DE IMAGEM ESCURA", "Redução de ruído + CLAHE",
-                    "DISTRIBUIÇÃO GRANULOMÉTRICA", "Figura 1 · Imagem original", "Figura 2 · Imagem filtrada", "Figura 3 · Imagem segmentada", "Figura 4 · Mapa granulométrico", "Figura 5 · Resumo", "Disco 3 · umidade 9,2%"})
+                    "DISTRIBUIÇÃO GRANULOMÉTRICA", "Figura 1 · Imagem original", "Figura 2 · Imagem filtrada", "Figura 3 · Imagem segmentada", "Figura 4 · Mapa granulométrico", "Figura 5 · Resumo", "Disco 3 · umidade 9,2%",
+                    "AJUSTE ROSIN", "Massa estimada (", "F(d) = 100", "Figura 6 · Distribuição granulométrica · histograma e Rosin"})
                 assertTrue("PDF sem \"" + s + "\"", text.contains(s));
         }
         File dir = new File(System.getProperty("pelotavision.validationDir", "../verification"), "pdf-windows-0.5.2");

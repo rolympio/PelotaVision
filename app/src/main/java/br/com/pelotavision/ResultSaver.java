@@ -77,6 +77,11 @@ final class ResultSaver {
     }
     /** 0.15.3: {@code folder} = subpasta desta gravação em Imagens/PelotaVision e Download/PelotaVision (null = direto na pasta PelotaVision); {@code testName} vai para o JSON e o PDF. */
     static SavedResult save(Context context,Bitmap photo,File original,String originalMime,PelletDetector.Result result,PelletDetector.Parameters parameters,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,DetectionTuner.Report suggestions,DetectionTuner.Option applied,boolean cropRoi,DetailedAnalysis.Report detailed,ReportVisuals visuals,CrackClassifierChoice.Resolution crackChoice,String networkId,LowLightInfo lowLight,Bitmap filtered,String folder,String testName) throws Exception {
+        return save(context,photo,original,originalMime,result,parameters,cracks,distribution,region,excludedByRegion,suggestions,applied,cropRoi,detailed,visuals,crackChoice,networkId,lowLight,filtered,folder,testName,RosinRammler.Basis.NUMBER);
+    }
+    /** 0.15.3: {@code rrBasis} = base da curva Rosin–Rammler mostrada na figura do PDF (as duas bases vão para o JSON). */
+    static SavedResult save(Context context,Bitmap photo,File original,String originalMime,PelletDetector.Result result,PelletDetector.Parameters parameters,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,DetectionTuner.Report suggestions,DetectionTuner.Option applied,boolean cropRoi,DetailedAnalysis.Report detailed,ReportVisuals visuals,CrackClassifierChoice.Resolution crackChoice,String networkId,LowLightInfo lowLight,Bitmap filtered,String folder,String testName,RosinRammler.Basis rrBasis) throws Exception {
+        if(rrBasis==null)rrBasis=RosinRammler.Basis.NUMBER;
         testName=SaveNaming.cleanTestName(testName);
         folder=folder==null||folder.trim().isEmpty()?null:SaveNaming.sanitizeFolder(folder);
         final String pictures=folder==null?"Pictures/PelotaVision":"Pictures/PelotaVision/"+folder;
@@ -116,7 +121,7 @@ final class ResultSaver {
                     try(OutputStream output=stream(resolver,mapUri)){if(!map.compress(Bitmap.CompressFormat.PNG,100,output))throw new IOException("Falha ao gravar o mapa.");}mapFile=base+"_mapa.png";}
             }catch(OutOfMemoryError e){mapFile=null;if(map!=null){map.recycle();map=null;}}
             JSONObject json=new JSONObject();json.put("app","PelotaVision "+APP_VERSION);json.put("report_schema_version",ReportJson.SCHEMA_VERSION);json.put("created_at_epoch_ms",System.currentTimeMillis());
-            json.put("test_name",testName==null?JSONObject.NULL:testName);json.put("output_folder",folder==null?JSONObject.NULL:folder);json.put("files_location",folder==null?"Imagens e Downloads / PelotaVision":"Imagens e Downloads / PelotaVision / "+folder);
+            json.put("test_name",testName==null?JSONObject.NULL:testName);json.put("rosin_rammler",RosinRammler.reportJson(distribution,rrBasis));json.put("output_folder",folder==null?JSONObject.NULL:folder);json.put("files_location",folder==null?"Imagens e Downloads / PelotaVision":"Imagens e Downloads / PelotaVision / "+folder);
             json.put("analysis_models",ReportJson.analysisModelsJson(applied,crackChoice,networkId));
             json.put("crack_histogram",ReportJson.crackHistogramJson(crackHistogram,visuals));
             Object mapJson=ReportJson.mapJson(distribution,visuals);if(mapJson instanceof JSONObject)((JSONObject)mapJson).put("file",mapFile==null?JSONObject.NULL:mapFile);json.put("granulometric_map",mapJson);
@@ -199,7 +204,9 @@ final class ResultSaver {
             try{
                 json.put("pdf_file",base+"_relatorio.pdf");
                 List<Bitmap> owned=new ArrayList<>();byte[] pdf;
-                try{pdf=PdfReport.render(json,PdfReport.figures(json,annotated,filteredPanel,map,owned));}finally{for(Bitmap b:owned)b.recycle();}
+                try{List<PdfReport.Figure> figs=PdfReport.figures(json,annotated,filteredPanel,map,owned);
+                    try{PdfReport.Figure dist=PdfReport.distributionFigure(json,distribution,crackHistogram,visuals,rrBasis,owned);if(dist!=null)figs.add(dist);}catch(OutOfMemoryError e){/* figura opcional: o PDF sai sem ela */}
+                    pdf=PdfReport.render(json,figs);}finally{for(Bitmap b:owned)b.recycle();}
                 candidate=create(resolver,MediaStore.Downloads.EXTERNAL_CONTENT_URI,base+"_relatorio.pdf","application/pdf",downloads);
                 try(OutputStream output=stream(resolver,candidate)){output.write(pdf);}
                 pending.add(candidate);pdfUri=candidate;

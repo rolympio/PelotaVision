@@ -93,6 +93,9 @@ public final class MainActivity extends ComponentActivity {
     private Button calibration;
     private TextView scaleLabel;
     private HistogramView histogram;
+    /** 0.15.3: curva acumulada + ajuste Rosin–Rammler, abaixo do histograma (mesma visibilidade). */
+    private RosinRammlerView rosinRammler;
+    private LinearLayout chartTabs;private TextView histogramTab,rrTab;private android.widget.FrameLayout chartSlot;
     private GranulometricColorMap colorMap;
     private boolean colorMapVisible=false;
     /** Visualização: 0 original (só a foto), 1 segmentação (marcações), 2 mapa granulométrico. */
@@ -216,7 +219,15 @@ public final class MainActivity extends ComponentActivity {
         roiActions=row();roiActions.setVisibility(View.GONE);root.addView(roiActions);
         segmentRoi=button("Segmentar foto",false);segmentRoi.setTag("segment_active_roi");segmentRoi.setTextSize(11);segmentRoi.setOnClickListener(v->showSegmentationOptions());roiActions.addView(segmentRoi,new LinearLayout.LayoutParams(0,dp(42),1));
         searchRoi=button("Buscar melhor ajuste",false);searchRoi.setTag("search_active_roi");searchRoi.setTextSize(11);searchRoi.setOnClickListener(v->startActiveAnalysis(true));roiActions.addView(searchRoi,new LinearLayout.LayoutParams(0,dp(42),1));
-        histogram=new HistogramView(this);histogram.setVisibility(View.GONE);histogram.setOnClickListener(v->showHistogramOptions());root.addView(histogram,new LinearLayout.LayoutParams(-1,dp(180)));
+        // 0.15.3: histograma e curva Rosin–Rammler dividem o mesmo espaço, escolhidos por abas (a foto não encolhe).
+        chartTabs=row();chartTabs.setVisibility(View.GONE);root.addView(chartTabs);
+        histogramTab=text("Histograma",12,Color.WHITE);rrTab=text("Rosin–Rammler",12,Color.WHITE);rrTab.setTag("chart_tab_rr");histogramTab.setTag("chart_tab_histogram");
+        for(TextView tab:new TextView[]{histogramTab,rrTab}){tab.setPadding(dp(10),dp(5),dp(10),dp(5));tab.setGravity(android.view.Gravity.CENTER);chartTabs.addView(tab,new LinearLayout.LayoutParams(0,-2,1));}
+        histogramTab.setOnClickListener(v->selectChart(false));rrTab.setOnClickListener(v->selectChart(true));
+        android.widget.FrameLayout chartSlot=new android.widget.FrameLayout(this);this.chartSlot=chartSlot;chartSlot.setVisibility(View.GONE);root.addView(chartSlot,new LinearLayout.LayoutParams(-1,dp(180)));
+        histogram=new HistogramView(this);histogram.setOnClickListener(v->showHistogramOptions());chartSlot.addView(histogram,new android.widget.FrameLayout.LayoutParams(-1,-1));
+        rosinRammler=new RosinRammlerView(this);rosinRammler.setTag("rosin_rammler_chart");rosinRammler.setOnClickListener(v->showRosinRammlerOptions());chartSlot.addView(rosinRammler,new android.widget.FrameLayout.LayoutParams(-1,-1));
+        selectChart(getPreferences(MODE_PRIVATE).getBoolean("chart_rr",false));
         LinearLayout tools=row();root.addView(tools);
         profileLabel=text("Pelotas médias",11,Color.rgb(151,174,187));profileLabel.setTag("suggestion_label");profileLabel.setOnClickListener(v->{if(photoDetailReport!=null&&!roiNeedsAnalysis)showDetailSummary();else showSuggestions();});tools.addView(profileLabel,new LinearLayout.LayoutParams(0,-2,1));
         CheckBox numberBox=new CheckBox(this);numberBox.setText("Números");numberBox.setTextSize(11);numberBox.setTextColor(Color.WHITE);numberBox.setChecked(true);
@@ -507,10 +518,11 @@ public final class MainActivity extends ComponentActivity {
         Granulometry.Distribution exportedDistribution=distribution;CrackAnalysis exportedCracks=photoCracks;final ReportVisuals exportedVisuals=visuals;final CrackClassifierChoice.Resolution exportedChoice=crackResolution;final MobileNetCrackModel net=crackNetwork;final String exportedNetwork=net==null?null:net.id;
         InterestRegion exportedRegion=interestRegion;int outside=regionExcludedCount();final boolean exportedCrop=cropRoiReport;final DetailedAnalysis.Report exportedDetail=photoDetailReport;final LowLightInfo exportedLight=photoLowLight;
         DetectionTuner.Report exportedSuggestions=rankedSuggestions();DetectionTuner.Option exportedOption=photoOption;
+        final RosinRammler.Basis exportedBasis=rrBasis();
         setBusy(Mode.SAVING,"Salvando…");
         worker.execute(()-> {
             try {
-                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork,exportedLight,exportedFiltered,outputFolder,testName);
+                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork,exportedLight,exportedFiltered,outputFolder,testName,exportedBasis);
                 runOnUiThread(()-> {if(!isDestroyed()){
                     mode=Mode.PHOTO;updateControls();final String dir=saved.folder==null?"PelotaVision":"PelotaVision/"+saved.folder;
                     hint.setText(saved.pdf!=null?"Relatório PDF salvo em Downloads / "+dir+".":"Histograma salvo no arquivo _resultado.png. Dados em Downloads / "+dir+".");
@@ -547,7 +559,7 @@ public final class MainActivity extends ComponentActivity {
         if(overlay!=null){overlay.region(null);overlay.reference(null);}
         if(overlay!=null)overlay.cracks(null);if(crackLabel!=null)crackLabel.setText("Trincas: analisadas ao fotografar");
         scaleSettings=null;distribution=null;originalWidth=originalHeight=0;
-        if(histogram!=null){histogram.display(null);histogram.setVisibility(View.GONE);}
+        if(histogram!=null){histogram.display(null);setChartsVisibility(View.GONE);}
         if(scaleLabel!=null)scaleLabel.setText("Fotografe para calibrar em px/mm");
     }
     private void setBusy(Mode newMode,String message) {
@@ -626,15 +638,15 @@ public final class MainActivity extends ComponentActivity {
         return items;
     }
     private void refreshDistribution() {
-        distribution=null;crackHistogram=null;histogram.display(null);histogram.setVisibility(View.GONE);hideColorMap(false);
+        distribution=null;crackHistogram=null;histogram.display(null);setChartsVisibility(View.GONE);hideColorMap(false);
         if(roiNeedsAnalysis){scaleLabel.setText(scaleSettings==null?"ROI sem escala física":"Escala preservada · aguardando segmentação");updateControls();return;}
         if(photoResult==null){scaleLabel.setText("Sem escala · toque em Escala / mm");updateControls();return;}
-        if(scaleSettings==null){distribution=PhotoComposer.pixelHistogram(photoResult);showHistogram();histogram.setVisibility(View.VISIBLE);if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.visuals(visuals);colorMap.viewport(displayWindow);}applyViewMode();scaleLabel.setText("Sem escala física · histograma em px");hint.setText("Toque numa pelota para revisar ou calibrar pela medida real. Escala / mm mantém as opções manuais.");updateControls();return;}
+        if(scaleSettings==null){distribution=PhotoComposer.pixelHistogram(photoResult);showHistogram();setChartsVisibility(View.VISIBLE);if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.visuals(visuals);colorMap.viewport(displayWindow);}applyViewMode();scaleLabel.setText("Sem escala física · histograma em px");hint.setText("Toque numa pelota para revisar ou calibrar pela medida real. Escala / mm mantém as opções manuais.");updateControls();return;}
         try {
             distribution=Granulometry.compute(measurementItems(),scaleSettings,originalWidth,originalHeight,photoResult.width,photoResult.height);
             scaleSettings=distribution.settings;
             scaleLabel.setText((scaleSettings.beltReference!=null?"Correia · ":scaleSettings.containerReference!=null?"Recipiente · ":scaleSettings.selectedObject!=null?"REF · ":scaleSettings.estimated()?"Estimativa · ":"")+HistogramView.number(scaleSettings.originalPixelsPerMm)+" px/mm · classe "+HistogramView.number(distribution.settings.binWidthMm)+" mm");
-            showHistogram();histogram.setVisibility(View.VISIBLE);
+            showHistogram();setChartsVisibility(View.VISIBLE);
             if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.visuals(visuals);colorMap.viewport(displayWindow);}applyViewMode();
             hint.setText(scaleSettings.selectedObject!=null?"Escala pela referência escolhida. Toque em REF para editar a medida.":scaleSettings.estimated()?"Escala estimada pela média informada. Use uma referência para medir em mm.":
                 "Escala aplicada. Confira a faixa em mm antes de salvar; largura da classe não é calibração.");
@@ -1121,6 +1133,21 @@ public final class MainActivity extends ComponentActivity {
         if(distribution==null||histogram==null)return;
         crackHistogram=CrackHistogram.compute(distribution,measurementItems(),photoCracks);
         histogram.display(distribution,crackHistogram,visuals);
+        if(rosinRammler!=null)rosinRammler.display(RosinRammler.fit(distribution,rrBasis()));
+    }
+    private void setChartsVisibility(int visibility){if(chartSlot!=null)chartSlot.setVisibility(visibility);if(chartTabs!=null)chartTabs.setVisibility(visibility);}
+    private void selectChart(boolean rr){
+        getPreferences(MODE_PRIVATE).edit().putBoolean("chart_rr",rr).apply();
+        histogram.setVisibility(rr?View.INVISIBLE:View.VISIBLE);rosinRammler.setVisibility(rr?View.VISIBLE:View.INVISIBLE);
+        histogramTab.setBackgroundColor(rr?Color.TRANSPARENT:Color.rgb(38,140,171));rrTab.setBackgroundColor(rr?Color.rgb(38,140,171):Color.TRANSPARENT);
+        histogramTab.setTextColor(rr?Color.rgb(151,174,187):Color.WHITE);rrTab.setTextColor(rr?Color.WHITE:Color.rgb(151,174,187));
+    }
+    private RosinRammler.Basis rrBasis(){return RosinRammler.Basis.fromId(getPreferences(MODE_PRIVATE).getString("rr_basis","number"));}
+    /** Base da curva: número (o que a foto mede) ou massa estimada ∝ d³ (aproxima a base das curvas de peneira). */
+    private void showRosinRammlerOptions(){
+        RosinRammler.Basis[] bases=RosinRammler.Basis.values();String[] labels=new String[bases.length];for(int i=0;i<bases.length;i++)labels[i]=bases[i].label;
+        new AlertDialog.Builder(this).setTitle("Rosin–Rammler · base da curva").setSingleChoiceItems(labels,rrBasis().ordinal(),(d,which)->{getPreferences(MODE_PRIVATE).edit().putString("rr_basis",bases[which].id).apply();showHistogram();d.dismiss();})
+            .setNegativeButton("Fechar",null).show();
     }
 
     private String crackMethodLabel(){

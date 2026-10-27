@@ -36,7 +36,11 @@ final class DesktopPdfReport {
 
     static final class Figure {
         final BufferedImage image; final String title, caption;
-        Figure(BufferedImage image, ReportPdfContent.FigureText t) { this.image = image; title = t.title; caption = t.caption; }
+        /** 0.5.3: ocupa até a página inteira (histograma + Rosin–Rammler); as demais usam meia página. */
+        final boolean fullPage;
+        Figure(BufferedImage image, ReportPdfContent.FigureText t) { this(image, t, false); }
+        private Figure(BufferedImage image, ReportPdfContent.FigureText t, boolean fullPage) { this.image = image; title = t.title; caption = t.caption; this.fullPage = fullPage; }
+        static Figure fullPage(BufferedImage image, ReportPdfContent.FigureText t) { return new Figure(image, t, true); }
     }
 
     /** Figuras na ordem do relatório, recortando o composto _resultado.png pelo mesmo layout do Android. */
@@ -130,7 +134,8 @@ final class DesktopPdfReport {
         /** Helvetica padrão usa WinAnsi: troca o que não existe nela (√, ≤, ≥, →…) por equivalentes legíveis. */
         String safe(String s, PDType1Font f) {
             if (s == null) return "";
-            s = s.replace("√", "raiz").replace("≤", "<=").replace("≥", ">=").replace("→", "->").replace(" ", " ");
+            s = s.replace("√", "raiz").replace("≤", "<=").replace("≥", ">=").replace("→", "->").replace(" ", " ")
+                    .replace("−", "-").replace("′", "'").replace("ⁿ", "^n").replace("∝", "~");
             StringBuilder b = new StringBuilder(s.length());
             for (int i = 0; i < s.length(); i++) {
                 char ch = s.charAt(i);
@@ -232,7 +237,7 @@ final class DesktopPdfReport {
         /** Figura numerada: título, legenda e imagem; até duas por página quando a imagem é paisagem. */
         void figure(int number, Figure f) throws IOException {
             List<String> lines = split(f.caption, 8.5f, false, W - 2 * M);
-            float maxW = W - 2 * M, maxH = (H - 2 * M - 20) / 2f - 26 - lines.size() * 11.5f;
+            float maxW = W - 2 * M, maxH = (H - 2 * M - 20) / (f.fullPage ? 1f : 2f) - 26 - lines.size() * 11.5f;
             float s = Math.min(maxW / f.image.getWidth(), maxH / f.image.getHeight());
             float dw = f.image.getWidth() * s, dh = f.image.getHeight() * s;
             ensure(16 + lines.size() * 11.5f + 4 + dh + 12);

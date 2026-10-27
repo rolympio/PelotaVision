@@ -26,6 +26,8 @@ final class DesktopAnalysis {
         Granulometry.Settings scale; // escala vigente (entra no contexto da busca, como no Android)
         CrackClassifierChoice crackChoice = CrackClassifierChoice.RANDOM_FOREST; // Modelos de analise
         ReportVisuals visuals = HistogramView.DEFAULTS; // mapa e grafico (gravados no relatorio)
+        /** 0.5.3: base da curva Rosin–Rammler exibida e destacada no relatório (as duas vão para o JSON). */
+        RosinRammler.Basis rrBasis = RosinRammler.Basis.NUMBER;
         /** 0.5.2: realce de imagem escura escolhido em "Luz / imagem escura…"; null = automático (como no Android). */
         LowLightPreprocessor.Mode lowLightMode;
 
