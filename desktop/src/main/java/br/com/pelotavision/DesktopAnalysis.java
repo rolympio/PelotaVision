@@ -24,7 +24,7 @@ final class DesktopAnalysis {
         int crackSensitivity = 50;  // padrao Android
         double minimumExpectedMm = 5;
         Granulometry.Settings scale; // escala vigente (entra no contexto da busca, como no Android)
-        CrackClassifierChoice crackChoice = CrackClassifierChoice.RANDOM_FOREST; // Modelos de analise
+        CrackClassifierChoice crackChoice = CrackClassifierChoice.DEFAULT; // Modelos de analise (0.5.5: MobileNetV3)
         ReportVisuals visuals = HistogramView.DEFAULTS; // mapa e grafico (gravados no relatorio)
         /** 0.5.3: base da curva Rosin–Rammler exibida e destacada no relatório (as duas vão para o JSON). */
         RosinRammler.Basis rrBasis = RosinRammler.Basis.NUMBER;
@@ -106,9 +106,9 @@ final class DesktopAnalysis {
 
     static String crackModelNote() {
         CrackClassifierChoice.Resolution r = lastResolution;
-        String base = crackModel() == null ? crackNote : "Random Forest experimental (crack_forest.pvrf), sem novo treinamento.";
+        String base = crackModel() == null ? crackNote : "Random Forest (reserva, crack_forest.pvrf).";
         if (r == null || r.effective == CrackClassifierChoice.RANDOM_FOREST) return r != null && r.message != null ? r.message : base;
-        return r.effective == CrackClassifierChoice.MOBILENET ? "MobileNetV3 experimental (nao validada); o RF continua o padrao." : base + " Comparacao com MobileNetV3 registrada (status do RF).";
+        return r.effective == CrackClassifierChoice.MOBILENET ? "MobileNetV3 (padrao); melhor que o RF em dois testes independentes, ainda sem validacao em producao." : base + " Comparacao com MobileNetV3 registrada (status do RF).";
     }
 
     private static MobileNetCrackModel network;
@@ -116,7 +116,7 @@ final class DesktopAnalysis {
 
     /** Rede carregada so quando escolhida; liberada quando o RF volta a ser usado. */
     static synchronized CrackDetector crackDetector(CrackClassifierChoice requested) {
-        if (requested == null) requested = CrackClassifierChoice.RANDOM_FOREST;
+        if (requested == null) requested = CrackClassifierChoice.DEFAULT;
         if (requested.needsNetwork()) {
             if (network == null) {
                 File onnx = DesktopApp.model(MobileNetCrackModel.MODEL), meta = DesktopApp.model(MobileNetCrackModel.METADATA);

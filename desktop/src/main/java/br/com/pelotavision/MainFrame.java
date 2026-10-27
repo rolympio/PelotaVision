@@ -163,7 +163,7 @@ final class MainFrame extends JFrame {
         top.add(extraToolbar);
         segExtra.setEnabled(false);
         segExtra.setToolTipText("<html>YOLO11-seg: sem mascaras de instancia com rotulo humano; codigo e pesos Ultralytics sao AGPL-3.0 (revisao de licenca antes de distribuir).<br>Hibrida: sem regra de fusao validada.</html>");
-        crackBox.setToolTipText("<html>Random Forest e o padrao. MobileNetV3 e experimental: poucas trincas reais (rotulos provisorios), testada em uma foto.<br>Recortes dos pixels originais (nunca da super-resolucao). Escore nao calibrado. U-Net de trincas: indisponivel (sem mascaras reais).</html>");
+        crackBox.setToolTipText("<html>MobileNetV3 e o padrao: acertou mais que o Random Forest em dois testes independentes (foto de 7 trincas; 57 fotos de bancada nunca vistas).<br>RF fica como reserva. Ainda sem validacao em producao.<br>Recortes dos pixels originais (nunca da super-resolucao). Escore nao calibrado. U-Net de trincas: indisponivel (sem mascaras reais).</html>");
         opacitySlider.setPreferredSize(new Dimension(110, 24));
         opacitySlider.setToolTipText("Opacidade da cor no mapa (0-90%; padrao 55%)");
         top.add(row(new JLabel("Modelos de analise ·"), new JLabel("Segmentacao neural extra:"), segExtra, new JLabel("Trincas:"), crackBox,
@@ -251,7 +251,7 @@ final class MainFrame extends JFrame {
         mapMax.addActionListener(e -> applyVisuals());
         chartButton.addActionListener(e -> chartOptions());
         crackBox.addActionListener(e -> {
-            prefs.put("crackChoice", CrackClassifierChoice.values()[crackBox.getSelectedIndex()].name());
+            prefs.put("crackChoice2", CrackClassifierChoice.values()[crackBox.getSelectedIndex()].name());
             // Mesmos contornos, so a triagem de trincas e refeita com o classificador escolhido.
             if (mode == Mode.PHOTO && session != null && session.analyzed() && !session.needsAnalysis() && session.output() != null) analyze(false, session.output().applied);
         });
@@ -315,7 +315,8 @@ final class MainFrame extends JFrame {
         opacitySlider.setValue((int) Math.round(visuals.mapOpacity * 100));
         mapLabels.setSelected(visuals.mapLabels); mapFixed.setSelected(visuals.mapFixed);
         mapMin.setText(HistogramView.fmt2(visuals.mapFixedMin)); mapMax.setText(HistogramView.fmt2(visuals.mapFixedMax));
-        crackBox.setSelectedIndex(CrackClassifierChoice.parse(prefs.get("crackChoice", "RANDOM_FOREST")).ordinal());
+        // 0.5.5: chave nova para o novo padrao (MobileNetV3) valer uma vez; a antiga era gravada sempre.
+        crackBox.setSelectedIndex(CrackClassifierChoice.parse(prefs.get("crackChoice2", CrackClassifierChoice.DEFAULT.name())).ordinal());
         viewBox.setSelectedIndex(1);
     }
 

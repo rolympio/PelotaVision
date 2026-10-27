@@ -1,10 +1,21 @@
 {
-  "model": "random_forest_20261018_v1",
+  "model": "random_forest_20261027_v2",
   "features": 72,
-  "n_base_pellets": 209,
-  "positive": 37,
-  "negative": 172,
-  "scenes": 7,
-  "sha256": "736bf0bbaf881cfc0465ea2de362285430820fbc3381cd9753f309cd5e09f8ce",
-  "evaluation": "leave-one-scene-out, original held-out images only, fixed threshold 0.5; annotations provisional, synthetic or provenance unverified; no physical phone or real production validation"
+  "role": "reserva (a MobileNetV3 e o padrao desde a 0.15.5)",
+  "trained_on": {
+    "cenas_antigas_rotuladas": 209,
+    "bancada_pelotas": 57,
+    "bancada_escalas": 2,
+    "bancada_rajadas": 21
+  },
+  "learner": "RandomForest 160 arvores, profundidade 7, min_samples_leaf 2, class_weight balanced (= ml_training/train.py); 6 variantes de iluminacao",
+  "sha256": "e94e05f3071064adb3fb4c942a42d268e2ffb2ab965ff2351fac5d99cc6b32dd",
+  "evaluation": {
+    "holdout_antigo_auc": 0.726,
+    "holdout_antigo_auc_modelo_anterior": 0.491,
+    "bancada_lobo_auc_original": 0.901,
+    "bancada_lobo_auc_reduzida": 0.954,
+    "detalhes": "verification/cracks-bench-20261026/metrics.json"
+  },
+  "reference_vectors": "verification/ml-0.15.5/reference_vectors.csv (vetores da 0.5.0, escores deste modelo)"
 }

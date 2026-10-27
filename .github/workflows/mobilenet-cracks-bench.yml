@@ -1,0 +1,103 @@
+name: Trincas - MobileNetV3 com fotos de bancada (26/10/2026)
+
+# Treina a MobileNetV3-Small com as cenas antigas + sinteticos + fotos de bancada (duas escalas) e avalia:
+#   * LOBO nas fotos de bancada (rajada inteira fora por vez);
+#   * holdout antigo (crack_example), nunca usado para escolha.
+# O asset do app so e substituido se passar no criterio FIXADO ANTES do treino
+# (verification/cracks-bench-20261026/gate_mobilenet.json). Resultados voltam para o branch.
+on:
+  workflow_dispatch:
+    inputs:
+      epocas:
+        description: 'Epocas por ajuste'
+        default: '10'
+  push:
+    branches-ignore: [main]
+    paths: ['tools/cracks/train_mobilenet.py', '.github/workflows/mobilenet-cracks-bench.yml', 'ml_training/data_bench_20261026/instances.jsonl']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mobilenet-bench-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  train:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 170
+    env:
+      EPOCAS: ${{ github.event.inputs.epocas || '10' }}
+      OUT: verification/mobilenet-cracks-20261027
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Dependencias
+        run: |
+          pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu
+          pip install "numpy<2.2" opencv-python-headless==4.12.0.88 scikit-image Pillow onnx onnxruntime==1.20.1 joblib "scikit-learn>=1.8,<1.10"
+      - name: Manifesto (cenas + holdout + sinteticos + bancada em duas escalas)
+        run: |
+          mkdir -p /tmp/trincas
+          git archive origin/feature/trincas-sintese ml_training | tar -x -C /tmp/trincas
+          python tools/cracks/render_synthetic.py --synth-dir /tmp/trincas/ml_training/crack_synthesis --out data/synthetic --per-donor 12 --extra-neg 6
+          B=ml_training/data_bench_20261026
+          python tools/cracks/build_manifest.py --scenes ml_training/data/annotations.json \
+            --holdout tools/cracks/labels/holdout_crack_example.json --synthetic-manifest data/synthetic/synthetic.csv \
+            --instances $B/instances.jsonl --instances-meta $B/meta.json --instances $B/instances_small.jsonl --instances-meta $B/meta_small.json \
+            --out data/pv_cracks
+          cat data/pv_cracks/summary.json
+      - name: Teste rapido (1 epoca, 2 rajadas)
+        run: |
+          python -u tools/cracks/train_mobilenet.py --manifest data/pv_cracks/labels.csv --out /tmp/smoke --epochs 1 --skip-dev \
+            --variants mnv3_plus_synthetic --lobo-prefix bench_photos_20261026: --lobo-limit 2 --model-id smoke 2>&1 | tail -n 15
+      - name: Treinar e avaliar
+        id: train
+        run: |
+          set +e
+          mkdir -p $OUT
+          python -u tools/cracks/train_mobilenet.py --manifest data/pv_cracks/labels.csv --out $OUT --epochs "$EPOCAS" --skip-dev \
+            --variants mnv3_plus_synthetic --lobo-prefix bench_photos_20261026: --model-id mobilenetv3_small_cracks_20261027_v2 > /tmp/run.txt 2>&1
+          s=$?; tail -n 40 /tmp/run.txt; cp /tmp/run.txt $OUT/run_stdout.txt
+          echo "status=$s" >> "$GITHUB_OUTPUT"
+          grep -E "holdout AUC|bancada LOBO" /tmp/run.txt | while IFS= read -r l; do echo "::notice title=MobileNetV3::$l"; done
+          [ $s -eq 0 ] || echo "::error title=MobileNetV3::falhou (status $s): $(tail -n 3 /tmp/run.txt | tr '\n' ' ')"
+      - name: Criterio fixado antes do treino
+        id: gate
+        if: steps.train.outputs.status == '0'
+        run: |
+          python - <<'E'
+          import json, os
+          g = json.load(open('verification/cracks-bench-20261026/gate_mobilenet.json'))['criterio_para_substituir_o_asset']
+          r = json.load(open(os.environ['OUT'] + '/metrics.json'))['results']['mnv3_plus_synthetic']
+          b, h = r['bench_lobo']['ambas'], r['holdout']
+          fn = h['confusion_[[TN,FP],[FN,TP]]'][1][0]
+          checks = {'bancada_auc': (b['auc'], b['auc'] >= g['bancada_lobo_auc_ambas_min']),
+                    'bancada_recall': (b['recall'], b['recall'] >= g['bancada_lobo_recall_ambas_min']),
+                    'holdout_auc': (h['auc'], h['auc'] >= g['holdout_antigo_auc_min']),
+                    'holdout_fn': (fn, fn <= g['holdout_antigo_fn_max'])}
+          ok = all(v[1] for v in checks.values())
+          json.dump({'checks': checks, 'aprovado': ok}, open(os.environ['OUT'] + '/gate_result.json', 'w'), indent=1)
+          print(json.dumps(checks), 'APROVADO' if ok else 'REPROVADO')
+          open(os.environ['GITHUB_OUTPUT'], 'a').write(f'ok={"1" if ok else "0"}\n')
+          print(f'::notice title=Criterio::{"APROVADO" if ok else "REPROVADO"} {json.dumps(checks)}')
+          E
+      - name: Gravar no branch (asset so se aprovado)
+        if: ${{ !cancelled() }}
+        run: |
+          A=app/src/main/assets
+          if [ "${{ steps.gate.outputs.ok }}" = "1" ]; then
+            cp $OUT/mnv3_plus_synthetic.onnx $A/crack_mobilenetv3.onnx
+            cp $OUT/crack_mobilenetv3.json $A/crack_mobilenetv3.json
+          fi
+          rm -f $OUT/mnv3_real_only.onnx
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A $OUT $A/crack_mobilenetv3.onnx $A/crack_mobilenetv3.json 2>/dev/null || git add -A $OUT
+          git commit -m "MobileNetV3 trincas + bancada: treino no CI ($EPOCAS epocas, status ${{ steps.train.outputs.status }}, criterio ${{ steps.gate.outputs.ok || 'n/a' }}) [skip ci]" || exit 0
+          git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}"
+          [ "${{ steps.train.outputs.status }}" = "0" ]

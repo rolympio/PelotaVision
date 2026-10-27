@@ -1,0 +1,13 @@
+{
+  "source_id": "bench_photos_20261026",
+  "images_dir": "ml_training/data_bench_20261026/images",
+  "license_status": "verified",
+  "license_note": "fotos do próprio usuário (Vale, Pelotização), enviadas em 27/10/2026 para treino interno",
+  "material_type": "unknown",
+  "scene": "pelota_isolada_bancada_fundo_branco",
+  "origin": "real",
+  "split_role": "dev",
+  "group_by": "instance_group",
+  "label_note": "rótulo da pasta vale para a foto; ver regras em tools/cracks/import_folder_photos.py",
+  "long_side_px": 1600
+}

@@ -2,15 +2,20 @@ package br.com.pelotavision;
 
 /**
  * Crack classifier selected in "Modelos de análise", with explicit fallback.
- * The Random Forest stays the default. MobileNetV3 is experimental and only runs when its asset
- * loaded and matched its SHA-256; otherwise the request falls back to the forest (and says so).
+ * 0.15.5: MobileNetV3 is the default. In two independent tests it beat the forest: the old holdout
+ * (AUC 0.96 vs 0.49) and the bench photos of 26/10/2026, never seen by either (AUC 0.97 vs 0.76;
+ * verification/cracks-bench-20261026). It only runs when its asset loaded and matched its SHA-256;
+ * otherwise the request falls back to the forest (and says so).
  * The comparison mode keeps the forest status (production behavior) and records the network score
  * next to it, without mixing them.
  */
 public enum CrackClassifierChoice {
-    RANDOM_FOREST("Random Forest (padrão)"),
-    MOBILENET("MobileNetV3 (experimental)"),
-    COMPARISON("Comparação RF × MobileNetV3 (experimental)");
+    RANDOM_FOREST("Random Forest (reserva)"),
+    MOBILENET("MobileNetV3 (padrão)"),
+    COMPARISON("Comparação RF × MobileNetV3");
+
+    /** Escolha de quem nunca mudou o classificador (e de valores salvos ilegíveis). */
+    public static final CrackClassifierChoice DEFAULT = MOBILENET;
 
     public final String label;
 
@@ -18,7 +23,7 @@ public enum CrackClassifierChoice {
 
     public static CrackClassifierChoice parse(String name) {
         for (CrackClassifierChoice c : values()) if (c.name().equals(name)) return c;
-        return RANDOM_FOREST;
+        return DEFAULT;
     }
 
     public boolean needsNetwork() { return this != RANDOM_FOREST; }
@@ -38,7 +43,7 @@ public enum CrackClassifierChoice {
     }
 
     public static Resolution resolve(CrackClassifierChoice requested, boolean forestAvailable, boolean networkAvailable, String networkError) {
-        if (requested == null) requested = RANDOM_FOREST;
+        if (requested == null) requested = DEFAULT;
         if (requested.needsNetwork() && !networkAvailable)
             return new Resolution(requested, RANDOM_FOREST, "MobileNetV3 indisponível (" + (networkError == null ? "modelo ausente" : networkError)
                     + "). Usando " + (forestAvailable ? "o Random Forest." : "a heurística de reserva."));

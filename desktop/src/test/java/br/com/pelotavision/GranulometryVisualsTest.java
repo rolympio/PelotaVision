@@ -234,7 +234,9 @@ public class GranulometryVisualsTest {
         assertEquals(CrackClassifierChoice.RANDOM_FOREST, CrackClassifierChoice.resolve(CrackClassifierChoice.COMPARISON, true, false, null).effective);
         assertFalse(CrackClassifierChoice.resolve(CrackClassifierChoice.RANDOM_FOREST, true, false, null).fellBack());
         assertEquals(CrackClassifierChoice.MOBILENET, CrackClassifierChoice.resolve(CrackClassifierChoice.COMPARISON, false, true, null).effective);
-        assertEquals(CrackClassifierChoice.RANDOM_FOREST, CrackClassifierChoice.parse("lixo"));
+        assertEquals(CrackClassifierChoice.DEFAULT, CrackClassifierChoice.parse("lixo"));
+        assertEquals("0.5.5: MobileNetV3 e o padrao", CrackClassifierChoice.MOBILENET, CrackClassifierChoice.DEFAULT);
+        assertEquals(CrackClassifierChoice.MOBILENET, CrackClassifierChoice.resolve(null, true, true, null).effective);
         try { new CrackDetector(null, null, CrackClassifierChoice.MOBILENET); fail("rede ausente deve ser recusada"); }
         catch (IllegalArgumentException expected) { /* fallback é obrigatório */ }
         assertNull(MobileNetCrackModel.load(new java.io.File("nao_existe.onnx"), "{}"));

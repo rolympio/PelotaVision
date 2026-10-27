@@ -11,9 +11,8 @@ on:
       epocas:
         description: 'Epocas por ajuste'
         default: '10'
-  push:
-    branches-ignore: [main]
-    paths: ['tools/cracks/train_mobilenet.py', '.github/workflows/mobilenet-cracks.yml']
+  # 27/10/2026: so manual. O treino com as fotos de bancada (mobilenet-cracks-bench.yml) tem criterio de troca;
+  # este copiava o modelo para o app sem criterio e correria em paralelo ao mudar train_mobilenet.py.
 
 permissions:
   contents: write

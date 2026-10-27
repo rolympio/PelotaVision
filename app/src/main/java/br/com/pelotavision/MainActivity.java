@@ -102,7 +102,7 @@ public final class MainActivity extends ComponentActivity {
     private int viewMode=1;private Button mapButton;
     private ReportVisuals visuals=ReportVisuals.defaults();
     private CrackHistogram crackHistogram;
-    private volatile CrackClassifierChoice crackChoice=CrackClassifierChoice.RANDOM_FOREST;
+    private volatile CrackClassifierChoice crackChoice=CrackClassifierChoice.DEFAULT;
     private volatile CrackClassifierChoice.Resolution crackResolution;
     private volatile MobileNetCrackModel crackNetwork;
     private int originalWidth,originalHeight;
@@ -1179,12 +1179,13 @@ public final class MainActivity extends ComponentActivity {
         CrackHistogram.Normalization n;try{n=CrackHistogram.Normalization.valueOf(p.getString("hist_normalization","PERCENT_OF_ALL"));}catch(IllegalArgumentException e){n=CrackHistogram.Normalization.PERCENT_OF_ALL;}
         visuals=new ReportVisuals(p.getFloat("map_opacity_v2",(float)GranulometryColorScale.DEFAULT_OPACITY),p.getBoolean("map_labels",false),p.getBoolean("map_fixed",false),
             p.getFloat("map_fixed_min",8),p.getFloat("map_fixed_max",16),p.getBoolean("hist_all",true),p.getBoolean("hist_cracked",true),p.getBoolean("hist_values",false),n);
-        crackChoice=CrackClassifierChoice.parse(p.getString("crack_classifier","RANDOM_FOREST"));
+        // 0.15.5: chave nova para o novo padrão valer uma vez (a antiga era gravada junto com os gráficos, mesmo sem escolha).
+        crackChoice=CrackClassifierChoice.parse(p.getString("crack_classifier_v2",CrackClassifierChoice.DEFAULT.name()));
     }
     private void saveVisuals(){
         getPreferences(MODE_PRIVATE).edit().putFloat("map_opacity_v2",(float)visuals.mapOpacity).putBoolean("map_labels",visuals.mapLabels).putBoolean("map_fixed",visuals.mapFixed)
             .putFloat("map_fixed_min",(float)visuals.mapFixedMin).putFloat("map_fixed_max",(float)visuals.mapFixedMax).putBoolean("hist_all",visuals.showAll).putBoolean("hist_cracked",visuals.showCracked)
-            .putBoolean("hist_values",visuals.showValues).putString("hist_normalization",visuals.normalization.name()).putString("crack_classifier",crackChoice.name()).apply();
+            .putBoolean("hist_values",visuals.showValues).putString("hist_normalization",visuals.normalization.name()).putString("crack_classifier_v2",crackChoice.name()).apply();
     }
     private void refreshVisuals(){saveVisuals();if(colorMap!=null)colorMap.visuals(visuals);showHistogram();applyViewMode();}
 
@@ -1247,7 +1248,7 @@ public final class MainActivity extends ComponentActivity {
         boolean assetPresent;try{getAssets().open(MobileNetCrackModel.MODEL).close();assetPresent=true;}catch(Exception e){assetPresent=false;}
         for(int i=0;i<choices.length;i++){android.widget.RadioButton r=new android.widget.RadioButton(this);clsIds[i]=View.generateViewId();r.setId(clsIds[i]);r.setText(choices[i].label+(choices[i].needsNetwork()&&!assetPresent?" — indisponível":""));r.setTextColor(Color.WHITE);r.setTextSize(12);r.setEnabled(!choices[i].needsNetwork()||assetPresent);cls.addView(r);if(choices[i]==crackChoice)cls.check(clsIds[i]);}
         content.addView(cls);
-        content.addView(text("O Random Forest continua o padrão. A MobileNetV3 foi treinada com poucas trincas reais (rótulos provisórios) e testada em uma única foto: use para comparar, não para decidir. Os recortes vêm dos pixels originais, nunca da super-resolução. O escore não é probabilidade calibrada. Localização de trincas por U-Net: indisponível (não há máscaras reais de trinca).",11,Color.LTGRAY));
+        content.addView(text("A MobileNetV3 é o padrão: em dois testes independentes (foto de 7 trincas e 57 fotos de bancada nunca vistas) acertou mais que o Random Forest, que fica como reserva. Ainda não foi validada em produção nem em pelotas cruas na panela. Os recortes vêm dos pixels originais, nunca da super-resolução. O escore não é probabilidade calibrada. Localização de trincas por U-Net: indisponível (não há máscaras reais de trinca).",11,Color.LTGRAY));
         content.addView(text("Visualização",15,Color.WHITE));android.widget.RadioGroup view=new android.widget.RadioGroup(this);
         String[] viewLabels={"Original","Segmentação","Mapa granulométrico"};int[] viewIds=new int[3];
         for(int i=0;i<3;i++){android.widget.RadioButton r=new android.widget.RadioButton(this);viewIds[i]=View.generateViewId();r.setId(viewIds[i]);r.setText(viewLabels[i]);r.setTextColor(Color.WHITE);r.setTextSize(12);view.addView(r);}
