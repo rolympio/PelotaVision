@@ -59,6 +59,11 @@ final class MainFrame extends JFrame {
     private final Preferences prefs = Preferences.userNodeForPackage(MainFrame.class);
     final ImageView view = new ImageView();
     private final HistogramView histogram = new HistogramView();
+    // 0.5.3: curva acumulada com ajuste Rosin–Rammler (mesmas pelotas e classes do histograma).
+    private final RosinRammlerView rrView = new RosinRammlerView();
+    private final JComboBox<String> rrBasisBox = new JComboBox<>(new String[]{RosinRammler.Basis.NUMBER.label, RosinRammler.Basis.MASS.label});
+    private final JButton scaleButton = new JButton("Escala e histograma…");
+    private javax.swing.JDialog scaleDialog;
     private final JTextArea summary = new JTextArea(10, 30);
     private final JLabel status = new JLabel(" ");
     private final JProgressBar progress = new JProgressBar();
@@ -83,6 +88,12 @@ final class MainFrame extends JFrame {
     private final JButton roiButton = new JButton("ROI…");
     private final JButton analyzeButton = new JButton("Segmentar");
     private final JButton cancelButton = new JButton("Cancelar");
+    // 0.5.2: paridade com o Android — segmentação detalhada e escolha do realce de imagem escura.
+    private final JButton detailButton = new JButton("Detalhada…");
+    private final JButton lightButton = new JButton("Luz / imagem escura…");
+    private DesktopDetail.Options detailOptions = new DesktopDetail.Options();
+    /** null = automático. Não é persistido (como no Android): cada sessão começa no automático. */
+    LowLightPreprocessor.Mode lowLightMode;
     private final JButton saveButton = new JButton("Salvar foto + dados…");
 
     private final JTextField pxPerMm = new JTextField(8);
@@ -95,7 +106,7 @@ final class MainFrame extends JFrame {
     private final JLabel scaleLabel = new JLabel("Sem escala fisica · valores em px");
     // ---- Modelos de analise (0.5.0): visualizacao, mapa, classificador de trincas e grafico ----
     private final JComboBox<String> viewBox = new JComboBox<>(new String[]{"Original", "Segmentacao", "Mapa granulometrico"});
-    private final javax.swing.JSlider opacitySlider = new javax.swing.JSlider(0, 70, 25);
+    private final javax.swing.JSlider opacitySlider = new javax.swing.JSlider(0, 90, 55);
     private final JCheckBox mapLabels = new JCheckBox("Diametros");
     private final JCheckBox mapFixed = new JCheckBox("Escala fixa");
     private final JTextField mapMin = new JTextField("8", 4), mapMax = new JTextField("16", 4);
@@ -144,14 +155,14 @@ final class MainFrame extends JFrame {
         top.add(row(new JLabel("Camera:"), cameraBox, resolutionBox, lockFocus, lockExposure, cameraButton, driverButton, liveBox,
                 Box.createHorizontalStrut(12), captureButton, openButton, backLiveButton));
         top.add(row(new JLabel("Cena:"), sceneBox, new JLabel("Perfil:"), profileBox, new JLabel("Metodo:"), methodBox, new JLabel("Sensibilidade %:"), sensitivity, autoSuggest,
-                numbers, Box.createHorizontalStrut(12), roiButton, analyzeButton, cancelButton, saveButton));
+                numbers, Box.createHorizontalStrut(12), roiButton, analyzeButton, detailButton, lightButton, cancelButton, saveButton));
         extraToolbar = row();
         top.add(extraToolbar);
         segExtra.setEnabled(false);
         segExtra.setToolTipText("<html>YOLO11-seg: sem mascaras de instancia com rotulo humano; codigo e pesos Ultralytics sao AGPL-3.0 (revisao de licenca antes de distribuir).<br>Hibrida: sem regra de fusao validada.</html>");
         crackBox.setToolTipText("<html>Random Forest e o padrao. MobileNetV3 e experimental: poucas trincas reais (rotulos provisorios), testada em uma foto.<br>Recortes dos pixels originais (nunca da super-resolucao). Escore nao calibrado. U-Net de trincas: indisponivel (sem mascaras reais).</html>");
         opacitySlider.setPreferredSize(new Dimension(110, 24));
-        opacitySlider.setToolTipText("Opacidade da cor no mapa (0-70%; padrao 25%)");
+        opacitySlider.setToolTipText("Opacidade da cor no mapa (0-90%; padrao 55%)");
         top.add(row(new JLabel("Modelos de analise ·"), new JLabel("Segmentacao neural extra:"), segExtra, new JLabel("Trincas:"), crackBox,
                 new JLabel("Visualizacao:"), viewBox, new JLabel("Opacidade:"), opacitySlider, mapLabels, mapFixed, mapMin, new JLabel("a"), mapMax, chartButton));
 
@@ -160,15 +171,22 @@ final class MainFrame extends JFrame {
         side.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
         scalePanel = new JPanel();
         scalePanel.setLayout(new BoxLayout(scalePanel, BoxLayout.Y_AXIS));
-        scalePanel.setBorder(BorderFactory.createTitledBorder("Escala e histograma"));
+        scalePanel.setBorder(BorderFactory.createTitledBorder("Escala e classes do histograma"));
         scalePanel.add(row(new JLabel("px/mm (imagem original):"), pxPerMm));
         scalePanel.add(row(new JLabel("Classe (mm):"), binWidth));
         scalePanel.add(row(excludePartial));
         scalePanel.add(row(excludeReview));
         scalePanel.add(row(measureButton));
         scalePanel.add(row(applyScaleButton, clearScaleButton));
-        scalePanel.add(row(scaleLabel));
-        side.add(scalePanel);
+        // 0.5.3: o painel de escala abre por botão; o espaço lateral fica para histograma + Rosin–Rammler.
+        scaleButton.setToolTipText("px/mm, classe, exclusões, referência, correia, recipiente, objeto e média");
+        scaleButton.addActionListener(e -> showScaleDialog());
+        JPanel scaleRow = new JPanel(new BorderLayout(6, 0));
+        scaleRow.add(scaleButton, BorderLayout.WEST);
+        scaleRow.add(scaleLabel, BorderLayout.CENTER);
+        scaleRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        scaleRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        side.add(scaleRow);
         summary.setEditable(false);
         summary.setLineWrap(true); summary.setWrapStyleWord(true);
         summary.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
@@ -177,12 +195,20 @@ final class MainFrame extends JFrame {
         side.add(sp);
         histogram.setBorder(BorderFactory.createTitledBorder("Histograma por numero"));
         side.add(histogram);
+        rrBasisBox.setSelectedIndex(RosinRammler.Basis.fromId(prefs.get("rrBasis", "number")).ordinal());
+        rrBasisBox.setToolTipText("<html>Numero: o que a imagem mede (contagem de pelotas).<br>Massa estimada: pondera cada pelota por d³ (esferas de mesma densidade) — aproxima a base das curvas de peneira, sem substituir o peneiramento.</html>");
+        rrBasisBox.addActionListener(e -> { prefs.put("rrBasis", rrBasis().id); refreshCharts(session); });
+        JPanel rrPanel = new JPanel(new BorderLayout());
+        rrPanel.setBorder(BorderFactory.createTitledBorder("Curva acumulada · Rosin–Rammler"));
+        rrPanel.add(row(new JLabel("Base:"), rrBasisBox), BorderLayout.NORTH);
+        rrPanel.add(rrView, BorderLayout.CENTER);
+        side.add(rrPanel);
         JLabel legend = new JLabel("<html><b>Legenda:</b> verde = aceita · amarelo = revisar/inconclusivo · vermelho = possivel trinca · "
                 + "cinza = parcial na borda · tracejado = forma sem confianca · ciano = REF.<br>Clique numa pelota para revisar/calibrar. "
                 + "Roda = zoom · arrastar = mover · duplo clique = ajustar.</html>");
         legend.setBorder(BorderFactory.createEmptyBorder(6, 2, 2, 2));
         side.add(legend);
-        side.setPreferredSize(new Dimension(420, 600));
+        side.setPreferredSize(new Dimension(440, 600));
 
         JPanel bottom = new JPanel(new BorderLayout(8, 0));
         bottom.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
@@ -206,6 +232,11 @@ final class MainFrame extends JFrame {
         backLiveButton.addActionListener(e -> backToLive());
         roiButton.addActionListener(e -> editRegion());
         analyzeButton.addActionListener(e -> analyze(false, null));
+        camera.onStatus = msg -> SwingUtilities.invokeLater(() -> { setStatus(msg); updateControls(); });
+        detailButton.addActionListener(e -> detailed());
+        lightButton.addActionListener(e -> lowLightDialog());
+        detailButton.setToolTipText("Lê a área nos pixels ORIGINAIS e analisa em blocos sobrepostos (até 3 min). Opcional: contraste local, ruído leve e FSRCNN 2×.");
+        lightButton.setToolTipText("Escolhe o realce de imagem escura (só na ROI) com prévia. As medidas continuam nos pixels originais.");
         cancelButton.addActionListener(e -> { AtomicBoolean c = cancel; if (c != null) c.set(true); });
         saveButton.addActionListener(e -> save());
         numbers.addActionListener(e -> view.setNumbers(numbers.isSelected()));
@@ -232,13 +263,40 @@ final class MainFrame extends JFrame {
         probeCameras();
     }
 
+    RosinRammler.Basis rrBasis() { return RosinRammler.Basis.values()[Math.max(0, rrBasisBox.getSelectedIndex())]; }
+
+    /** Curva RR da distribuição exibida (null = sem gráfico). */
+    private void refreshCharts(PhotoSession s) {
+        Granulometry.Distribution d = s == null ? null : s.distribution();
+        rrView.display(d == null ? null : RosinRammler.fit(d, rrBasis()));
+    }
+
+    /** Janela (não modal) com o antigo painel "Escala e histograma"; reaproveita os mesmos controles. */
+    private void showScaleDialog() {
+        if (scaleDialog == null) {
+            scaleDialog = new javax.swing.JDialog(this, "Escala e histograma", false);
+            JPanel content = new JPanel(new BorderLayout());
+            content.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            content.add(new JScrollPane(scalePanel), BorderLayout.CENTER);
+            JButton close = new JButton("Fechar");
+            close.addActionListener(e -> scaleDialog.setVisible(false));
+            content.add(row(close), BorderLayout.SOUTH);
+            scaleDialog.setContentPane(content);
+            scaleDialog.pack();
+            scaleDialog.setSize(Math.max(460, scaleDialog.getWidth()), Math.min(scaleDialog.getHeight(), 720));
+            scaleDialog.setLocationRelativeTo(scaleButton);
+        }
+        scaleDialog.setVisible(true);
+        scaleDialog.toFront();
+    }
+
     final JPanel extraToolbar;
     final JPanel scalePanel;
 
     private void restoreVisuals() {
         CrackHistogram.Normalization n;
         try { n = CrackHistogram.Normalization.valueOf(prefs.get("histNorm", "ABSOLUTE")); } catch (IllegalArgumentException e) { n = CrackHistogram.Normalization.ABSOLUTE; }
-        visuals = new ReportVisuals(prefs.getDouble("mapOpacity", GranulometryColorScale.DEFAULT_OPACITY), prefs.getBoolean("mapLabels", false), prefs.getBoolean("mapFixed", false),
+        visuals = new ReportVisuals(prefs.getDouble("mapOpacity2", GranulometryColorScale.DEFAULT_OPACITY), prefs.getBoolean("mapLabels", false), prefs.getBoolean("mapFixed", false),
                 prefs.getDouble("mapMin", 8), prefs.getDouble("mapMax", 16), prefs.getBoolean("histAll", true), prefs.getBoolean("histCracked", true), prefs.getBoolean("histValues", false), n);
         opacitySlider.setValue((int) Math.round(visuals.mapOpacity * 100));
         mapLabels.setSelected(visuals.mapLabels); mapFixed.setSelected(visuals.mapFixed);
@@ -253,7 +311,7 @@ final class MainFrame extends JFrame {
         try { lo = Double.parseDouble(mapMin.getText().trim().replace(',', '.')); hi = Double.parseDouble(mapMax.getText().trim().replace(',', '.')); if (mapFixed.isSelected()) GranulometryColorScale.fixed(lo, hi, "mm"); }
         catch (IllegalArgumentException e) { if (mapFixed.isSelected()) { setStatus("Escala fixa invalida: informe minimo < maximo."); mapFixed.setSelected(false); } }
         visuals = visuals.withMap(opacitySlider.getValue() / 100.0, mapLabels.isSelected(), mapFixed.isSelected(), lo, hi);
-        prefs.putDouble("mapOpacity", visuals.mapOpacity); prefs.putBoolean("mapLabels", visuals.mapLabels); prefs.putBoolean("mapFixed", visuals.mapFixed);
+        prefs.putDouble("mapOpacity2", visuals.mapOpacity); prefs.putBoolean("mapLabels", visuals.mapLabels); prefs.putBoolean("mapFixed", visuals.mapFixed);
         prefs.putDouble("mapMin", visuals.mapFixedMin); prefs.putDouble("mapMax", visuals.mapFixedMax);
         refreshVisuals();
     }
@@ -261,6 +319,7 @@ final class MainFrame extends JFrame {
     private void refreshVisuals() {
         if (session == null) return;
         histogram.display(session.distribution(), session.crackHistogram(), visuals);
+        refreshCharts(session);
         view.setMap(session.distribution(), visuals);
     }
 
@@ -432,9 +491,11 @@ final class MainFrame extends JFrame {
         c.autoSuggest = autoSuggest.isSelected();
         c.crackSensitivity = crackSensitivity;
         c.crackChoice = CrackClassifierChoice.values()[Math.max(0, crackBox.getSelectedIndex())];
+        c.rrBasis = rrBasis();
         c.visuals = visuals;
         c.scale = session == null ? null : session.scale();
         c.minimumExpectedMm = session == null ? 5 : session.minimumExpectedMm();
+        c.lowLightMode = lowLightMode;
         return c;
     }
 
@@ -482,14 +543,158 @@ final class MainFrame extends JFrame {
         });
     }
 
+    // ---------------- Segmentação detalhada (0.5.2) ----------------
+
+    /** Opções e execução da segmentação detalhada; com resultado detalhado, mostra antes o resumo. */
+    private void detailed() {
+        PhotoSession s = session;
+        if (s == null || mode != Mode.PHOTO) return;
+        if (s.output() != null && s.output().detailed != null && !s.needsAnalysis()) {
+            Object[] choices = {"Segmentar novamente", "Fechar"};
+            int r = JOptionPane.showOptionDialog(this, DesktopDetail.summary(s.output().detailed), "Segmentação detalhada", JOptionPane.DEFAULT_OPTION,
+                    JOptionPane.INFORMATION_MESSAGE, null, choices, choices[1]);
+            if (r != 0) return;
+        }
+        if (sceneBox.getSelectedIndex() == 1) { info("Na correia use a análise rápida: ela já trabalha na resolução nativa (até 1600 px) e o modo detalhado mede os perfis pelo bloco, não pela foto."); return; }
+        JCheckBox compare = new JCheckBox("Comparar original, contraste local e redução leve de ruído", detailOptions.compare);
+        JCheckBox search = new JCheckBox("Buscar configuração de detecção antes dos blocos", detailOptions.search);
+        JCheckBox sr = new JCheckBox("Testar super-resolução FSRCNN 2× (experimental)", detailOptions.superResolution);
+        boolean srAvailable = DesktopApp.model(FsrcnnUpscaler.MODEL).isFile();
+        if (!srAvailable) { sr.setSelected(false); sr.setEnabled(false); sr.setText(sr.getText() + " — modelo ausente"); }
+        JPanel p = new JPanel();
+        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+        JLabel intro = new JLabel("<html><body style='width:420px'>Detalhada lê a área da foto ORIGINAL (antes da redução para análise) e analisa blocos sobrepostos. Pode demorar até 3 minutos. "
+                + "A escala e as coordenadas do relatório são preservadas.<br><br>SR só propõe contornos: elipses são reajustadas e trincas analisadas nos pixels originais. "
+                + "Mais marcações não provam maior precisão. Leitura limitada a 8 megapixels por área.</body></html>");
+        p.add(intro); p.add(compare); p.add(search); p.add(sr);
+        if (JOptionPane.showConfirmDialog(this, p, "Como segmentar esta área?", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
+        if (s.pendingReviews() > 0 && JOptionPane.showConfirmDialog(this, "Reanalisar descarta " + s.pendingReviews() + " revisao(oes) manual(is) de trinca. Continuar?",
+                "Reanalisar", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
+        DesktopDetail.Options opt = new DesktopDetail.Options();
+        opt.compare = compare.isSelected(); opt.search = search.isSelected(); opt.superResolution = sr.isSelected() && srAvailable;
+        detailOptions = opt;
+        savePrefs();
+        DesktopAnalysis.Config cfg = config();
+        DetectionTuner.Option current = s.output() != null && !s.needsAnalysis() ? s.output().applied : null;
+        AtomicBoolean c = new AtomicBoolean(false);
+        cancel = c;
+        mode = Mode.BUSY;
+        updateControls();
+        progress.setIndeterminate(true);
+        setStatus("Segmentação detalhada: lendo a " + (s.region() == null ? "foto" : "ROI") + " original…");
+        worker.execute(() -> {
+            try {
+                DesktopAnalysis.Output out = DesktopDetail.run(s, cfg, current, opt, c::get,
+                        (done, total, label) -> SwingUtilities.invokeLater(() -> { progress.setIndeterminate(false); progress.setMaximum(Math.max(1, total)); progress.setValue(done); setStatus("Detalhada " + done + "/" + total + ": " + label); }));
+                SwingUtilities.invokeLater(() -> {
+                    if (session != s) return;
+                    String warning = s.accept(out);
+                    mode = Mode.PHOTO;
+                    refreshPhoto();
+                    setStatus(out.detailed.summary() + " · " + s.active().circles.size() + " propostas. Confira os contornos antes de salvar.");
+                    if (warning != null) JOptionPane.showMessageDialog(this, warning, "Escala", JOptionPane.WARNING_MESSAGE);
+                });
+            } catch (java.util.concurrent.CancellationException ex) {
+                SwingUtilities.invokeLater(() -> { mode = Mode.PHOTO; setStatus("Processamento cancelado; resultado anterior preservado."); updateControls(); });
+            } catch (Exception | OutOfMemoryError ex) {
+                SwingUtilities.invokeLater(() -> { mode = Mode.PHOTO; error("Segmentação detalhada", ex instanceof Exception ? (Exception) ex : new RuntimeException("Memória insuficiente: reduza a ROI.", ex)); updateControls(); });
+            } finally {
+                SwingUtilities.invokeLater(() -> { progress.setIndeterminate(false); progress.setValue(0); cancel = null; });
+            }
+        });
+    }
+
+    // ---------------- Imagem escura (0.5.2) ----------------
+
+    /** Escolha do realce com prévia, como "Recuperação de imagem escura" do Android. Aplicar exige ROI. */
+    private void lowLightDialog() {
+        PhotoSession s = session;
+        if (s == null || mode != Mode.PHOTO) return;
+        LowLightPreprocessor.Mode[] modes = LowLightPreprocessor.Mode.values();
+        String[] choices = {"Automático", "Original (sem filtro)", "Gama + CLAHE", "Redução de ruído + CLAHE", "Retinex"};
+        JComboBox<String> box = new JComboBox<>(choices);
+        box.setSelectedIndex(lowLightMode == null ? 0 : lowLightMode.ordinal() + 1);
+        JLabel preview = new JLabel();
+        preview.setPreferredSize(new Dimension(640, 400));
+        preview.setHorizontalAlignment(JLabel.CENTER);
+        // Prévia ilustrativa sobre a área mostrada (ROI ou foto), reduzida a 900 px; a análise usa a ROI inteira.
+        AnalysisWindow w = new AnalysisWindow(s.width, s.height, s.region());
+        Mat small;
+        {
+            Mat full = Mats.gray(s.analyzed), crop = null;
+            try {
+                crop = w.region == null ? full : w.cropGray(full);
+                double f = Math.min(1, 900.0 / Math.max(crop.cols(), crop.rows()));
+                small = new Mat();
+                org.opencv.imgproc.Imgproc.resize(crop, small, new org.opencv.core.Size(Math.max(1, crop.cols() * f), Math.max(1, crop.rows() * f)), 0, 0, org.opencv.imgproc.Imgproc.INTER_AREA);
+            } finally {
+                if (crop != null && crop != full) crop.release();
+                full.release();
+            }
+        }
+        LowLightPreprocessor.Quality q = LowLightPreprocessor.assess(small);
+        JLabel quality = new JLabel(String.format(Locale.ROOT, "Nível médio de cinza %.0f · contraste %.0f · %s", q.mean, q.standardDeviation,
+                q.needsCorrection() ? "imagem escura ou de baixo contraste" : "iluminação adequada"));
+        Runnable render = () -> {
+            int i = box.getSelectedIndex();
+            Mat out = LowLightPreprocessor.apply(small, i <= 1 ? LowLightPreprocessor.Mode.ORIGINAL : modes[i - 1]);
+            try {
+                BufferedImage img = Mats.toImage(out);
+                double f = Math.min(640.0 / img.getWidth(), 400.0 / img.getHeight());
+                preview.setIcon(new javax.swing.ImageIcon(img.getScaledInstance(Math.max(1, (int) (img.getWidth() * f)), Math.max(1, (int) (img.getHeight() * f)), java.awt.Image.SCALE_SMOOTH)));
+            } finally {
+                out.release();
+            }
+        };
+        box.addActionListener(e -> render.run());
+        render.run();
+        JPanel p = new JPanel(new BorderLayout(6, 6));
+        JLabel note = new JLabel("<html><body style='width:620px'>Prévia de iluminação. A segmentação usa a ROI selecionada e refina as medidas na imagem original. "
+                + "Automático só aplica realce quando a ROI está escura ou com pouco contraste.</body></html>");
+        p.add(note, BorderLayout.NORTH); p.add(preview, BorderLayout.CENTER);
+        JPanel south = new JPanel(new BorderLayout(4, 4)); south.add(box, BorderLayout.NORTH); south.add(quality, BorderLayout.SOUTH);
+        p.add(south, BorderLayout.SOUTH);
+        Object[] options = {"Aplicar e analisar", "Cancelar"};
+        int r;
+        try {
+            r = JOptionPane.showOptionDialog(this, p, "Recuperação de imagem escura", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+        } finally {
+            small.release();
+        }
+        if (r != 0) return;
+        if (s.region() == null) { info("Selecione primeiro uma ROI (botão ROI…). O realce de imagem escura só é aplicado numa área selecionada."); return; }
+        int i = box.getSelectedIndex();
+        lowLightMode = i == 0 ? null : modes[i - 1];
+        analyze(false, s.output() != null && !s.needsAnalysis() ? s.output().applied : null);
+    }
+
     double prefsMinimum() { return prefs.getDouble("minimumMm", 5); }
     void savePrefsMinimum(double v) { prefs.putDouble("minimumMm", v); }
     void editRegionPublic() { editRegion(); }
+    /** Abre o editor de ROI com uma proposta (ex.: interior do recipiente); nada muda sem Aplicar. */
+    void editRegionPublic(InterestRegion proposal) { editRegion(proposal); }
 
-    private void editRegion() {
+    /** Ganchos do roteiro de capturas do manual (DesktopManual): mesmas ações dos botões, sem seletor de arquivo. */
+    void manual(String action) {
+        switch (action) {
+            case "detalhada": detailed(); break;
+            case "luz": lowLightDialog(); break;
+            case "roi": editRegion(); break;
+            case "grafico": chartOptions(); break;
+            case "mapa": viewBox.setSelectedIndex(2); break;
+            case "original": viewBox.setSelectedIndex(0); break;
+            case "segmentacao": viewBox.setSelectedIndex(1); break;
+            default: throw new IllegalArgumentException(action);
+        }
+    }
+    void manualLoad(PhotoSession s) { loadPhoto(s); }
+
+    private void editRegion() { editRegion(session == null ? null : session.region()); }
+
+    private void editRegion(InterestRegion initial) {
         PhotoSession s = session;
         if (s == null || mode != Mode.PHOTO) return;
-        RegionEditorDialog d = new RegionEditorDialog(this, s.analyzedImage, s.region());
+        RegionEditorDialog d = new RegionEditorDialog(this, s.analyzedImage, initial);
         d.setVisible(true);
         if (!d.applied) return;
         try {
@@ -506,6 +711,7 @@ final class MainFrame extends JFrame {
     void refreshPhoto() {
         PhotoSession s = session;
         if (s == null) return;
+        view.setImage(s.shownImage(), true); // 0.5.2: filtrada quando a análise aplicou realce de iluminação
         view.setViewport(s.displayWindow());
         view.setOverlay(s.active(), s.activeCracks());
         view.setReference(s.reference());
@@ -516,6 +722,7 @@ final class MainFrame extends JFrame {
         if (s.region() != null) t.append(String.format(Locale.ROOT, "ROI %s %.0f x %.0f px%s.\n", s.region().shape == InterestRegion.Shape.CIRCLE ? "circular" : "retangular",
                 s.region().width(), s.region().height(), s.regionExcluded() > 0 ? " · " + s.regionExcluded() + " fora/cruzando o limite" : ""));
         if (!s.analyzed()) t.append("Aguardando analise.\n");
+        else if (s.filteredImage() != null) t.append("Iluminacao: " + LowLightInfo.label(s.lowLight().mode) + " aplicado na ROI (exibicao e relatorio; medidas nos pixels originais).\n");
         else if (s.needsAnalysis()) t.append("Area alterada · aguardando analise. Salvar fica bloqueado ate segmentar.\n");
         else {
             for (String line : DesktopExport.summaryLines(s)) t.append(line).append('\n');
@@ -524,6 +731,7 @@ final class MainFrame extends JFrame {
         summary.setText(t.toString());
         summary.setCaretPosition(0);
         histogram.display(s.distribution(), s.crackHistogram(), visuals);
+        refreshCharts(s);
         view.setMap(s.distribution(), visuals);
         view.setViewMode(viewBox.getSelectedIndex());
         refreshScaleLabel();
@@ -612,7 +820,7 @@ final class MainFrame extends JFrame {
     private void refreshScaleLabel() {
         Granulometry.Settings s = session == null ? null : session.scale();
         if (s == null) { scaleLabel.setText("Sem escala fisica · valores em px"); return; }
-        String source = s.beltReference != null ? "Correia" : s.selectedObject != null ? "REF " + s.selectedObject.summary()
+        String source = s.beltReference != null ? "Correia" : s.containerReference != null ? s.containerReference.summary() : s.selectedObject != null ? "REF " + s.selectedObject.summary()
                 : s.estimated() ? "ESTIMATIVA pela media informada (hipotese)" : "reference_length".equals(s.calibrationSource) ? "referencia de comprimento" : "digitado";
         scaleLabel.setText(String.format(Locale.ROOT, "<html>%.4f px/mm · %s<br>classe %s mm</html>", s.originalPixelsPerMm, source, HistogramView.fmt(s.binWidthMm)));
     }
@@ -622,19 +830,17 @@ final class MainFrame extends JFrame {
     private void save() {
         PhotoSession s = session;
         if (s == null || !s.canSave()) { info(s != null && s.needsAnalysis() ? "A area mudou: segmente antes de salvar." : "Analise uma foto antes de salvar."); return; }
-        JFileChooser chooser = new JFileChooser();
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        chooser.setDialogTitle("Pasta para os resultados");
+        // 0.5.3: cada gravação vai para uma pasta própria, sugerida com data/hora do momento + nome do teste.
         File def = new File(FileSystemView.getFileSystemView().getDefaultDirectory(), "PelotaVision");
-        File last = new File(prefs.get("saveDir", def.getPath()));
-        chooser.setCurrentDirectory(last.getParentFile());
-        chooser.setSelectedFile(last);
-        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
-        File folder = chooser.getSelectedFile();
-        prefs.put("saveDir", folder.getPath());
+        File root = new File(prefs.get("saveRoot", def.getPath()));
+        SaveDialog.Choice choice = SaveDialog.show(this, root, prefs.get("lastTestName", ""));
+        if (choice == null) return;
+        File folder = choice.folder;
+        prefs.put("saveRoot", choice.parent.getPath());
+        prefs.put("lastTestName", choice.testName == null ? "" : choice.testName);
         try {
-            List<File> files = DesktopExport.save(folder, s, config());
-            StringBuilder t = new StringBuilder("Arquivos salvos em\n" + folder + "\n\n");
+            List<File> files = DesktopExport.save(folder, s, config(), choice.testName);
+            StringBuilder t = new StringBuilder((choice.testName == null ? "" : "Teste: " + choice.testName + "\n") + "Arquivos salvos em\n" + folder + "\n\n");
             for (File f : files) t.append(f.getName()).append('\n');
             JOptionPane.showMessageDialog(this, t.toString(), "Resultado salvo", JOptionPane.INFORMATION_MESSAGE);
             setStatus("Resultados salvos em " + folder);
@@ -658,12 +864,16 @@ final class MainFrame extends JFrame {
         resolutionBox.setEnabled(!busy && !running);
         lockFocus.setEnabled(!running); lockExposure.setEnabled(!running);
         driverButton.setEnabled(running);
-        captureButton.setEnabled(!busy && running);
+        captureButton.setEnabled(!busy && running && !camera.isReconnecting());
         backLiveButton.setEnabled(!busy && running && mode != Mode.LIVE);
         openButton.setEnabled(!busy);
         roiButton.setEnabled(!busy && photo);
         analyzeButton.setEnabled(!busy && photo);
         analyzeButton.setText(session != null && session.region() != null ? "Segmentar ROI" : "Segmentar foto");
+        detailButton.setEnabled(!busy && photo);
+        detailButton.setText(session != null && session.output() != null && session.output().detailed != null ? "Detalhada ✓…" : "Detalhada…");
+        lightButton.setEnabled(!busy && photo);
+        lightButton.setText(lowLightMode == null ? "Luz / imagem escura…" : "Luz: " + LowLightInfo.label(lowLightMode) + "…");
         cancelButton.setEnabled(busy);
         saveButton.setEnabled(!busy && photo && session.canSave());
         measureButton.setEnabled(!busy && photo);

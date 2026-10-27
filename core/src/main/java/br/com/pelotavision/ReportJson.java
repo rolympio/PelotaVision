@@ -22,6 +22,18 @@ public final class ReportJson {
     public static Object beltReferenceJson(BeltCalibration.Reference ref)throws Exception {
         if(ref==null)return JSONObject.NULL;JSONObject j=new JSONObject();j.put("type","belt_width");j.put("user_confirmed",true);j.put("automatically_suggested_edges",ref.edges.automatic);j.put("real_width_mm",ref.realWidthMm);j.put("original_width_px",ref.originalWidthPixels);j.put("original_pixels_per_mm",ref.originalPixelsPerMm);j.put("relative_width_variation",ref.widthVariation);j.put("created_at_epoch_ms",ref.createdAt);j.put("perspective_rectified",false);j.put("analyzed_width",ref.width);j.put("analyzed_height",ref.height);j.put("original_width",ref.originalWidth);j.put("original_height",ref.originalHeight);JSONArray edges=new JSONArray();for(int i=0;i<4;i++){JSONObject p=new JSONObject();p.put("x_px",ref.edges.x(i));p.put("y_px",ref.edges.y(i));edges.put(p);}j.put("edge_endpoints_analyzed_px",edges);return j;
     }
+    public static Object containerReferenceJson(ContainerCalibration.Reference ref)throws Exception {
+        if(ref==null)return JSONObject.NULL;JSONObject j=new JSONObject();
+        j.put("type","container_inner_diameter");j.put("user_confirmed",true);j.put("automatically_suggested_circle",ref.circle.automatic);
+        j.put("measurement_plane",ref.plane.code);j.put("real_inner_diameter_mm",ref.realInnerDiameterMm);
+        j.put("original_diameter_px",ref.originalDiameterPixels);j.put("original_pixels_per_mm",ref.originalPixelsPerMm);
+        j.put("center_x",ref.circle.cx);j.put("center_y",ref.circle.cy);j.put("radius",ref.circle.r);
+        j.put("rim_ovality",finite(ref.rimOvality));j.put("rim_over_pellet_level_scale_ratio_minus_1",finite(ref.rimOverPelletScale));
+        j.put("perspective_rectified",false);
+        j.put("plane_note",ref.plane==ContainerCalibration.Plane.RIM?"scale valid at the rim plane; pellets lie deeper, farther from the camera, and are measured too small by about the rim/pellet-level ratio":"pellet-level circle = outer envelope of peripheral pellets; assumes a cylindrical wall and pellets touching it; heaped material is still closer to the camera at the center");
+        j.put("created_at_epoch_ms",ref.createdAt);j.put("analyzed_width",ref.width);j.put("analyzed_height",ref.height);j.put("original_width",ref.originalWidth);j.put("original_height",ref.originalHeight);
+        return j;
+    }
     private static Object finite(double v){return Double.isFinite(v)?v:JSONObject.NULL;}
     public static Object suggestionScopeJson(DetectionTuner.Report report)throws Exception {
         if(report.context.window==null)return JSONObject.NULL;JSONObject j=processingScopeJson(report.context.window);
@@ -91,7 +103,7 @@ public final class ReportJson {
     }
     public static Object mapJson(Granulometry.Distribution d,ReportVisuals v)throws Exception {
         GranulometryColorScale scale=v.scale(d);if(scale==null)return JSONObject.NULL;JSONObject j=new JSONObject();
-        j.put("palette","continuous HSV hue 240->0 (blue, cyan, green, yellow, red), S=0.85 V=0.95");j.put("scale_mode",scale.mode());j.put("min",scale.min);j.put("max",scale.max);j.put("unit",scale.unit);
+        j.put("palette","continuous HSV hue 240->0 (blue, cyan, green, yellow, red), S=0.85 V=0.95");j.put("scale_mode",scale.mode());j.put("scale_basis",scale.basis);j.put("rim_opacity",GranulometryColorScale.rimOpacity(v.mapOpacity));j.put("min",scale.min);j.put("max",scale.max);j.put("unit",scale.unit);
         j.put("equal_range_middle_color",scale.equalRange());j.put("opacity",v.mapOpacity);j.put("photo_weight",1-v.mapOpacity);j.put("diameter_labels",v.mapLabels);
         j.put("colored_region","inside each fitted ellipse of pellets included in the histogram; nothing outside the ROI or on the belt background");j.put("diameter_basis","equivalent diameter used by the histogram (same scale and classes)");
         j.put("fixed_range_requested",v.mapFixed);return j;

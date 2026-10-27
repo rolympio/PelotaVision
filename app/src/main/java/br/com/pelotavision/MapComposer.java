@@ -38,7 +38,7 @@ final class MapComposer {
             c.scale(v.scale, v.scale);
             ReportClip.clip(c, v, region);
             c.drawBitmap(painted, 0, 0, null);
-            if (visuals.mapLabels) drawLabels(c, result, distribution, v.scale);
+            if (visuals.mapLabels && coloredCount(result, distribution) <= MAX_LABELED) drawLabels(c, result, distribution, v.scale);
             c.restore();
             drawLegend(c, scale, visuals, 0, v.height, v.width, band);
             return out;
@@ -48,6 +48,14 @@ final class MapComposer {
         } finally {
             painted.recycle();
         }
+    }
+
+    /** Acima disto os rótulos de diâmetro viram ruído (1000+ pelotas na correia): o mapa sai sem eles. */
+    static final int MAX_LABELED = 250;
+    static int coloredCount(PelletDetector.Result r, Granulometry.Distribution d) {
+        int n = 0;
+        for (PelletDetector.Detection p : r.circles) if (GranulometryColorScale.colored(d, new Granulometry.Item(2 * p.radius, p.partial, p.needsReview))) n++;
+        return n;
     }
 
     private static void drawLabels(Canvas c, PelletDetector.Result result, Granulometry.Distribution d, float scale) {
@@ -72,13 +80,21 @@ final class MapComposer {
         }
     }
 
+    /** Reduz o tamanho da fonte até o texto caber na largura (nunca abaixo de 60% do tamanho pedido). */
+    static void fit(Paint p, String text, float width) {
+        float size = p.getTextSize(), min = size * 0.6f;
+        while (p.measureText(text) > width && p.getTextSize() > min) p.setTextSize(p.getTextSize() * 0.95f);
+    }
+
     static void drawLegend(Canvas c, GranulometryColorScale scale, ReportVisuals visuals, float x, float y, float width, float height) {
         float s = width / 380f;
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setColor(Color.WHITE);
         p.setTextSize(10 * s);
-        c.drawText(String.format(Locale.getDefault(), "Mapa granulométrico · escala %s · cor %d%% sobre foto %d%%", scale.mode(),
-                Math.round(visuals.mapOpacity * 100), Math.round((1 - visuals.mapOpacity) * 100)), x + 12 * s, y + 16 * s, p);
+        String title = String.format(Locale.getDefault(), "Mapa granulométrico · escala %s · cor %d%% sobre foto %d%%", scale.label(),
+                Math.round(visuals.mapOpacity * 100), Math.round((1 - visuals.mapOpacity) * 100));
+        fit(p, title, width - 24 * s);
+        c.drawText(title, x + 12 * s, y + 16 * s, p);
         float bx = x + 12 * s, bw = width - 24 * s, by = y + 24 * s, bh = 12 * s;
         int[] colors = new int[9];
         for (int i = 0; i < colors.length; i++) colors[i] = 0xFF000000 | GranulometryColorScale.colorAt(i / (colors.length - 1.0));
@@ -89,12 +105,13 @@ final class MapComposer {
         double[] ticks = scale.ticks(scale.equalRange() ? 2 : 5);
         for (int i = 0; i < ticks.length; i++) {
             p.setTextAlign(i == 0 ? Paint.Align.LEFT : i == ticks.length - 1 ? Paint.Align.RIGHT : Paint.Align.CENTER);
-            c.drawText(HistogramView.number(ticks[i]) + (i == ticks.length - 1 ? " " + scale.unit : ""), bx + bw * i / (ticks.length - 1f), by + bh + 11 * s, p);
+            c.drawText((scale.clipsEnds() && i == 0 ? "≤" : scale.clipsEnds() && i == ticks.length - 1 ? "≥" : "") + HistogramView.number(ticks[i]) + (i == ticks.length - 1 ? " " + scale.unit : ""), bx + bw * i / (ticks.length - 1f), by + bh + 11 * s, p);
         }
         p.setTextAlign(Paint.Align.LEFT);
         p.setColor(Color.rgb(151, 174, 187));
         p.setTextSize(8 * s);
-        c.drawText(scale.equalRange() ? "Todos os diâmetros iguais: cor intermediária." : "Cor dentro da elipse ajustada de cada pelota incluída no histograma; fundo e área fora da ROI sem cor.",
-                bx, Math.min(y + height - 4 * s, by + bh + 24 * s), p);
+        String note = scale.equalRange() ? "Todos os diâmetros iguais: cor intermediária." : scale.clipsEnds() ? "Escala sobre D10–D90: abaixo de D10 = azul, acima de D90 = vermelho. Fundo e área fora da ROI sem cor." : "Cor dentro da elipse ajustada de cada pelota incluída no histograma; fundo e área fora da ROI sem cor.";
+        fit(p, note, bw); // 0.15.2: a nota não pode passar da borda direita do mapa exportado
+        c.drawText(note, bx, Math.min(y + height - 4 * s, by + bh + 24 * s), p);
     }
 }

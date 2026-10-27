@@ -1,4 +1,4 @@
-testes=103 falhas=0 erros=0 ignorados=0
+testes=104 falhas=0 erros=0 ignorados=0
 ok     ActiveRoiDemoTest.realRoiIsTheOnlyPhotoOnMainScreenBeforeAndAfterSegmentation
 ok     ActiveRoiWorkflowTest.fractionalCropPreservesPixelScaleAndRejectsTinyAnalysis
 ok     ActiveRoiWorkflowTest.editorApplyShowsOnlyCropAndRequiresFreshSegmentation
@@ -30,6 +30,7 @@ ok     CoverageSuggestionTest.unsupportedImageEvidenceIsExplicitlyUnavailable
 ok     CrackExportTest.tappingPelletAndClassifyingChangesActualActivityCount
 ok     CrackExportTest.exportedReportPreservesOriginalAboveMarkedPanelAndHistogram
 ok     CrackExportTest.realSaverWritesStackedPngCrackCountsAndPixelUnits
+ok     CrackExportTest.lowLightBlockRecordsSelectionModeAndIllumination
 ok     CrackExportTest.suppliedPhotoGeneratesNativeAndroidCompositionWithPixelHistogram
 ok     CrackExportTest.candidateCountIsPerPelletAndReviewChangesPersistInJson
 ok     DetailedDemoTest.rendersActualDetailOptionsAndSuppliedRoiResult

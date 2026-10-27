@@ -59,6 +59,10 @@ final class Features {
         f.extraToolbar.add(crackButton);
         f.extraToolbar.add(shapeButton);
         f.scalePanel.add(MainFrame.row(beltButton));
+        JButton containerButton = new JButton("Calibrar pelo diametro do recipiente…");
+        containerButton.setToolTipText("Detecta a borda de um recipiente redondo e usa o diametro interno conhecido (plano da borda ou nivel das pelotas).");
+        f.scalePanel.add(MainFrame.row(containerButton));
+        containerButton.addActionListener(e -> ContainerFeature.open(f));
         f.scalePanel.add(MainFrame.row(scaleObjectButton));
         f.scalePanel.add(MainFrame.row(meanButton));
         f.scalePanel.add(MainFrame.row(new JLabel("<html><i>Calibrar por objeto: clique numa pelota inteira ou esfera e escolha \"Calibrar\".</i></html>")));

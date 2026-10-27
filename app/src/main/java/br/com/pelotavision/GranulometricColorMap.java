@@ -71,7 +71,8 @@ final class GranulometricColorMap extends View {
 
         canvas.save();
         canvas.clipRect(ox, oy, ox + w * k, oy + h * k);
-        int alpha = GranulometryColorScale.alpha(visuals.mapOpacity);
+        int alpha = GranulometryColorScale.alpha(visuals.mapOpacity), rimAlpha = GranulometryColorScale.alpha(GranulometryColorScale.rimOpacity(visuals.mapOpacity));
+        Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);rim.setStyle(Paint.Style.STROKE);
         for (PelletDetector.Detection d : result.circles) {
             Granulometry.Item item = new Granulometry.Item(d.radius * 2, d.partial, d.needsReview);
             if (!GranulometryColorScale.colored(distribution, item)) continue;
@@ -82,9 +83,14 @@ final class GranulometricColorMap extends View {
             canvas.save();
             canvas.rotate((float) d.angleDeg, x, y);
             canvas.drawOval(new RectF(x - a, y - b, x + a, y + b), fill);
+            if (rimAlpha > 0) {
+                float sw = Math.max(1.5f, Math.min(a, b) * 0.2f);
+                rim.setStrokeWidth(sw);rim.setColor(Color.argb(rimAlpha, (c >> 16) & 255, (c >> 8) & 255, c & 255));
+                canvas.drawOval(new RectF(x - a + sw / 2, y - b + sw / 2, x + a - sw / 2, y + b - sw / 2), rim);
+            }
             canvas.restore();
         }
-        if (visuals.mapLabels) drawLabels(canvas, left, top, k);
+        if (visuals.mapLabels && MapComposer.coloredCount(result, distribution) <= MapComposer.MAX_LABELED) drawLabels(canvas, left, top, k);
         canvas.restore();
         drawLegend(canvas, scale);
     }
@@ -129,7 +135,7 @@ final class GranulometricColorMap extends View {
         text.setTextSize(10 * density);
         text.setTextAlign(Paint.Align.CENTER);
         String title = String.format(Locale.getDefault(), "Mapa granulométrico · escala %s · %s · opacidade %d%%",
-                scale.mode(), scale.unit, Math.round(visuals.mapOpacity * 100));
+                scale.label(), scale.unit, Math.round(visuals.mapOpacity * 100));
         canvas.drawText(title, getWidth() / 2f, y0 - 6 * density, text);
         double[] ticks = scale.ticks(scale.equalRange() ? 2 : 5);
         for (int i = 0; i < ticks.length; i++) {

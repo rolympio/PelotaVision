@@ -126,7 +126,7 @@ final class HistogramView extends JPanel {
         for (int i = 0; i < width; i++) { g.setColor(new Color(GranulometryColorScale.colorAt(i / (double) Math.max(1, width - 1)))); g.fillRect(x + i, y, 1, bh); }
         g.setColor(text);
         g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        g.drawString(String.format(Locale.ROOT, "Mapa granulometrico · escala %s · cor %d%% sobre foto %d%%", scale.mode(), Math.round(v.mapOpacity * 100), Math.round((1 - v.mapOpacity) * 100)), x, y - 4);
+        g.drawString(String.format(Locale.ROOT, "Mapa granulometrico · escala %s · cor %d%% sobre foto %d%%", scale.label(), Math.round(v.mapOpacity * 100), Math.round((1 - v.mapOpacity) * 100)), x, y - 4);
         double[] t = scale.ticks(scale.equalRange() ? 2 : 5);
         for (int i = 0; i < t.length; i++) {
             String s = fmt2(t[i]) + (i == t.length - 1 ? " " + scale.unit : "");

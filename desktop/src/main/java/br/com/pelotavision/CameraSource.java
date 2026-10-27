@@ -57,12 +57,21 @@ final class CameraSource {
         }
     }
 
-    private VideoCapture capture;
+    private volatile VideoCapture capture;
     private Thread thread;
     private volatile boolean running;
+    private volatile boolean reconnecting;
     private final Object lock = new Object();
     private Mat latest;
     private Info info;
+    /** 0.5.2: avisos de queda/reconexão para a barra de status (chamado fora da thread da interface). */
+    volatile Consumer<String> onStatus;
+
+    /** Sem quadro por este tempo, a câmera é considerada desconectada. */
+    static final long LOST_AFTER_MS = 1500;
+    /** Tentativas de reabrir a mesma câmera (com os mesmos pedidos ao driver) antes de desistir. */
+    static final int RECONNECT_ATTEMPTS = 15;
+    static final long RECONNECT_INTERVAL_MS = 2000;
 
     /** Testa indices 0..max-1 e devolve os que abrem. */
     static List<Integer> probe(int max) {
@@ -74,51 +83,98 @@ final class CameraSource {
         return found;
     }
 
-    synchronized Info open(int index, int width, int height, boolean lockFocus, boolean lockExposure, Consumer<Mat> onFrame) {
-        close();
+    /** Abre a câmera e aplica os pedidos ao driver; null se não abrir. */
+    private static VideoCapture openCapture(int index, int width, int height, Info i) {
         VideoCapture c = new VideoCapture(index, Videoio.CAP_DSHOW);
         if (!c.isOpened()) { c.release(); c = new VideoCapture(index, Videoio.CAP_MSMF); }
-        if (!c.isOpened()) { c.release(); throw new IllegalStateException("Nao foi possivel abrir a camera " + index + "."); }
+        if (!c.isOpened()) { c.release(); return null; }
         c.set(Videoio.CAP_PROP_FOURCC, VideoWriter.fourcc('M', 'J', 'P', 'G'));
         c.set(Videoio.CAP_PROP_FRAME_WIDTH, width);
         c.set(Videoio.CAP_PROP_FRAME_HEIGHT, height);
+        if (i.lockFocusRequested) i.autofocusSetAccepted = c.set(Videoio.CAP_PROP_AUTOFOCUS, 0);
+        // DirectShow no OpenCV: 0.25 = manual, 0.75 = automatico (convencao V4L/DSHOW do OpenCV).
+        if (i.lockExposureRequested) i.autoExposureSetAccepted = c.set(Videoio.CAP_PROP_AUTO_EXPOSURE, 0.25);
+        return c;
+    }
+
+    synchronized Info open(int index, int width, int height, boolean lockFocus, boolean lockExposure, Consumer<Mat> onFrame) {
+        close();
         Info i = new Info();
         i.index = index; i.requestedWidth = width; i.requestedHeight = height;
         i.lockFocusRequested = lockFocus; i.lockExposureRequested = lockExposure;
-        if (lockFocus) i.autofocusSetAccepted = c.set(Videoio.CAP_PROP_AUTOFOCUS, 0);
-        // DirectShow no OpenCV: 0.25 = manual, 0.75 = automatico (convencao V4L/DSHOW do OpenCV).
-        if (lockExposure) i.autoExposureSetAccepted = c.set(Videoio.CAP_PROP_AUTO_EXPOSURE, 0.25);
+        VideoCapture c = openCapture(index, width, height, i);
+        if (c == null) throw new IllegalStateException("Nao foi possivel abrir a camera " + index + ".");
         capture = c;
         refreshInfo(i);
         info = i;
         running = true;
-        final VideoCapture cap = c;
-        thread = new Thread(() -> {
-            Mat frame = new Mat();
-            int failures = 0;
-            while (running) {
-                if (!cap.read(frame) || frame.empty()) {
-                    if (++failures > 50) break;
-                    try { Thread.sleep(20); } catch (InterruptedException e) { break; }
-                    continue;
-                }
-                failures = 0;
-                synchronized (lock) {
-                    if (latest != null) latest.release();
-                    latest = frame.clone();
-                }
-                if (onFrame != null) onFrame.accept(frame);
-            }
-            frame.release();
-            running = false;
-        }, "PelotaVision-camera");
+        reconnecting = false;
+        thread = new Thread(() -> loop(index, width, height, i, onFrame), "PelotaVision-camera");
         thread.setDaemon(true);
         thread.start();
         return i;
     }
 
+    /** Leitura contínua; se a câmera cair (cabo USB, hub, driver), tenta reabrir a mesma câmera. */
+    private void loop(int index, int width, int height, Info i, Consumer<Mat> onFrame) {
+        Mat frame = new Mat();
+        long lastFrame = System.currentTimeMillis();
+        try {
+            while (running) {
+                VideoCapture cap = capture;
+                boolean ok = cap != null && cap.read(frame) && !frame.empty();
+                if (ok) {
+                    lastFrame = System.currentTimeMillis();
+                    if (reconnecting) { reconnecting = false; status("Camera " + index + " reconectada."); }
+                    synchronized (lock) {
+                        if (latest != null) latest.release();
+                        latest = frame.clone();
+                    }
+                    if (onFrame != null) onFrame.accept(frame);
+                    continue;
+                }
+                if (System.currentTimeMillis() - lastFrame < LOST_AFTER_MS) {
+                    try { Thread.sleep(20); } catch (InterruptedException e) { return; }
+                    continue;
+                }
+                // Perdida: descarta o último quadro para nunca capturar uma imagem velha como se fosse atual.
+                reconnecting = true;
+                synchronized (lock) { if (latest != null) { latest.release(); latest = null; } }
+                VideoCapture reopened = null;
+                for (int attempt = 1; running && attempt <= RECONNECT_ATTEMPTS && reopened == null; attempt++) {
+                    status("Camera " + index + " sem imagem · reconectando (" + attempt + "/" + RECONNECT_ATTEMPTS + ")…");
+                    VideoCapture old = capture;
+                    capture = null;
+                    if (old != null) old.release();
+                    try { Thread.sleep(RECONNECT_INTERVAL_MS); } catch (InterruptedException e) { return; }
+                    if (!running) return;
+                    reopened = openCapture(index, width, height, i);
+                }
+                if (reopened == null) {
+                    status("Camera " + index + " desconectada. Confira o cabo e abra a camera de novo.");
+                    return;
+                }
+                capture = reopened;
+                try { refreshInfo(i); } catch (RuntimeException ignored) {}
+                lastFrame = System.currentTimeMillis();
+            }
+        } finally {
+            frame.release();
+            running = false;
+        }
+    }
+
+    private void status(String message) {
+        Consumer<String> s = onStatus;
+        if (s != null) s.accept(message);
+    }
+
+    /** true enquanto a câmera caiu e o app tenta reabri-la (capturar fica bloqueado). */
+    boolean isReconnecting() { return reconnecting; }
+
     private void refreshInfo(Info i) {
         VideoCapture c = capture;
+        if (c == null) return;
         i.backend = safeBackend(c);
         i.width = (int) c.get(Videoio.CAP_PROP_FRAME_WIDTH);
         i.height = (int) c.get(Videoio.CAP_PROP_FRAME_HEIGHT);
@@ -157,7 +213,10 @@ final class CameraSource {
     synchronized void close() {
         running = false;
         if (thread != null) { try { thread.join(1500); } catch (InterruptedException ignored) {} thread = null; }
-        if (capture != null) { capture.release(); capture = null; }
+        VideoCapture c = capture;
+        capture = null;
+        if (c != null) c.release();
+        reconnecting = false;
         synchronized (lock) { if (latest != null) { latest.release(); latest = null; } }
     }
 }

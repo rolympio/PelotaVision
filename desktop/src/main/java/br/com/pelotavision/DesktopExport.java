@@ -36,6 +36,12 @@ final class DesktopExport {
     private DesktopExport() {}
 
     static List<File> save(File folder, PhotoSession s, DesktopAnalysis.Config cfg) throws Exception {
+        return save(folder, s, cfg, null);
+    }
+
+    /** 0.5.3: {@code testName} (opcional) vai para o JSON ("test_name") e para o cabeçalho do PDF. */
+    static List<File> save(File folder, PhotoSession s, DesktopAnalysis.Config cfg, String testName) throws Exception {
+        testName = SaveNaming.cleanTestName(testName);
         if (!s.canSave()) throw new IllegalStateException("Segmente a area atual antes de salvar.");
         if (!folder.isDirectory() && !folder.mkdirs()) throw new IOException("Nao foi possivel criar a pasta " + folder);
         String base = "PelotaVision_" + new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.ROOT).format(new Date());
@@ -75,8 +81,28 @@ final class DesktopExport {
 
         BufferedImage map = mapImage(s, viewport, visuals);
         String mapName = map == null ? null : base + "_mapa.png";
+        // 0.5.2: imagem filtrada (só quando a análise aplicou realce de iluminação na ROI).
+        BufferedImage filteredPanel = s.filteredImage() == null ? null : panelImage(s, viewport, s.filteredImage(), false);
+        String filteredName = filteredPanel == null ? null : base + "_filtrada.png";
+        File filteredFile = null;
+        if (filteredPanel != null) {
+            filteredFile = new File(folder, filteredName);
+            if (!ImageIO.write(filteredPanel, "png", filteredFile)) throw new IOException("Falha ao gravar a imagem filtrada.");
+        }
         File json = new File(folder, base + ".json");
         JSONObject report = report(s, cfg, viewport, composite, base, extension);
+        report.put("test_name", testName == null ? JSONObject.NULL : testName);
+        RosinRammler.Basis rrBasis = cfg.rrBasis == null ? RosinRammler.Basis.NUMBER : cfg.rrBasis;
+        report.put("rosin_rammler", RosinRammler.reportJson(d, rrBasis));
+        report.put("output_folder", folder.getName());
+        LowLightInfo light = s.lowLight();
+        report.put("low_light", light == null ? JSONObject.NULL : light.toJson());
+        JSONObject imagery = new JSONObject();
+        imagery.put("filtered_file", filteredName == null ? JSONObject.NULL : filteredName);
+        imagery.put("segmented_base", filteredPanel != null ? "filtered" : "original"); imagery.put("map_base", filteredPanel != null ? "filtered" : "original");
+        imagery.put("note", "filtered image is for display and object proposal only; ellipses, diameters and crack crops use ORIGINAL pixels");
+        report.put("report_images", imagery);
+        report.put("files_location", "mesma pasta deste PDF");
         report.put("report_schema_version", ReportJson.SCHEMA_VERSION);
         report.put("analysis_models", ReportJson.analysisModelsJson(s.output() == null ? null : s.output().applied, DesktopAnalysis.lastResolution, DesktopAnalysis.networkId()));
         if (ch != null) report.put("crack_histogram", ReportJson.crackHistogramJson(ch, visuals));
@@ -87,13 +113,32 @@ final class DesktopExport {
         display.put("histogram_show_all", visuals.showAll); display.put("histogram_show_cracked", visuals.showCracked); display.put("histogram_values_on_bars", visuals.showValues);
         display.put("histogram_normalization", visuals.normalization.name()); display.put("all_color", "#268CAB alpha 0.55"); display.put("cracked_color", "#FF8C1A alpha 0.65");
         report.put("visualization", display);
-        Files.write(json.toPath(), report.toString(2).getBytes(StandardCharsets.UTF_8));
-        written.add(json);
+        File mapFile = null;
         if (map != null) {
-            File mapFile = new File(folder, mapName);
+            mapFile = new File(folder, mapName);
             if (!ImageIO.write(map, "png", mapFile)) throw new IOException("Falha ao gravar o mapa granulometrico.");
-            written.add(mapFile);
         }
+        // 0.5.2: relatório PDF a partir do mesmo JSON (conteúdo comum ao Android). Falha no PDF não invalida os demais arquivos.
+        File pdf = new File(folder, base + "_relatorio.pdf");
+        boolean pdfOk = false;
+        try {
+            report.put("pdf_file", pdf.getName());
+            List<DesktopPdfReport.Figure> figs = DesktopPdfReport.figures(report, composite, viewport.height, filteredPanel, map);
+            // 0.5.3: histograma + Rosin–Rammler numa página inteira, com a fórmula ajustada.
+            figs.add(DesktopPdfReport.Figure.fullPage(distributionFigure(s, visuals, rrBasis), ReportPdfContent.distributionFigure(report)));
+            Files.write(pdf.toPath(), DesktopPdfReport.render(report, figs));
+            pdfOk = true;
+        } catch (Exception | OutOfMemoryError | LinkageError e) {
+            Files.deleteIfExists(pdf.toPath());
+            report.put("pdf_file", JSONObject.NULL);
+            report.put("pdf_error", e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+        Files.write(json.toPath(), report.toString(2).getBytes(StandardCharsets.UTF_8));
+        // Ordem mantida desde a 0.5.0 (json no índice 4, mapa logo depois); 0.5.2 acrescenta filtrada e PDF no fim.
+        written.add(json);
+        if (mapFile != null) written.add(mapFile);
+        if (filteredFile != null) written.add(filteredFile);
+        if (pdfOk) written.add(pdf);
         return written;
     }
 
@@ -102,7 +147,7 @@ final class DesktopExport {
         Granulometry.Distribution d = s.distribution();
         GranulometryColorScale scale = visuals.scale(d);
         if (scale == null) return null;
-        BufferedImage src = s.analyzedImage;
+        BufferedImage src = s.shownImage(); // 0.5.2: filtrada quando houve realce
         int w = src.getWidth(), h = src.getHeight();
         int[] px = src.getRGB(0, 0, w, h, null, 0, w);
         GranulometryColorScale.paintMap(px, w, h, s.active(), d, scale, visuals.mapOpacity);
@@ -138,6 +183,33 @@ final class DesktopExport {
         }
     }
 
+    /**
+     * Figura do relatório: histograma (em cima) e curva acumulada com ajuste Rosin–Rammler (embaixo),
+     * desenhada em 2× para o texto ficar nítido no PDF.
+     */
+    static BufferedImage distributionFigure(PhotoSession s, ReportVisuals visuals, RosinRammler.Basis basis) {
+        return distributionFigure(s.distribution(), s.crackHistogram(), visuals, basis);
+    }
+
+    /** Histograma com a 2ª série (pelotas trincadas, mesmas classes e eixos) + curva RR. */
+    static BufferedImage distributionFigure(Granulometry.Distribution d, CrackHistogram cracks, ReportVisuals visuals, RosinRammler.Basis basis) {
+        int w = 560, hh = 300, rh = 470, gap = 14, k = 2;
+        BufferedImage img = new BufferedImage(w * k, (hh + gap + rh) * k, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g.scale(k, k);
+        g.setColor(Color.WHITE); g.fillRect(0, 0, w, hh + gap + rh);
+        HistogramView.paint(g, d, cracks, visuals, w, hh);
+        g.setColor(new Color(205, 214, 220)); g.drawLine(8, hh + gap / 2, w - 8, hh + gap / 2);
+        Graphics2D r = (Graphics2D) g.create();
+        r.translate(0, hh + gap);
+        RosinRammlerView.paint(r, d == null ? null : RosinRammler.fit(d, basis), w, rh, 1f, false);
+        r.dispose();
+        g.dispose();
+        return img;
+    }
+
     static BufferedImage compose(PhotoSession s, ReportViewport v) { return compose(s, v, HistogramView.DEFAULTS); }
 
     static BufferedImage compose(PhotoSession s, ReportViewport v, ReportVisuals visuals) {
@@ -155,10 +227,10 @@ final class DesktopExport {
         g.setColor(Color.WHITE);
         g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, Math.max(8, Math.round(12 * sc))));
         g.drawString(v.cropped ? "1 · ROI AMPLIADA — sem marcacoes" : "1 · ORIGINAL — sem marcacoes", 12 * sc, 16 * sc);
-        panel(g, s, v, layout.originalTop, false);
+        panel(g, s, v, layout.originalTop, false, s.analyzedImage);
         g.setColor(Color.WHITE);
-        g.drawString("2 · PELOTAS E POSSIVEIS TRINCAS", 12 * sc, layout.annotatedTop - 8 * sc);
-        panel(g, s, v, layout.annotatedTop, true);
+        g.drawString(s.filteredImage() != null ? "2 · PELOTAS E POSSIVEIS TRINCAS · FILTRADA" : "2 · PELOTAS E POSSIVEIS TRINCAS", 12 * sc, layout.annotatedTop - 8 * sc);
+        panel(g, s, v, layout.annotatedTop, true, s.shownImage());
         g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(8, Math.round(11 * sc))));
         g.setColor(Color.WHITE);
         float y = layout.summaryTop;
@@ -176,7 +248,7 @@ final class DesktopExport {
                 String.format(Locale.ROOT, "Esfericidade aparente 2D (b/a): %s · n=%d", Double.isFinite(shape.mean) ? String.format(Locale.ROOT, "%.3f", shape.mean) : "—", shape.included),
                 "Excluidas da forma: " + shape.excluded + " · media por numero · nao mede esfericidade 3D",
                 "Vermelho: possivel trinca · amarelo: revisao · tracejado: forma sem ajuste",
-                s.region() == null ? "Sem indicacao nao garante ausencia de trinca." : "ROI ativa · somente recorte analisado · exige revisao",
+                s.region() == null ? "Sem indicacao nao garante ausencia de trinca." : result.method.contains("detail_original_tiles_v1") ? "ROI detalhada · medidas na original · exige revisao" : "ROI ativa · somente recorte analisado · exige revisao",
                 scaleLine1(d), scaleLine2(d, v)};
         float[] offsets = {50, 65, 79, 93, 108, 123, 138};
         for (int i = 0; i < lines.length; i++) g.drawString(lines[i], 12 * sc, y + offsets[i] * sc);
@@ -192,6 +264,8 @@ final class DesktopExport {
         ObjectCalibration.Reference r = d.settings.selectedObject;
         if (r != null) return "REF do usuario · " + r.summary();
         if (d.settings.beltReference != null) return "Correia: " + HistogramView.fmt(d.settings.beltReference.realWidthMm) + " mm · bordas confirmadas pelo usuario";
+        ContainerCalibration.Reference c = d.settings.containerReference;
+        if (c != null) return "Recipiente: Ø interno " + HistogramView.fmt(c.realInnerDiameterMm) + " mm · " + (c.plane == ContainerCalibration.Plane.RIM ? "plano da borda" : "nivel das pelotas") + " · confirmado pelo usuario";
         return d.settings.pixelsOnly() ? "Calibre: correia, referencia ou px/mm." : "Escala informada: " + HistogramView.fmt4(d.settings.originalPixelsPerMm) + " px/mm (original)";
     }
 
@@ -199,10 +273,24 @@ final class DesktopExport {
         ObjectCalibration.Reference r = d.settings.selectedObject;
         if (r != null) return "Escala: " + HistogramView.fmt4(d.settings.originalPixelsPerMm) + " px/mm (original) · " + (r.excludeFromStatistics ? "REF fora da amostra" : "REF incluida na amostra");
         if (d.settings.beltReference != null) return "Escala original: " + HistogramView.fmt4(d.settings.beltReference.originalPixelsPerMm) + " px/mm · " + (v.cropped ? "ROI ampliada; medidas preservadas" : "imagem inteira");
+        ContainerCalibration.Reference c = d.settings.containerReference;
+        if (c != null) return "Escala original: " + HistogramView.fmt4(c.originalPixelsPerMm) + " px/mm" + (Double.isFinite(c.rimOverPelletScale) ? " · borda/nivel " + HistogramView.fmt(100 * c.rimOverPelletScale) + "%" : "") + " · " + (v.cropped ? "ROI ampliada; medidas preservadas" : "imagem inteira");
         return d.settings.pixelsOnly() ? "Sem referencia fisica; histograma em pixels." : d.settings.estimated() ? "ESTIMATIVA pela media informada; nao e referencia independente." : "Sem referencia de objeto selecionada nesta foto.";
     }
 
-    private static void panel(Graphics2D g0, PhotoSession s, ReportViewport v, int top, boolean marked) {
+    /** Um painel isolado (sem títulos), recortado como no relatório. */
+    static BufferedImage panelImage(PhotoSession s, ReportViewport v, BufferedImage image, boolean marked) {
+        BufferedImage out = new BufferedImage(v.width, v.height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = out.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.setColor(new Color(16, 26, 35)); g.fillRect(0, 0, v.width, v.height);
+        panel(g, s, v, 0, marked, image);
+        g.dispose();
+        return out;
+    }
+
+    private static void panel(Graphics2D g0, PhotoSession s, ReportViewport v, int top, boolean marked, BufferedImage image) {
         Graphics2D g = (Graphics2D) g0.create();
         g.clip(new Rectangle2D.Double(0, top, v.width, v.height));
         g.translate(-v.left * v.scale, top - v.top * v.scale);
@@ -211,7 +299,7 @@ final class DesktopExport {
         InterestRegion roi = s.region();
         if (v.cropped) g.clip(new Rectangle2D.Double(roi.left, roi.top, roi.width(), roi.height()));
         if (v.circular) g.clip(new Ellipse2D.Double(roi.left, roi.top, roi.width(), roi.height()));
-        g.drawImage(s.analyzedImage, 0, 0, null);
+        g.drawImage(image, 0, 0, null);
         if (marked) {
             float w = Math.max(2, s.width / 600f);
             ImageView.drawDetections(g, s.active(), s.activeCracks(), w, true);
@@ -224,6 +312,7 @@ final class DesktopExport {
             Granulometry.Distribution d = s.distribution();
             if (d.settings.selectedObject != null) ImageView.drawReference(g, d.settings.selectedObject, w);
             if (!v.cropped && d.settings.beltReference != null) drawBelt(g, d.settings.beltReference.edges, w);
+            if (!v.cropped && d.settings.containerReference != null) drawContainer(g, d.settings.containerReference.circle, null, w);
         }
         g.dispose();
     }
@@ -233,6 +322,20 @@ final class DesktopExport {
         g.setStroke(new BasicStroke(w * 1.5f));
         g.draw(new Line2D.Double(e.x(0), e.y(0), e.x(1), e.y(1)));
         g.draw(new Line2D.Double(e.x(2), e.y(2), e.x(3), e.y(3)));
+    }
+
+    static void drawContainer(Graphics2D g, ContainerCalibration.Circle active, ContainerCalibration.Circle other, float w) {
+        if (other != null) {
+            g.setColor(new Color(190, 190, 190));
+            g.setStroke(new BasicStroke(w * 1.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10, new float[]{w * 6, w * 4}, 0));
+            g.draw(new Ellipse2D.Double(other.cx - other.r, other.cy - other.r, 2 * other.r, 2 * other.r));
+        }
+        if (active == null) return;
+        g.setColor(new Color(255, 210, 0));
+        g.setStroke(new BasicStroke(w * 1.5f));
+        g.draw(new Ellipse2D.Double(active.cx - active.r, active.cy - active.r, 2 * active.r, 2 * active.r));
+        g.setStroke(new BasicStroke(w, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10, new float[]{w * 4, w * 3}, 0));
+        g.draw(new Line2D.Double(active.cx - active.r, active.cy, active.cx + active.r, active.cy));
     }
 
     /** Linhas do resumo na tela. */
@@ -289,8 +392,16 @@ final class DesktopExport {
         json.put("detection_suggestion", ReportJson.suggestionJson(s.rankedSuggestions(), out.applied));
         json.put("neural_model", ReportJson.neuralModelJson(out.applied));
         json.put("scene", ReportJson.sceneJson(out.applied));
-        json.put("processing_scope", ReportJson.processingScopeJson(out.window));
-        json.put("detailed_analysis", JSONObject.NULL);
+        JSONObject processing = ReportJson.processingScopeJson(out.window);
+        DetailedAnalysis.Report detailed = out.detailed;
+        if (detailed != null) { // 0.5.2: mesmos campos do Android (ResultSaver)
+            processing.put("input_width", detailed.geometry.width); processing.put("input_height", detailed.geometry.height);
+            processing.put("crop_resizes_input", detailed.geometry.sample > 1);
+            processing.put("coordinate_mapping", "detailed_analysis.local_to_preview; detections retain preview coordinates");
+            processing.put("outside_roi_original_pixels_analyzed", region == null);
+        }
+        json.put("processing_scope", processing);
+        json.put("detailed_analysis", ReportJson.detailJson(detailed));
         json.put("method", result.method);
         json.put("shape_analysis", ReportJson.shapeJson(result));
         json.put("count", result.circles.size());
@@ -313,6 +424,7 @@ final class DesktopExport {
             scale.put("source", distribution.settings.calibrationSource);
             scale.put("estimated", distribution.settings.estimated());
             scale.put("belt_reference", ReportJson.beltReferenceJson(distribution.settings.beltReference));
+            scale.put("container_reference", ReportJson.containerReferenceJson(distribution.settings.containerReference));
             scale.put("selected_object", ReportJson.objectReferenceJson(distribution.settings.selectedObject, region));
             scale.put("assumed_mean_mm", Double.isFinite(distribution.settings.knownMeanMm) ? distribution.settings.knownMeanMm : JSONObject.NULL);
             scale.put("reference_pixels", Double.isFinite(distribution.settings.referencePixels) ? distribution.settings.referencePixels : JSONObject.NULL);

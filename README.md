@@ -11,7 +11,7 @@ O **PelotaVision** é um software de pesquisa e desenvolvimento para análise de
 - **Detecção e segmentação individual:** métodos clássicos de bordas e LoG, além de alternativas neurais experimentais, com parâmetros ajustáveis para cenas de bancada e correia.
 - **Granulometria:** estimativa de dimensões projetadas, distribuição de tamanhos, histogramas e sobreposição de cores translúcidas por faixa granulométrica.
 - **Inspeção de trincas:** identificação assistida de possíveis trincas, revisão visual e distribuição granulométrica específica das pelotas classificadas como trincadas.
-- **Calibração:** escala em pixel/mm, referência dimensional e largura conhecida da correia, com ajuste manual das bordas.
+- **Calibração:** escala em pixel/mm, referência dimensional, largura conhecida da correia e diâmetro interno de recipiente redondo com borda detectada automaticamente ([detalhes](docs/calibracao-recipiente.md)), sempre com confirmação do usuário.
 - **ROI:** seleção e processamento de região de interesse, preservando a fotografia original.
 - **Qualidade de imagem:** ajustes de contraste e iluminação, análise detalhada em blocos e super-resolução FSRCNN 2× opcional e experimental.
 - **Rastreabilidade:** exportações e registros de configurações, parâmetros, medidas e evidências visuais, conforme o suporte de cada versão.
@@ -45,6 +45,30 @@ Análise de imagens de pelotas de minério de ferro: localização e ajuste elí
 **Estado:** protótipo de P&D. Nenhuma versão foi validada em fotos da usina com verdade-terreno nem testada em telefone físico; os números abaixo servem ao desenvolvimento, não à metrologia.
 
 Releases: `v0.14.0-build34` (APK) e `windows-v0.5.0-build33` (pacote portátil).
+
+## Novo na 0.15.3 (Android) / Windows 0.5.3
+- **Rosin–Rammler:** curva acumulada (% passante, eixo log) com pontos nos limites de classe e ajuste RR por máxima verossimilhança, em base número ou massa estimada (∝ d³). Aparece na tela (Windows: painel próprio; Android: abas Histograma | Rosin–Rammler) e no PDF, numa página com o histograma todas × trincadas, a curva e a fórmula. Detalhes em `docs/rosin-rammler.md`.
+- **Salvar:** campo de nome do teste e pasta sugerida com data e hora do momento.
+- **Calibração pelo recipiente:** diâmetro interno com borda detectada automaticamente e confirmação do plano de medida (`docs/calibracao-recipiente.md`).
+- **Windows:** além do zip portátil, instalador por usuário (sem administrador, Inno Setup). O painel "Escala e histograma" abre por botão.
+
+## Novo na 0.15.2 (Android) / Windows 0.5.2
+
+- **Relatório PDF com figuras individuais**: original, **filtrada** (só quando há realce de iluminação), segmentada, mapa granulométrico e resumo + histograma, cada uma com título e legenda próprios, duas por página quando cabem. Os painéis são recortados do `_resultado.png`, pixel a pixel iguais a ele.
+- **Filtro de iluminação visível**: com realce aplicado (automático ou manual em "Luz"), a tela, a ROI ampliada, a imagem segmentada e o mapa mostram a imagem filtrada; a imagem original continua no painel 1 e no `_original`. Nova saída `_filtrada.png`; JSON: bloco aditivo `report_images` (`filtered_file`, `segmented_base`, `map_base`). Elipses, diâmetros e trincas continuam medidos nos pixels **originais**.
+- versionCode 22.
+- **Windows 0.5.2 — paridade com o Android**: segmentação **detalhada** em blocos nos pixels originais da ROI (comparação de contraste local e ruído leve, pré-ajuste num bloco, FSRCNN 2× opcional; resumo dos blocos; `detailed_analysis` no JSON); **escolha manual do realce de imagem escura** com prévia ("Luz / imagem escura…"); **reconexão automática da webcam** (até ~30 s, sem capturar quadro velho); LEIA-ME do pacote atualizado.
+- **Windows 0.5.2**: passa a gerar o mesmo relatório PDF (`_relatorio.pdf` na pasta escolhida), com o mesmo conteúdo do Android — textos, tabelas e legendas vêm de `ReportPdfContent`, no núcleo comum; o desenho usa Apache PDFBox 3 (Apache 2.0). O Windows também passa a registrar o bloco `low_light` (recuperação automática na ROI) e, quando houve realce, mostra a imagem filtrada na tela, na segmentação e no mapa, e grava `_filtrada.png`.
+
+## Novo na 0.15.1 (Android; núcleo comum também no Windows)
+
+- **Mapa granulométrico mais evidente**: opacidade padrão 55% (antes 25%), máximo 90%; contorno de cada pelota mais opaco (+30 p.p.) para separar pelotas encostadas; com ≥ 20 pelotas a escala relativa usa **D10–D90** (abaixo = azul, acima = vermelho), em vez de mínimo–máximo, que poucos extremos esticavam; rótulos de diâmetro omitidos acima de 250 pelotas. A preferência de opacidade foi renomeada para que o novo padrão valha também para quem já tinha 25% salvo. JSON: `scale_basis`, `rim_opacity`.
+
+## Novo na 0.15.0 (Android)
+
+- **Relatório PDF** (`_relatorio.pdf` em Downloads / PelotaVision), gerado a partir do mesmo JSON salvo: resumo (contagem, média, D10/D50/D90, escala, trincas, ROI), bloco de **iluminação e tratamento de imagem escura**, método e modelos, tabela de classes, limitações, imagem de resultado e mapa granulométrico. Falha no PDF não impede a gravação dos demais arquivos (`pdf_error` no JSON).
+- **Imagem escura**: inclui a visualização e a escolha manual do realce em "Luz" (PR #14) sobre a recuperação adaptativa de ROI da 0.14.2. O JSON ganha o bloco aditivo `low_light` (seleção automática/manual, modo, nível médio de cinza, contraste, saturação e escores heurísticos).
+- versionCode 20. Windows continua na 0.5.1, ainda sem PDF.
 
 ## Novo na 0.14.0 / Windows 0.5.0
 - **Histograma todas × trincadas:** série laranja sobreposta (mesmas classes e eixos), com modos absoluto, % do total e condicional. Sem classificação, o app mostra "classificação indisponível", nunca zero.

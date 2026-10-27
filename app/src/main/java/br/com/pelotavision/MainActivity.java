@@ -70,6 +70,7 @@ public final class MainActivity extends ComponentActivity {
     private volatile int detectionMethod=DetectionTuner.GRADIENT;
     /** Cena: bancada (padrão) ou correia (pelotas pequenas e numerosas). */
     private volatile boolean beltScene=false;
+    private volatile LowLightPreprocessor.Mode selectedLowLightMode=null; // null = automatic
     private int method(){return detectionMethod==DetectionTuner.NEURAL&&!NeuralPelletDetector.available(beltScene)?DetectionTuner.GRADIENT:detectionMethod;}
     private volatile PelletDetector.Parameters parameters=PelletDetector.Parameters.automatic();
     private volatile Mode mode=Mode.LIVE;
@@ -92,6 +93,9 @@ public final class MainActivity extends ComponentActivity {
     private Button calibration;
     private TextView scaleLabel;
     private HistogramView histogram;
+    /** 0.15.3: curva acumulada + ajuste Rosin–Rammler, abaixo do histograma (mesma visibilidade). */
+    private RosinRammlerView rosinRammler;
+    private LinearLayout chartTabs;private TextView histogramTab,rrTab;private android.widget.FrameLayout chartSlot;
     private GranulometricColorMap colorMap;
     private boolean colorMapVisible=false;
     /** Visualização: 0 original (só a foto), 1 segmentação (marcações), 2 mapa granulométrico. */
@@ -117,6 +121,8 @@ public final class MainActivity extends ComponentActivity {
     private boolean roiNeedsAnalysis;
     private boolean detailMode,detailCompare=true,detailSr;
     private DetailedAnalysis.Report photoDetailReport;
+    private Bitmap photoFiltered; // 0.15.2: foto com o filtro de iluminação aplicado na janela analisada (só exibição/relatório)
+    private LowLightInfo photoLowLight; // 0.15.0: tratamento de baixa iluminação usado na análise atual (relatório PDF/JSON)
     private LinearLayout roiActions;
     private Button segmentRoi,searchRoi;
     private File photoFile;
@@ -213,13 +219,21 @@ public final class MainActivity extends ComponentActivity {
         roiActions=row();roiActions.setVisibility(View.GONE);root.addView(roiActions);
         segmentRoi=button("Segmentar foto",false);segmentRoi.setTag("segment_active_roi");segmentRoi.setTextSize(11);segmentRoi.setOnClickListener(v->showSegmentationOptions());roiActions.addView(segmentRoi,new LinearLayout.LayoutParams(0,dp(42),1));
         searchRoi=button("Buscar melhor ajuste",false);searchRoi.setTag("search_active_roi");searchRoi.setTextSize(11);searchRoi.setOnClickListener(v->startActiveAnalysis(true));roiActions.addView(searchRoi,new LinearLayout.LayoutParams(0,dp(42),1));
-        histogram=new HistogramView(this);histogram.setVisibility(View.GONE);histogram.setOnClickListener(v->showHistogramOptions());root.addView(histogram,new LinearLayout.LayoutParams(-1,dp(180)));
+        // 0.15.3: histograma e curva Rosin–Rammler dividem o mesmo espaço, escolhidos por abas (a foto não encolhe).
+        chartTabs=row();chartTabs.setVisibility(View.GONE);root.addView(chartTabs);
+        histogramTab=text("Histograma",12,Color.WHITE);rrTab=text("Rosin–Rammler",12,Color.WHITE);rrTab.setTag("chart_tab_rr");histogramTab.setTag("chart_tab_histogram");
+        for(TextView tab:new TextView[]{histogramTab,rrTab}){tab.setPadding(dp(10),dp(5),dp(10),dp(5));tab.setGravity(android.view.Gravity.CENTER);chartTabs.addView(tab,new LinearLayout.LayoutParams(0,-2,1));}
+        histogramTab.setOnClickListener(v->selectChart(false));rrTab.setOnClickListener(v->selectChart(true));
+        android.widget.FrameLayout chartSlot=new android.widget.FrameLayout(this);this.chartSlot=chartSlot;chartSlot.setVisibility(View.GONE);root.addView(chartSlot,new LinearLayout.LayoutParams(-1,dp(180)));
+        histogram=new HistogramView(this);histogram.setOnClickListener(v->showHistogramOptions());chartSlot.addView(histogram,new android.widget.FrameLayout.LayoutParams(-1,-1));
+        rosinRammler=new RosinRammlerView(this);rosinRammler.setTag("rosin_rammler_chart");rosinRammler.setOnClickListener(v->showRosinRammlerOptions());chartSlot.addView(rosinRammler,new android.widget.FrameLayout.LayoutParams(-1,-1));
+        setChartsVisibility(View.GONE);
         LinearLayout tools=row();root.addView(tools);
         profileLabel=text("Pelotas médias",11,Color.rgb(151,174,187));profileLabel.setTag("suggestion_label");profileLabel.setOnClickListener(v->{if(photoDetailReport!=null&&!roiNeedsAnalysis)showDetailSummary();else showSuggestions();});tools.addView(profileLabel,new LinearLayout.LayoutParams(0,-2,1));
         CheckBox numberBox=new CheckBox(this);numberBox.setText("Números");numberBox.setTextSize(11);numberBox.setTextColor(Color.WHITE);numberBox.setChecked(true);
         numberBox.setOnCheckedChangeListener((button,checked)-> {numbers=checked;if(mode==Mode.PHOTO&&photoResult!=null)overlay.display(photoResult,numbers);else if(mode==Mode.LIVE&&lastLiveResult!=null)overlay.display(lastLiveResult,numbers);});tools.addView(numberBox);
         Button mapBtn=button("Seg.",false);mapBtn.setTag("view_mode");mapBtn.setTextSize(11);mapBtn.setOnClickListener(v->toggleColorMap());mapBtn.setOnLongClickListener(v->{showMapOptions();return true;});mapButton=mapBtn;tools.addView(mapBtn,new LinearLayout.LayoutParams(dp(64),dp(40)));
-        torch=button("Luz",false);torch.setTextSize(11);torch.setOnClickListener(v->toggleTorch());tools.addView(torch,new LinearLayout.LayoutParams(dp(58),dp(40)));
+        torch=button("Luz",false);torch.setTextSize(11);torch.setOnClickListener(v->{if(mode==Mode.PHOTO)showLowLightDialog();else toggleTorch();});tools.addView(torch,new LinearLayout.LayoutParams(dp(58),dp(40)));
         adjust=button("Ajustes",false);adjust.setTextSize(11);adjust.setOnClickListener(v->showAdjustments());tools.addView(adjust,new LinearLayout.LayoutParams(dp(77),dp(40)));
         cameraResolutionLabel=text("Câmera: verificando resolução…",11,Color.rgb(151,174,187));
         cameraResolutionLabel.setOnClickListener(v->showCameraSettings());root.addView(cameraResolutionLabel);
@@ -365,26 +379,42 @@ public final class MainActivity extends ComponentActivity {
             }else local=DetectionTuner.detect(gray,current,window);
             // Adaptive low-light proposals only on a user-selected ROI; original pixels remain
             // the sole source for final ellipse fitting and crack classification.
-            if(cached==null&&window.region!=null&&LowLightPreprocessor.assess(gray).needsCorrection()){
+            LowLightPreprocessor.Quality lightQuality=LowLightPreprocessor.assess(gray);
+            LowLightInfo lightInfo=LowLightInfo.notApplied(lightQuality,cached!=null?"result reused from suggestion search":window.region==null?"low-light recovery runs only on a selected ROI":"illumination adequate; original kept");
+            if(cached==null&&window.region!=null&&(selectedLowLightMode!=null||lightQuality.needsCorrection())){
                 DetectionAssessment.Context lowContext=new DetectionAssessment.Context(replacingCurrent?scaleSettings:null,sourceSize[0],sourceSize[1],null,minimumExpectedMm,window);
-                LowLightRecovery.Result recovered=LowLightRecovery.analyze(gray,selected,window,lowContext);
-                local=recovered.pellets;
+                if(selectedLowLightMode==null){
+                    LowLightRecovery.Result recovered=LowLightRecovery.analyze(gray,selected,window,lowContext);
+                    local=recovered.pellets;lightInfo=LowLightInfo.automatic(recovered);
+                }else if(selectedLowLightMode==LowLightPreprocessor.Mode.ORIGINAL){lightInfo=LowLightInfo.manual(LowLightPreprocessor.Mode.ORIGINAL,lightQuality);
+                }else if(selectedLowLightMode!=LowLightPreprocessor.Mode.ORIGINAL){lightInfo=LowLightInfo.manual(selectedLowLightMode,lightQuality);
+                    Mat enhanced=LowLightPreprocessor.apply(gray,selectedLowLightMode);
+                    try {
+                        PelletDetector.Result seeds=DetectionTuner.seeds(enhanced,selected,selected.parameters.workSide(1024),12);
+                        local=window.filterLocal(new EllipseFitter().refine(gray,seeds,selected.belt));
+                    } finally {enhanced.release();}
+                }
             }
             CrackAnalysis cracks=window.toGlobal(crackDetector().detect(gray,local,crackSensitivity));
             PelletDetector.Result result=window.toGlobal(local);Bitmap ready=bitmap;
-            final DetectionTuner.Report searchReport=suggestions;final DetectionTuner.Option selectedOption=selected;
+            // 0.15.2: com realce aplicado, a tela, a imagem segmentada, o mapa e o PDF mostram a imagem filtrada.
+            Bitmap filteredView=null;
+            if(lightInfo.enhanced())try{filteredView=FilteredPhoto.render(bitmap,gray,window,lightInfo.mode);}catch(RuntimeException|OutOfMemoryError e){filteredView=null;}
+            final Bitmap filteredReady=filteredView;
+            final DetectionTuner.Report searchReport=suggestions;final DetectionTuner.Option selectedOption=selected;final LowLightInfo analyzedLight=lightInfo;
             runOnUiThread(()-> {
                 closeTuneProgress();
-                if(isDestroyed()||isFinishing()){ready.recycle();if(!replacingCurrent)file.delete();return;}
+                if(isDestroyed()||isFinishing()){ready.recycle();if(filteredReady!=null)filteredReady.recycle();if(!replacingCurrent)file.delete();return;}
                 Granulometry.Settings previousScale=replacingCurrent?scaleSettings:null;
                 boolean referenceInvalidated=previousScale!=null&&previousScale.selectedObject!=null&&!window.keepsReference(previousScale.selectedObject,result,sourceSize[0],sourceSize[1]);
                 if(referenceInvalidated)previousScale=null;
                 if(previousScale!=null&&previousScale.beltReference!=null&&!previousScale.beltReference.matches(sourceSize[0],sourceSize[1],result.width,result.height))previousScale=null;
+                if(previousScale!=null&&previousScale.containerReference!=null&&!previousScale.containerReference.matches(sourceSize[0],sourceSize[1],result.width,result.height))previousScale=null;
                 if(replacingCurrent)photoFile=null;
-                releasePreviousPhoto();photoBitmap=ready;photoFile=file;photoMime=mime;photoResult=result;photoCracks=cracks;photoParameters=selectedOption.parameters;photoOption=selectedOption;photoSuggestions=searchReport;
+                releasePreviousPhoto();photoBitmap=ready;photoFiltered=filteredReady;photoFile=file;photoMime=mime;photoResult=result;photoCracks=cracks;photoParameters=selectedOption.parameters;photoOption=selectedOption;photoSuggestions=searchReport;
                 photoAnalysisWindow=window;suggestionWindow=searchReport==null?null:window;roiNeedsAnalysis=false;
                 originalWidth=sourceSize[0];originalHeight=sourceSize[1];scaleSettings=previousScale;
-                photoAllResult=result;photoAllCracks=cracks;interestRegion=window.region;cropRoiReport=interestRegion!=null;
+                photoAllResult=result;photoAllCracks=cracks;photoLowLight=analyzedLight;interestRegion=window.region;cropRoiReport=interestRegion!=null;
                 frozen.setVisibility(View.VISIBLE);mode=Mode.PHOTO;applyRegion(interestRegion);
                 if(searchReport!=null)hint.setText((window.region==null?"Foto":"ROI")+": "+(searchReport.cancelled?"busca cancelada; aplicado o ajuste atual.":searchReport.weak()?"sugestão com pouca evidência; confira os contornos.":"ajuste sugerido aplicado. Toque em Sugestão para comparar.")+(minimumExpectedMm>0&&scaleSettings==null?" Calibre pela medida real para verificar "+HistogramView.number(minimumExpectedMm)+" mm.":""));
                 if(referenceInvalidated){hint.setText("O contorno da referência mudou. Toque novamente no objeto para calibrar.");toast("Referência alterada pela reanálise; escala removida.");}
@@ -437,37 +467,76 @@ public final class MainActivity extends ComponentActivity {
             DetailedAnalysis.Output analyzed=DetailedAnalysis.run(input.gray,input.geometry,selected,compare,upscaler,scaleSettings,source[0],source[1],minimumExpectedMm,crackDetector(),crackSensitivity,()->cancel.get()||isDestroyed(),(done,total,label)->runOnUiThread(()->updateTuneProgress(done,total,label)));
             final Bitmap displayed=ready;final DetailedAnalysis.Report detailedReport=analyzed.report.withSearch(report);final DetectionTuner.Option chosen=selected;
             runOnUiThread(()->{closeTuneProgress();if(isDestroyed()||isFinishing()){displayed.recycle();return;}if(cancel.get()){displayed.recycle();mode=Mode.PHOTO;applyRegion(interestRegion);hint.setText("Processamento cancelado; resultado anterior preservado.");return;}Granulometry.Settings previous=scaleSettings;boolean changed=previous!=null&&previous.selectedObject!=null&&!scope.keepsReference(previous.selectedObject,analyzed.result,source[0],source[1]);if(changed)previous=null;
-                photoFile=null;releasePreviousPhoto();photoBitmap=displayed;photoFile=file;photoMime=mime;originalWidth=source[0];originalHeight=source[1];scaleSettings=previous;photoAllResult=analyzed.result;photoAllCracks=analyzed.cracks;photoParameters=chosen.parameters;photoOption=chosen;photoSuggestions=null;suggestionWindow=null;photoAnalysisWindow=scope;photoDetailReport=detailedReport;detailMode=true;detailCompare=compare;detailSr=sr;interestRegion=scope.region;cropRoiReport=scope.region!=null;roiNeedsAnalysis=false;frozen.setVisibility(View.VISIBLE);mode=Mode.PHOTO;applyRegion(interestRegion);
+                photoFile=null;releasePreviousPhoto();photoBitmap=displayed;photoFile=file;photoMime=mime;originalWidth=source[0];originalHeight=source[1];scaleSettings=previous;photoAllResult=analyzed.result;photoAllCracks=analyzed.cracks;photoParameters=chosen.parameters;photoOption=chosen;photoSuggestions=null;suggestionWindow=null;photoAnalysisWindow=scope;photoDetailReport=detailedReport;photoLowLight=null;detailMode=true;detailCompare=compare;detailSr=sr;interestRegion=scope.region;cropRoiReport=scope.region!=null;roiNeedsAnalysis=false;frozen.setVisibility(View.VISIBLE);mode=Mode.PHOTO;applyRegion(interestRegion);
                 hint.setText(analyzed.report.summary()+". Toque em Detalhada para comparar. "+(changed?"O contorno da referência mudou; calibre novamente.":"Confira os contornos antes de salvar."));if(changed)toast("Referência alterada; escala removida.");
             });
         }catch(Exception|OutOfMemoryError e){if(ready!=null)ready.recycle();final String reason=e instanceof java.util.concurrent.CancellationException?"Processamento cancelado; resultado anterior preservado.":e instanceof IllegalArgumentException&&e.getMessage()!=null?e.getMessage():"Não foi possível concluir a análise detalhada. Reduza a ROI ou desative SR e tente novamente.";runOnUiThread(()->{if(!isDestroyed()){closeTuneProgress();mode=Mode.PHOTO;applyRegion(interestRegion);hint.setText(reason);toast(reason);}});
         }finally{if(input!=null)input.close();if(small!=null&&small!=previewGray)small.release();if(previewGray!=null)previewGray.release();}
     }
+    /** 0.15.3: antes de gravar, pede o nome do teste e sugere a pasta com a data e a hora deste momento. */
     private void savePhoto() {
+        if(mode!=Mode.PHOTO||photoBitmap==null||photoResult==null||photoFile==null)return;
+        if(roiNeedsAnalysis){toast("Segmente a área ativa antes de salvar.");return;}
+        final java.util.Date[] stamp={new java.util.Date()};
+        final boolean[] edited={false},programmatic={false};
+        String lastTest=getPreferences(MODE_PRIVATE).getString("last_test_name","");
+        LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(8),dp(20),dp(8));ScrollView scroll=new ScrollView(this);scroll.addView(content);
+        content.addView(text("Nome do teste (opcional)",14,Color.WHITE));
+        EditText test=new EditText(this);test.setTag("save_test_name");test.setSingleLine();test.setTextColor(Color.WHITE);test.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);test.setHint("Ex.: Disco 3 · umidade 9,2%");test.setText(lastTest);content.addView(test);
+        content.addView(text("Pasta desta gravação",14,Color.WHITE));
+        EditText folder=new EditText(this);folder.setTag("save_folder");folder.setSingleLine();folder.setTextColor(Color.WHITE);folder.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);folder.setText(SaveNaming.suggestedFolder(stamp[0],lastTest));content.addView(folder);
+        TextView where=text("",12,Color.LTGRAY);where.setTag("save_where");content.addView(where);
+        Runnable preview=()->{try{String f=SaveNaming.sanitizeFolder(folder.getText().toString());where.setText("Imagens: Pictures/PelotaVision/"+f+"\nDados e PDF: Download/PelotaVision/"+f);}catch(IllegalArgumentException e){where.setText(e.getMessage());}};
+        Runnable suggest=()->{programmatic[0]=true;folder.setText(SaveNaming.suggestedFolder(stamp[0],test.getText().toString()));programmatic[0]=false;preview.run();};
+        test.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence c,int a,int b,int d){}public void onTextChanged(CharSequence c,int a,int b,int d){}public void afterTextChanged(android.text.Editable e){if(!edited[0])suggest.run();}});
+        folder.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence c,int a,int b,int d){}public void onTextChanged(CharSequence c,int a,int b,int d){}public void afterTextChanged(android.text.Editable e){if(!programmatic[0])edited[0]=true;preview.run();}});
+        preview.run();
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Salvar foto + dados").setView(scroll)
+            .setNegativeButton("Cancelar",null).setNeutralButton("Hora atual",null).setPositiveButton("Salvar",null).create();
+        dialog.setOnShowListener(d->{
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{stamp[0]=new java.util.Date();edited[0]=false;suggest.run();});
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String name;try{name=SaveNaming.sanitizeFolder(folder.getText().toString());}catch(IllegalArgumentException e){where.setText(e.getMessage());return;}
+                String testName=SaveNaming.cleanTestName(test.getText().toString());
+                getPreferences(MODE_PRIVATE).edit().putString("last_test_name",testName==null?"":testName).apply();
+                dialog.dismiss();savePhoto(name,testName);});
+        });
+        dialog.show();
+    }
+    private void savePhoto(String outputFolder,String testName) {
         if(mode!=Mode.PHOTO||photoBitmap==null||photoResult==null||photoFile==null)return;
         if(roiNeedsAnalysis){toast("Segmente a área ativa antes de salvar.");return;}
         refreshDistribution();
         if(distribution==null){toast("Não foi possível montar o histograma. Confira a escala.");return;}
-        Bitmap copy;
+        Bitmap copy,filteredCopy=null;
         try {copy=photoBitmap.copy(Bitmap.Config.ARGB_8888,false);}
         catch(OutOfMemoryError e){toast("Memória insuficiente para salvar. Feche outros aplicativos.");return;}
+        Bitmap shown=shownPhoto();
+        if(shown!=null&&shown!=photoBitmap)try{filteredCopy=shown.copy(Bitmap.Config.ARGB_8888,false);}catch(OutOfMemoryError e){filteredCopy=null;toast("Memória insuficiente para a imagem filtrada; o relatório usará a original.");}
+        final Bitmap exportedFiltered=filteredCopy;
         File source=photoFile;String mime=photoMime;PelletDetector.Result result=photoResult;PelletDetector.Parameters cfg=photoParameters;
         Granulometry.Distribution exportedDistribution=distribution;CrackAnalysis exportedCracks=photoCracks;final ReportVisuals exportedVisuals=visuals;final CrackClassifierChoice.Resolution exportedChoice=crackResolution;final MobileNetCrackModel net=crackNetwork;final String exportedNetwork=net==null?null:net.id;
-        InterestRegion exportedRegion=interestRegion;int outside=regionExcludedCount();final boolean exportedCrop=cropRoiReport;final DetailedAnalysis.Report exportedDetail=photoDetailReport;
+        InterestRegion exportedRegion=interestRegion;int outside=regionExcludedCount();final boolean exportedCrop=cropRoiReport;final DetailedAnalysis.Report exportedDetail=photoDetailReport;final LowLightInfo exportedLight=photoLowLight;
         DetectionTuner.Report exportedSuggestions=rankedSuggestions();DetectionTuner.Option exportedOption=photoOption;
+        final RosinRammler.Basis exportedBasis=rrBasis();
         setBusy(Mode.SAVING,"Salvando…");
         worker.execute(()-> {
             try {
-                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork);
+                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork,exportedLight,exportedFiltered,outputFolder,testName,exportedBasis);
                 runOnUiThread(()-> {if(!isDestroyed()){
-                    mode=Mode.PHOTO;updateControls();hint.setText("Histograma salvo no arquivo _resultado.png. Dados em Downloads / PelotaVision.");
+                    mode=Mode.PHOTO;updateControls();final String dir=saved.folder==null?"PelotaVision":"PelotaVision/"+saved.folder;
+                    hint.setText(saved.pdf!=null?"Relatório PDF salvo em Downloads / "+dir+".":"Histograma salvo no arquivo _resultado.png. Dados em Downloads / "+dir+".");
                     new AlertDialog.Builder(this).setTitle("Resultado salvo")
-                        .setMessage("O relatório "+saved.base+"_resultado.png contém a imagem sem marcações, a imagem com elipses e possíveis trincas e o histograma (todas × trincadas). O mapa granulométrico com legenda fica em "+saved.base+"_mapa.png. Quando selecionada, a ROI é ampliada nos dois painéis. O arquivo _original preserva os bytes da entrada.")
-                        .setNegativeButton("Fechar",null).setPositiveButton("Abrir imagem",(d,w)->openSavedImage(saved.image)).show();
+                        .setMessage((testName==null?"":"Teste: "+testName+"\n")+"Imagens em Pictures/"+dir+"; dados e PDF em Download/"+dir+".\n\n"+(saved.pdf!=null?"Relatório PDF: "+saved.base+"_relatorio.pdf (resumo, iluminação, modelos, classes e uma figura por imagem: original, filtrada, segmentada, mapa e histograma).\n\n":"O PDF não pôde ser gerado; os demais arquivos foram salvos.\n\n")+"O relatório "+saved.base+"_resultado.png contém a imagem sem marcações, a imagem com elipses e possíveis trincas e o histograma (todas × trincadas). O mapa granulométrico com legenda fica em "+saved.base+"_mapa.png. Quando selecionada, a ROI é ampliada nos dois painéis. O arquivo _original preserva os bytes da entrada."+(exportedFiltered!=null?"\n\nFiltro de iluminação aplicado: a imagem filtrada está em "+saved.base+"_filtrada.png e a segmentação e o mapa foram desenhados sobre ela. As medidas seguem nos pixels originais.":""))
+                        .setNegativeButton("Fechar",null).setNeutralButton("Abrir imagem",(d,w)->openSavedImage(saved.image)).setPositiveButton(saved.pdf!=null?"Abrir PDF":"OK",(d,w)->{if(saved.pdf!=null)openSavedPdf(saved.pdf);}).show();
                 }});
             } catch(Exception|OutOfMemoryError e) {runOnUiThread(()-> {if(!isDestroyed()){mode=Mode.PHOTO;updateControls();toast("Falha ao salvar: "+e.getMessage());}});}
-            finally {copy.recycle();if(isDestroyed())source.delete();}
+            finally {copy.recycle();if(exportedFiltered!=null)exportedFiltered.recycle();if(isDestroyed())source.delete();}
         });
+    }
+    private void openSavedPdf(Uri pdf) {
+        Intent intent=new Intent(Intent.ACTION_VIEW).setDataAndType(pdf,"application/pdf").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try{startActivity(intent);}catch(android.content.ActivityNotFoundException e){toast("Nenhum leitor de PDF instalado. O arquivo está em Downloads / PelotaVision.");}
     }
     private void openSavedImage(Uri image) {
         Intent intent=new Intent(Intent.ACTION_VIEW).setDataAndType(image,"image/png").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -480,7 +549,8 @@ public final class MainActivity extends ComponentActivity {
     }
     private void releasePreviousPhoto() {
         frozen.setImageDrawable(null);
-        if(displayBitmap!=null&&displayBitmap!=photoBitmap&&!displayBitmap.isRecycled())displayBitmap.recycle();displayBitmap=displaySource=null;displayWindow=photoAnalysisWindow=suggestionWindow=null;roiNeedsAnalysis=false;photoDetailReport=null;detailMode=false;
+        if(displayBitmap!=null&&displayBitmap!=photoBitmap&&displayBitmap!=photoFiltered&&!displayBitmap.isRecycled())displayBitmap.recycle();displayBitmap=displaySource=null;
+        if(photoFiltered!=null){if(!photoFiltered.isRecycled())photoFiltered.recycle();photoFiltered=null;}displayWindow=photoAnalysisWindow=suggestionWindow=null;roiNeedsAnalysis=false;photoDetailReport=null;detailMode=false;
         if(overlay!=null)overlay.viewport(null);
         if(photoBitmap!=null){photoBitmap.recycle();photoBitmap=null;}
         if(photoFile!=null){photoFile.delete();photoFile=null;}
@@ -489,7 +559,7 @@ public final class MainActivity extends ComponentActivity {
         if(overlay!=null){overlay.region(null);overlay.reference(null);}
         if(overlay!=null)overlay.cracks(null);if(crackLabel!=null)crackLabel.setText("Trincas: analisadas ao fotografar");
         scaleSettings=null;distribution=null;originalWidth=originalHeight=0;
-        if(histogram!=null){histogram.display(null);histogram.setVisibility(View.GONE);}
+        if(histogram!=null){histogram.display(null);setChartsVisibility(View.GONE);}
         if(scaleLabel!=null)scaleLabel.setText("Fotografe para calibrar em px/mm");
     }
     private void setBusy(Mode newMode,String message) {
@@ -506,12 +576,52 @@ public final class MainActivity extends ComponentActivity {
         back.setVisibility(photo?View.VISIBLE:View.GONE);back.setEnabled(!busy);
         open.setVisibility(photo?View.GONE:View.VISIBLE);open.setEnabled(!busy&&nativeReady);
         profileLabel.setEnabled(!busy&&mode==Mode.PHOTO);
-        adjust.setEnabled(!busy);torch.setEnabled(!busy&&!photo&&camera!=null&&camera.getCameraInfo().hasFlashUnit());
+        adjust.setEnabled(!busy);torch.setEnabled(!busy&&(photo||(camera!=null&&camera.getCameraInfo().hasFlashUnit())));torch.setText(photo?"Luz/ROI":torchOn?"Luz ✓":"Luz");
         calibration.setEnabled(!busy&&photoResult!=null&&mode==Mode.PHOTO);
         if(regionButton!=null){regionButton.setEnabled(!busy&&mode==Mode.PHOTO&&photoBitmap!=null);regionButton.setText(interestRegion==null?"Área":"Área ✓");}
         if(roiActions!=null){roiActions.setVisibility(photo?View.VISIBLE:View.GONE);segmentRoi.setEnabled(!busy&&mode==Mode.PHOTO&&photoBitmap!=null);searchRoi.setEnabled(segmentRoi.isEnabled());segmentRoi.setText(interestRegion==null?"Segmentar foto":"Segmentar ROI");searchRoi.setText(interestRegion==null?"Buscar melhor ajuste":"Buscar ajuste na ROI");}
         if(mode==Mode.PHOTO)badge.setText(interestRegion==null?"FOTO":"ROI");
     }
+    /** Preview is illustrative: only the selected ROI is used for final segmentation. */
+    private void showLowLightDialog() {
+        if(photoBitmap==null){toast("Abra uma fotografia primeiro.");return;}
+        final LowLightPreprocessor.Mode[] modes=LowLightPreprocessor.Mode.values();
+        final String[] names={"Original (sem filtro)","Gamma + CLAHE","Redução de ruído + CLAHE","Retinex"};
+        final String[] choices={"Automático","Original (sem filtro)","Gamma + CLAHE","Redução de ruído + CLAHE","Retinex"};
+        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(12),dp(8),dp(12),dp(8));
+        TextView info=text("Prévia de iluminação. A segmentação usa a ROI selecionada e refina as medidas na imagem original.",13,Color.LTGRAY);body.addView(info);
+        ImageView previewImage=new ImageView(this);previewImage.setAdjustViewBounds(true);body.addView(previewImage,new LinearLayout.LayoutParams(-1,dp(300)));
+        final int[] choice={selectedLowLightMode==null?0:selectedLowLightMode.ordinal()+1};
+        android.widget.Spinner spinner=new android.widget.Spinner(this);
+        android.widget.ArrayAdapter<String> adapter=new android.widget.ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,choices);
+        spinner.setAdapter(adapter);spinner.setSelection(choice[0]);body.addView(spinner);
+        final Runnable render=()->{
+            Bitmap previewBitmap=Bitmap.createScaledBitmap(photoBitmap,Math.min(900,photoBitmap.getWidth()),Math.max(1,(int)(photoBitmap.getHeight()*Math.min(900,photoBitmap.getWidth())/(double)photoBitmap.getWidth())),true);
+            Mat source=null,out=null;
+            try {
+                source=new Mat();
+                org.opencv.android.Utils.bitmapToMat(previewBitmap,source);
+                int index=spinner.getSelectedItemPosition();
+                out=LowLightPreprocessor.apply(source,index<=1?LowLightPreprocessor.Mode.ORIGINAL:modes[index-1]);
+                Bitmap shown=Bitmap.createBitmap(out.cols(),out.rows(),Bitmap.Config.ARGB_8888);
+                org.opencv.android.Utils.matToBitmap(out,shown);
+                previewImage.setImageBitmap(shown);
+            }catch(Exception|LinkageError ex){toast("Não foi possível gerar a prévia.");}
+            finally {try{if(source!=null)source.release();if(out!=null)out.release();}catch(LinkageError ignored){}previewBitmap.recycle();}
+        };
+        spinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){choice[0]=pos;render.run();}
+            public void onNothingSelected(android.widget.AdapterView<?> p){}
+        });
+        new AlertDialog.Builder(this).setTitle("Recuperação de imagem escura").setView(body)
+          .setNegativeButton("Cancelar",(d,w)->{})
+          .setPositiveButton("Aplicar e analisar",(d,w)->{
+              if(interestRegion==null){toast("Selecione primeiro uma ROI em Área.");return;}
+              selectedLowLightMode=choice[0]==0?null:modes[choice[0]-1];
+              startActiveAnalysis(false);
+          }).show();
+    }
+
     private void toggleTorch() {
         if(camera==null||!camera.getCameraInfo().hasFlashUnit())return;
         torchOn=!torchOn;camera.getCameraControl().enableTorch(torchOn);torch.setText(torchOn?"Luz ✓":"Luz");
@@ -528,15 +638,15 @@ public final class MainActivity extends ComponentActivity {
         return items;
     }
     private void refreshDistribution() {
-        distribution=null;crackHistogram=null;histogram.display(null);histogram.setVisibility(View.GONE);hideColorMap(false);
+        distribution=null;crackHistogram=null;histogram.display(null);setChartsVisibility(View.GONE);hideColorMap(false);
         if(roiNeedsAnalysis){scaleLabel.setText(scaleSettings==null?"ROI sem escala física":"Escala preservada · aguardando segmentação");updateControls();return;}
         if(photoResult==null){scaleLabel.setText("Sem escala · toque em Escala / mm");updateControls();return;}
-        if(scaleSettings==null){distribution=PhotoComposer.pixelHistogram(photoResult);showHistogram();histogram.setVisibility(View.VISIBLE);if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.visuals(visuals);colorMap.viewport(displayWindow);}applyViewMode();scaleLabel.setText("Sem escala física · histograma em px");hint.setText("Toque numa pelota para revisar ou calibrar pela medida real. Escala / mm mantém as opções manuais.");updateControls();return;}
+        if(scaleSettings==null){distribution=PhotoComposer.pixelHistogram(photoResult);showHistogram();setChartsVisibility(View.VISIBLE);if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.visuals(visuals);colorMap.viewport(displayWindow);}applyViewMode();scaleLabel.setText("Sem escala física · histograma em px");hint.setText("Toque numa pelota para revisar ou calibrar pela medida real. Escala / mm mantém as opções manuais.");updateControls();return;}
         try {
             distribution=Granulometry.compute(measurementItems(),scaleSettings,originalWidth,originalHeight,photoResult.width,photoResult.height);
             scaleSettings=distribution.settings;
-            scaleLabel.setText((scaleSettings.beltReference!=null?"Correia · ":scaleSettings.selectedObject!=null?"REF · ":scaleSettings.estimated()?"Estimativa · ":"")+HistogramView.number(scaleSettings.originalPixelsPerMm)+" px/mm · classe "+HistogramView.number(distribution.settings.binWidthMm)+" mm");
-            showHistogram();histogram.setVisibility(View.VISIBLE);
+            scaleLabel.setText((scaleSettings.beltReference!=null?"Correia · ":scaleSettings.containerReference!=null?"Recipiente · ":scaleSettings.selectedObject!=null?"REF · ":scaleSettings.estimated()?"Estimativa · ":"")+HistogramView.number(scaleSettings.originalPixelsPerMm)+" px/mm · classe "+HistogramView.number(distribution.settings.binWidthMm)+" mm");
+            showHistogram();setChartsVisibility(View.VISIBLE);
             if(colorMap!=null){colorMap.display(photoResult,distribution);colorMap.visuals(visuals);colorMap.viewport(displayWindow);}applyViewMode();
             hint.setText(scaleSettings.selectedObject!=null?"Escala pela referência escolhida. Toque em REF para editar a medida.":scaleSettings.estimated()?"Escala estimada pela média informada. Use uma referência para medir em mm.":
                 "Escala aplicada. Confira a faixa em mm antes de salvar; largura da classe não é calibração.");
@@ -558,10 +668,21 @@ public final class MainActivity extends ComponentActivity {
     }
     private void updateActivePhotoDisplay(){
         if(photoBitmap==null)return;AnalysisWindow wanted=new AnalysisWindow(photoBitmap.getWidth(),photoBitmap.getHeight(),interestRegion);
-        if(displaySource==photoBitmap&&wanted.sameScope(displayWindow)&&displayBitmap!=null&&!displayBitmap.isRecycled())return;
-        Bitmap next=ActivePhoto.render(photoBitmap,wanted);frozen.setImageBitmap(next);
-        if(displayBitmap!=null&&displayBitmap!=photoBitmap&&displayBitmap!=next&&!displayBitmap.isRecycled())displayBitmap.recycle();
-        displayBitmap=next;displaySource=photoBitmap;displayWindow=wanted;
+        Bitmap source=shownPhoto();
+        if(displaySource==source&&wanted.sameScope(displayWindow)&&displayBitmap!=null&&!displayBitmap.isRecycled())return;
+        Bitmap next=ActivePhoto.render(source,wanted);frozen.setImageBitmap(next);
+        if(displayBitmap!=null&&displayBitmap!=photoBitmap&&displayBitmap!=photoFiltered&&displayBitmap!=next&&!displayBitmap.isRecycled())displayBitmap.recycle();
+        displayBitmap=next;displaySource=source;displayWindow=wanted;
+    }
+    /**
+     * 0.15.2: imagem mostrada na tela e usada na segmentação/mapa do relatório. É a filtrada quando houve realce
+     * e a ROI na tela ainda é a mesma da análise; senão, a original. Nunca é usada para medir.
+     */
+    private Bitmap shownPhoto(){
+        if(photoBitmap==null)return null;
+        if(photoFiltered==null||photoFiltered.isRecycled()||roiNeedsAnalysis||photoAnalysisWindow==null)return photoBitmap;
+        AnalysisWindow current=new AnalysisWindow(photoBitmap.getWidth(),photoBitmap.getHeight(),interestRegion);
+        return current.sameScope(photoAnalysisWindow)?photoFiltered:photoBitmap;
     }
     private void activateRoi(InterestRegion region){
         if(photoBitmap==null)return;AnalysisWindow wanted=new AnalysisWindow(photoBitmap.getWidth(),photoBitmap.getHeight(),region);
@@ -574,13 +695,14 @@ public final class MainActivity extends ComponentActivity {
         File file=photoFile;String mime=photoMime;PelletDetector.Parameters cfg=photoParameters;
         setBusy(Mode.PROCESSING,(search?"Buscando ajuste pela iluminação da ":"Segmentando ")+(interestRegion==null?"foto…":"ROI…"));worker.execute(()->processPhoto(file,mime,cfg,search,null));
     }
-    private void showRegionEditor(){
+    private void showRegionEditor(){showRegionEditor(interestRegion);}
+    private void showRegionEditor(InterestRegion initial){
         if(mode!=Mode.PHOTO||photoBitmap==null||photoAllResult==null)return;
         android.app.Dialog dialog=new android.app.Dialog(this);dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(12),dp(12),dp(12),dp(12));root.setBackgroundColor(Color.rgb(16,26,35));
         root.addView(text("Área de interesse",22,Color.WHITE));
         root.addView(text("Arraste dentro para mover. Use as alças nos lados/cantos ou dois dedos para redimensionar. Pelotas que cruzam o limite ficam fora da análise.",13,Color.LTGRAY));
-        RegionEditorView editor=new RegionEditorView(this,photoBitmap,interestRegion);
+        RegionEditorView editor=new RegionEditorView(this,photoBitmap,initial);
         LinearLayout shapes=row();Button rectangle=button("Retângulo",false),circle=button("Círculo",false),reset=button("Restaurar",false);
         shapes.addView(rectangle,new LinearLayout.LayoutParams(0,dp(44),1));shapes.addView(circle,new LinearLayout.LayoutParams(0,dp(44),1));shapes.addView(reset,new LinearLayout.LayoutParams(0,dp(44),1));root.addView(shapes);
         rectangle.setOnClickListener(v->editor.shape(InterestRegion.Shape.RECTANGLE));circle.setOnClickListener(v->editor.shape(InterestRegion.Shape.CIRCLE));reset.setOnClickListener(v->editor.reset());
@@ -697,10 +819,11 @@ public final class MainActivity extends ComponentActivity {
         TextView note=text("Toque numa pelota na foto e use Calibrar para informar a medida real. A escala converte pixels em mm. A classe apenas agrupa diâmetros: 1 mm gera barras como 8–9, 9–10 mm. Use pixels da foto ORIGINAL ("+originalWidth+" × "+originalHeight+" px), não pixels da tela. O redimensionamento interno é corrigido.",13,Color.LTGRAY);content.addView(note);
         if(activeReference()!=null){Button edit=button("Editar referência selecionada",false);edit.setTag("edit_selected_reference");edit.setOnClickListener(v->{ObjectCalibration.Reference ref=activeReference();if(ref!=null)showObjectCalibrationForGeometry(ref.geometry,ref.fullImageId,ref.displayIdAtSelection);});content.addView(edit);}
         Button belt=button("Calibrar pela largura da correia",false);belt.setTag("belt_calibration");content.addView(belt);
+        Button container=button("Calibrar pelo diâmetro interno do recipiente",false);container.setTag("container_calibration");content.addView(container);
         android.widget.RadioGroup methods=new android.widget.RadioGroup(this);
-        int[] ids={View.generateViewId(),View.generateViewId(),View.generateViewId(),View.generateViewId(),View.generateViewId()};
-        String[] labels={"Informar escala em px/mm","Calcular por referência de comprimento","Estimar por média conhecida (mm)","Usar objeto selecionado na foto","Usar largura da correia confirmada"};
-        for(int i=0;i<ids.length;i++){android.widget.RadioButton option=new android.widget.RadioButton(this);option.setId(ids[i]);option.setText(labels[i]);option.setTextColor(Color.WHITE);option.setTextSize(13);if(i==3)option.setEnabled(activeReference()!=null);if(i==4)option.setEnabled(scaleSettings!=null&&scaleSettings.beltReference!=null);methods.addView(option);}
+        int[] ids={View.generateViewId(),View.generateViewId(),View.generateViewId(),View.generateViewId(),View.generateViewId(),View.generateViewId()};
+        String[] labels={"Informar escala em px/mm","Calcular por referência de comprimento","Estimar por média conhecida (mm)","Usar objeto selecionado na foto","Usar largura da correia confirmada","Usar diâmetro do recipiente confirmado"};
+        for(int i=0;i<ids.length;i++){android.widget.RadioButton option=new android.widget.RadioButton(this);option.setId(ids[i]);option.setText(labels[i]);option.setTextColor(Color.WHITE);option.setTextSize(13);if(i==3)option.setEnabled(activeReference()!=null);if(i==4)option.setEnabled(scaleSettings!=null&&scaleSettings.beltReference!=null);if(i==5)option.setEnabled(scaleSettings!=null&&scaleSettings.containerReference!=null);methods.addView(option);}
         content.addView(methods);
         TextView valueLabel=text("Pixels por milímetro (px/mm)",14,Color.WHITE);content.addView(valueLabel);
         EditText pixels=new EditText(this);pixels.setSingleLine();pixels.setTextColor(Color.WHITE);pixels.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);content.addView(pixels);
@@ -718,7 +841,7 @@ public final class MainActivity extends ComponentActivity {
         TextView error=text("",13,Color.rgb(255,146,146));error.setPadding(0,dp(8),0,dp(8));error.setVisibility(View.GONE);content.addView(error);
         java.util.function.Supplier<Granulometry.Settings> input=()-> {
             double bin=parsePositive(classes.getText().toString());
-            if((methods.getCheckedRadioButtonId()==ids[3]&&activeReference()!=null)||(methods.getCheckedRadioButtonId()==ids[4]&&scaleSettings!=null&&scaleSettings.beltReference!=null))return scaleSettings.withHistogram(bin,edges.isChecked(),review.isChecked());
+            if((methods.getCheckedRadioButtonId()==ids[3]&&activeReference()!=null)||(methods.getCheckedRadioButtonId()==ids[4]&&scaleSettings!=null&&scaleSettings.beltReference!=null)||(methods.getCheckedRadioButtonId()==ids[5]&&scaleSettings!=null&&scaleSettings.containerReference!=null))return scaleSettings.withHistogram(bin,edges.isChecked(),review.isChecked());
             double value=parsePositive(pixels.getText().toString());
             if(methods.getCheckedRadioButtonId()==ids[1])return Granulometry.Settings.reference(value,parsePositive(length.getText().toString()),bin,edges.isChecked(),review.isChecked());
             if(methods.getCheckedRadioButtonId()==ids[2])return Granulometry.Settings.estimatedMean(value,bin,edges.isChecked(),review.isChecked());
@@ -734,21 +857,22 @@ public final class MainActivity extends ComponentActivity {
         pixels.addTextChangedListener(watcher);length.addTextChangedListener(watcher);classes.addTextChangedListener(watcher);
         edges.setOnCheckedChangeListener((v,checked)->updatePreview.run());review.setOnCheckedChangeListener((v,checked)->updatePreview.run());
         methods.setOnCheckedChangeListener((group,checked)-> {
-            boolean reference=checked==ids[1],estimate=checked==ids[2],selected=checked==ids[3]||checked==ids[4];
+            boolean reference=checked==ids[1],estimate=checked==ids[2],selected=checked==ids[3]||checked==ids[4]||checked==ids[5];
             valueLabel.setVisibility(selected?View.GONE:View.VISIBLE);pixels.setVisibility(selected?View.GONE:View.VISIBLE);
             lengthLabel.setVisibility(reference?View.VISIBLE:View.GONE);length.setVisibility(reference?View.VISIBLE:View.GONE);
             valueLabel.setText(reference?"Comprimento da referência na foto original (px)":estimate?"Média conhecida das pelotas incluídas (mm)":"Pixels por milímetro (px/mm)");
             pixels.setHint(reference?"Ex.: 192":estimate?"Ex.: 12":"Ex.: 16 ou 16,5");
-            methodNote.setText(checked==ids[4]&&scaleSettings!=null&&scaleSettings.beltReference!=null?"Largura confirmada: "+HistogramView.number(scaleSettings.beltReference.realWidthMm)+" mm. Use o botão da correia para editar as bordas.":selected&&activeReference()!=null?"REF: "+activeReference().summary()+". Para trocar, toque no objeto na foto.":reference?"Ex.: 192 px / 12 mm = 16 px/mm. Meça uma referência no mesmo plano das pelotas.":estimate?"Use somente se a média desta amostra foi obtida externamente. A média informada define a escala; não será uma medição independente. A faixa não será forçada a 8–16 mm.":"px/mm = comprimento em pixels / comprimento real em mm. Não informe o diâmetro médio neste campo.");
+            methodNote.setText(checked==ids[5]&&scaleSettings!=null&&scaleSettings.containerReference!=null?"Recipiente confirmado: "+scaleSettings.containerReference.summary()+". Use o botão do recipiente para editar a borda.":checked==ids[4]&&scaleSettings!=null&&scaleSettings.beltReference!=null?"Largura confirmada: "+HistogramView.number(scaleSettings.beltReference.realWidthMm)+" mm. Use o botão da correia para editar as bordas.":selected&&activeReference()!=null?"REF: "+activeReference().summary()+". Para trocar, toque no objeto na foto.":reference?"Ex.: 192 px / 12 mm = 16 px/mm. Meça uma referência no mesmo plano das pelotas.":estimate?"Use somente se a média desta amostra foi obtida externamente. A média informada define a escala; não será uma medição independente. A faixa não será forçada a 8–16 mm.":"px/mm = comprimento em pixels / comprimento real em mm. Não informe o diâmetro médio neste campo.");
             boolean match=scaleSettings!=null&&(reference?"reference_length".equals(scaleSettings.calibrationSource):estimate?scaleSettings.estimated():"pixels_per_mm".equals(scaleSettings.calibrationSource));
             pixels.setText(match?Double.toString(reference?scaleSettings.referencePixels:estimate?scaleSettings.knownMeanMm:scaleSettings.originalPixelsPerMm):"");
             length.setText(match&&reference?Double.toString(scaleSettings.referenceMm):"");updatePreview.run();
         });
-        methods.check(ids[scaleSettings==null?0:scaleSettings.beltReference!=null?4:scaleSettings.selectedObject!=null?3:scaleSettings.estimated()?2:"reference_length".equals(scaleSettings.calibrationSource)?1:0]);
+        methods.check(ids[scaleSettings==null?0:scaleSettings.containerReference!=null?5:scaleSettings.beltReference!=null?4:scaleSettings.selectedObject!=null?3:scaleSettings.estimated()?2:"reference_length".equals(scaleSettings.calibrationSource)?1:0]);
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Escala e granulometria").setView(scroll)
             .setNegativeButton("Cancelar",null).setNeutralButton("Remover escala",(d,w)->commitScale(null))
             .setPositiveButton("Aplicar",null).create();
         belt.setOnClickListener(v->{dialog.dismiss();showBeltCalibration();});
+        container.setOnClickListener(v->{dialog.dismiss();showContainerCalibration();});
         dialog.setOnShowListener(ignored->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             try {
                 Granulometry.Settings prospective=input.get();Granulometry.Distribution measured=Granulometry.compute(measurementItems(prospective),prospective,originalWidth,originalHeight,photoResult.width,photoResult.height);
@@ -768,7 +892,7 @@ public final class MainActivity extends ComponentActivity {
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(12),dp(12),dp(12),dp(12));root.setBackgroundColor(Color.rgb(16,26,35));
         root.addView(text("ROI ampliada",22,Color.WHITE));root.addView(text("Aproxime com dois dedos e arraste para inspecionar. O relatório usa a ROI inteira selecionada, com a mesma escala física.",13,Color.LTGRAY));
         java.util.List<Integer> indices=roiNeedsAnalysis?new java.util.ArrayList<>():ObjectCalibration.sampleIndices(photoAllResult,roi,activeReference());
-        RoiZoomView zoom=new RoiZoomView(this,photoBitmap,InterestRegion.select(photoAllResult,indices),photoAllCracks==null?null:photoAllCracks.select(indices),roi,activeReference());root.addView(zoom,new LinearLayout.LayoutParams(-1,0,1));
+        RoiZoomView zoom=new RoiZoomView(this,shownPhoto(),InterestRegion.select(photoAllResult,indices),photoAllCracks==null?null:photoAllCracks.select(indices),roi,activeReference());root.addView(zoom,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout actions=row();Button reset=button("Enquadrar ROI",false),close=button("Voltar",true);actions.addView(reset,new LinearLayout.LayoutParams(0,dp(48),1));actions.addView(close,new LinearLayout.LayoutParams(0,dp(48),1));root.addView(actions);reset.setOnClickListener(v->zoom.reset());close.setOnClickListener(v->dialog.dismiss());
         dialog.setContentView(root);dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);
     }
@@ -801,6 +925,63 @@ public final class MainActivity extends ComponentActivity {
         });
         cancel.setOnClickListener(v->dialog.dismiss());apply.setOnClickListener(v->{try{if(!confirmed.isChecked())return;BeltCalibration.Reference ref=BeltCalibration.select(editor.edges(),parsePositive(real.getText().toString()),ow,oh,w,h);Granulometry.Settings cfg=Granulometry.Settings.belt(ref,parsePositive(bin.getText().toString()),scaleSettings==null||scaleSettings.excludePartial,scaleSettings!=null&&scaleSettings.excludeReview);Granulometry.compute(measurementItems(cfg),cfg,ow,oh,w,h);commitScale(cfg);dialog.dismiss();showRegionEditor();}catch(IllegalArgumentException e){status.setText(e.getMessage());}});
         dialog.setContentView(root);dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);update.run();if(previous==null)automatic.performClick();
+    }
+
+    /** Escala pelo diâmetro interno conhecido de um recipiente redondo; a borda é sugerida automaticamente e confirmada pelo usuário. */
+    private void showContainerCalibration(){
+        if(mode!=Mode.PHOTO||photoBitmap==null||photoAllResult==null)return;
+        final Bitmap snapshot=photoBitmap;final int ow=originalWidth,oh=originalHeight,w=snapshot.getWidth(),h=snapshot.getHeight();
+        ContainerCalibration.Reference previous=scaleSettings==null?null:scaleSettings.containerReference;
+        final ContainerCalibration.Detection[] detection={previous==null?null:previous.detection};
+        final ContainerCalibration.Circle[] circles=new ContainerCalibration.Circle[2];
+        final ContainerCalibration.Plane[] plane={previous==null?ContainerCalibration.Plane.RIM:previous.plane};
+        if(detection[0]!=null){circles[0]=detection[0].rim;circles[1]=detection[0].pelletLevel;}
+        if(previous!=null)circles[previous.plane.ordinal()]=previous.circle;
+        android.app.Dialog dialog=new android.app.Dialog(this);dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        LinearLayout root=new LinearLayout(this);root.setTag("container_dialog");root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(12),dp(12),dp(12),dp(12));root.setBackgroundColor(Color.rgb(16,26,35));
+        root.addView(text("Diâmetro interno do recipiente",22,Color.WHITE));
+        root.addView(text("A borda é detectada automaticamente. Confira o círculo amarelo; arraste a linha ou as alças para o raio e a cruz central para mover. Dois dedos ampliam.",12,Color.LTGRAY));
+        LinearLayout labels=row();labels.addView(text("Diâmetro interno (mm)",13,Color.WHITE),new LinearLayout.LayoutParams(0,-2,1));labels.addView(text("Classe (mm)",13,Color.WHITE),new LinearLayout.LayoutParams(0,-2,1));root.addView(labels);
+        LinearLayout values=row();EditText real=new EditText(this),bin=new EditText(this);real.setTag("container_diameter_mm");bin.setTag("container_bin_mm");
+        for(EditText input:new EditText[]{real,bin}){input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);input.setOnEditorActionListener((v,action,event)->{android.view.inputmethod.InputMethodManager keyboard=(android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);if(keyboard!=null)keyboard.hideSoftInputFromWindow(v.getWindowToken(),0);v.clearFocus();return true;});input.setTextColor(Color.WHITE);input.setSingleLine();input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);values.addView(input,new LinearLayout.LayoutParams(0,dp(46),1));}root.addView(values);
+        real.setHint("Medido por dentro");if(previous!=null)real.setText(Double.toString(previous.realInnerDiameterMm));bin.setText(scaleSettings==null?"1":Double.toString(scaleSettings.binWidthMm));
+        android.widget.RadioGroup planes=new android.widget.RadioGroup(this);planes.setOrientation(LinearLayout.HORIZONTAL);
+        android.widget.RadioButton level=new android.widget.RadioButton(this),rim=new android.widget.RadioButton(this);level.setId(View.generateViewId());rim.setId(View.generateViewId());level.setTag("container_plane_level");rim.setTag("container_plane_rim");
+        level.setText("Nível das pelotas");rim.setText("Borda superior");for(android.widget.RadioButton b:new android.widget.RadioButton[]{level,rim}){b.setTextColor(Color.WHITE);b.setTextSize(12);planes.addView(b,new android.widget.RadioGroup.LayoutParams(0,-2,1f));}root.addView(planes);
+        ContainerCalibration.Circle start=circles[plane[0].ordinal()]!=null?circles[plane[0].ordinal()]:ContainerCalibration.initial(w,h);
+        ContainerEditorView editor=new ContainerEditorView(this,snapshot,start);editor.setTag("container_editor");
+        LinearLayout tools=row();Button automatic=button("Detectar borda",false),fit=button("Enquadrar",false);automatic.setTag("container_auto");for(Button b:new Button[]{automatic,fit})tools.addView(b,new LinearLayout.LayoutParams(0,dp(44),1));root.addView(tools);root.addView(editor,new LinearLayout.LayoutParams(-1,0,1));
+        TextView status=text("",12,Color.rgb(82,216,190));status.setTag("container_status");root.addView(status);
+        TextView warning=text("",12,Color.rgb(255,196,92));warning.setTag("container_warning");root.addView(warning);
+        CheckBox confirmed=new CheckBox(this);confirmed.setTag("container_confirm");confirmed.setText("Conferi o círculo, o plano e o diâmetro interno real");confirmed.setTextColor(Color.WHITE);confirmed.setTextSize(12);root.addView(confirmed);
+        root.addView(text("A escala só vale no plano do círculo. Recipiente fundo: a borda fica mais perto da câmera que as pelotas, que sairiam menores. Use câmera paralela à boca, camada nivelada e recipiente cilíndrico. Borda ovalizada acima de 6% bloqueia a calibração.",11,Color.LTGRAY));
+        LinearLayout actions=row();Button cancel=button("Cancelar",false),apply=button("Aplicar diâmetro",true);apply.setTag("container_apply");actions.addView(cancel,new LinearLayout.LayoutParams(0,dp(48),1));actions.addView(apply,new LinearLayout.LayoutParams(0,dp(48),1));root.addView(actions);
+        final boolean[] quiet={false};
+        Runnable update=()->{
+            ContainerCalibration.Detection d=detection[0];double bias=d==null?Double.NaN:d.rimOverPelletScale();
+            warning.setText(Double.isFinite(bias)?(plane[0]==ContainerCalibration.Plane.RIM&&bias>.02?"Atenção: na borda a escala é "+HistogramView.number(100*bias)+"% maior que no nível das pelotas; as pelotas sairiam cerca de "+HistogramView.number(100*bias/(1+bias))+"% menores.":"Diferença de escala borda/nível das pelotas: "+HistogramView.number(100*bias)+"%."+(plane[0]==ContainerCalibration.Plane.PELLET_LEVEL?" Supõe parede cilíndrica e pelotas encostadas nela.":"")):plane[0]==ContainerCalibration.Plane.PELLET_LEVEL&&d!=null?d.pelletNote:"");
+            try{ContainerCalibration.Reference ref=ContainerCalibration.select(editor.circle(),plane[0],parsePositive(real.getText().toString()),d,ow,oh,w,h);parsePositive(bin.getText().toString());status.setText("Ø "+HistogramView.number(ref.originalDiameterPixels)+" px na original / "+HistogramView.number(ref.realInnerDiameterMm)+" mm = "+HistogramView.number(ref.originalPixelsPerMm)+" px/mm"+(Double.isFinite(ref.rimOvality)?" · ovalização "+HistogramView.number(100*ref.rimOvality)+"%":""));apply.setEnabled(confirmed.isChecked());}catch(IllegalArgumentException e){status.setText(e.getMessage());apply.setEnabled(false);}
+        };
+        editor.changed(()->{circles[plane[0].ordinal()]=editor.circle();if(!quiet[0])confirmed.setChecked(false);update.run();});confirmed.setOnCheckedChangeListener((v,c)->update.run());
+        android.text.TextWatcher watcher=new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int f){}public void onTextChanged(CharSequence s,int a,int b,int c){confirmed.setChecked(false);update.run();}public void afterTextChanged(android.text.Editable e){}};real.addTextChangedListener(watcher);bin.addTextChangedListener(watcher);
+        Runnable showPlane=()->{ContainerCalibration.Plane p=plane[0];ContainerCalibration.Circle active=circles[p.ordinal()];if(active==null){ContainerCalibration.Circle o=circles[1-p.ordinal()];active=o==null?ContainerCalibration.initial(w,h):o.manual();circles[p.ordinal()]=active;}editor.circles(active,circles[1-p.ordinal()]);};
+        planes.setOnCheckedChangeListener((g,id)->{plane[0]=id==rim.getId()?ContainerCalibration.Plane.RIM:ContainerCalibration.Plane.PELLET_LEVEL;confirmed.setChecked(false);showPlane.run();});
+        fit.setOnClickListener(v->editor.resetZoom());
+        automatic.setOnClickListener(v->{
+            automatic.setEnabled(false);confirmed.setChecked(false);status.setText("Procurando a borda circular; confira a sugestão antes de aplicar.");
+            double k=Math.min(1,640./Math.max(w,h));int tw=Math.max(64,(int)Math.round(w*k)),th=Math.max(64,(int)Math.round(h*k));Bitmap small=Bitmap.createScaledBitmap(snapshot,tw,th,true);final Bitmap scan=small==snapshot?small.copy(Bitmap.Config.ARGB_8888,false):small;
+            worker.execute(()->{ContainerCalibration.Detection found=null;try{int[] pixels=new int[tw*th];scan.getPixels(pixels,0,tw,0,0,tw,th);byte[] gray=new byte[pixels.length];for(int i=0;i<pixels.length;i++){int c=pixels[i];gray[i]=(byte)((77*Color.red(c)+150*Color.green(c)+29*Color.blue(c))>>8);}ContainerCalibration.Detection d=ContainerRimDetector.detect(gray,tw,th);if(d!=null)found=d.scaled((w-1)/(tw-1.),(h-1)/(th-1.));}catch(RuntimeException ignored){}finally{scan.recycle();}final ContainerCalibration.Detection suggestion=found;
+                runOnUiThread(()->{if(!dialog.isShowing()||isDestroyed()||photoBitmap!=snapshot)return;automatic.setEnabled(true);
+                    if(suggestion==null){status.setText("Borda não encontrada. Enquadre o recipiente inteiro ou ajuste o círculo manualmente.");return;}
+                    detection[0]=suggestion;circles[0]=suggestion.rim;circles[1]=suggestion.pelletLevel;plane[0]=ContainerCalibration.suggestedPlane(suggestion);
+                    quiet[0]=true;planes.check(plane[0]==ContainerCalibration.Plane.RIM?rim.getId():level.getId());showPlane.run();quiet[0]=false;update.run();
+                    status.setText((suggestion.pelletLevel==null?"Borda detectada; nível das pelotas não encontrado, confira o plano.":"Borda e nível das pelotas detectados. Amarelo: plano em uso; tracejado: o outro.")+"\n"+status.getText());});});
+        });
+        cancel.setOnClickListener(v->dialog.dismiss());
+        apply.setOnClickListener(v->{try{if(!confirmed.isChecked())return;ContainerCalibration.Reference ref=ContainerCalibration.select(editor.circle(),plane[0],parsePositive(real.getText().toString()),detection[0],ow,oh,w,h);Granulometry.Settings cfg=Granulometry.Settings.container(ref,parsePositive(bin.getText().toString()),scaleSettings==null||scaleSettings.excludePartial,scaleSettings!=null&&scaleSettings.excludeReview);Granulometry.compute(measurementItems(cfg),cfg,ow,oh,w,h);commitScale(cfg);dialog.dismiss();
+            ContainerCalibration.Circle inner=circles[0]!=null?circles[0]:editor.circle();showRegionEditor(interestRegion==null?ContainerCalibration.interiorRegion(inner,w,h):interestRegion);}catch(IllegalArgumentException e){status.setText(e.getMessage());}});
+        dialog.setContentView(root);dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);
+        quiet[0]=true;planes.check(plane[0]==ContainerCalibration.Plane.RIM?rim.getId():level.getId());quiet[0]=false;update.run();if(previous==null)automatic.performClick();
     }
     private static double parsePositive(String value) {
         try {double result=Double.parseDouble(value.trim().replace(',','.'));
@@ -952,6 +1133,26 @@ public final class MainActivity extends ComponentActivity {
         if(distribution==null||histogram==null)return;
         crackHistogram=CrackHistogram.compute(distribution,measurementItems(),photoCracks);
         histogram.display(distribution,crackHistogram,visuals);
+        if(rosinRammler!=null)rosinRammler.display(RosinRammler.fit(distribution,rrBasis()));
+    }
+    private void setChartsVisibility(int visibility){
+        if(chartSlot!=null)chartSlot.setVisibility(visibility);if(chartTabs!=null)chartTabs.setVisibility(visibility);
+        // Oculto: os dois gráficos ficam GONE (contrato anterior); visível: só a aba escolhida aparece.
+        if(visibility==View.VISIBLE)selectChart(getPreferences(MODE_PRIVATE).getBoolean("chart_rr",false));
+        else{histogram.setVisibility(visibility);if(rosinRammler!=null)rosinRammler.setVisibility(visibility);}
+    }
+    private void selectChart(boolean rr){
+        getPreferences(MODE_PRIVATE).edit().putBoolean("chart_rr",rr).apply();
+        histogram.setVisibility(rr?View.INVISIBLE:View.VISIBLE);rosinRammler.setVisibility(rr?View.VISIBLE:View.INVISIBLE);
+        histogramTab.setBackgroundColor(rr?Color.TRANSPARENT:Color.rgb(38,140,171));rrTab.setBackgroundColor(rr?Color.rgb(38,140,171):Color.TRANSPARENT);
+        histogramTab.setTextColor(rr?Color.rgb(151,174,187):Color.WHITE);rrTab.setTextColor(rr?Color.WHITE:Color.rgb(151,174,187));
+    }
+    private RosinRammler.Basis rrBasis(){return RosinRammler.Basis.fromId(getPreferences(MODE_PRIVATE).getString("rr_basis","number"));}
+    /** Base da curva: número (o que a foto mede) ou massa estimada ∝ d³ (aproxima a base das curvas de peneira). */
+    private void showRosinRammlerOptions(){
+        RosinRammler.Basis[] bases=RosinRammler.Basis.values();String[] labels=new String[bases.length];for(int i=0;i<bases.length;i++)labels[i]=bases[i].label;
+        new AlertDialog.Builder(this).setTitle("Rosin–Rammler · base da curva").setSingleChoiceItems(labels,rrBasis().ordinal(),(d,which)->{getPreferences(MODE_PRIVATE).edit().putString("rr_basis",bases[which].id).apply();showHistogram();d.dismiss();})
+            .setNegativeButton("Fechar",null).show();
     }
 
     private String crackMethodLabel(){
@@ -976,12 +1177,12 @@ public final class MainActivity extends ComponentActivity {
     private void restoreVisuals(){
         android.content.SharedPreferences p=getPreferences(MODE_PRIVATE);
         CrackHistogram.Normalization n;try{n=CrackHistogram.Normalization.valueOf(p.getString("hist_normalization","PERCENT_OF_ALL"));}catch(IllegalArgumentException e){n=CrackHistogram.Normalization.PERCENT_OF_ALL;}
-        visuals=new ReportVisuals(p.getFloat("map_opacity",(float)GranulometryColorScale.DEFAULT_OPACITY),p.getBoolean("map_labels",false),p.getBoolean("map_fixed",false),
+        visuals=new ReportVisuals(p.getFloat("map_opacity_v2",(float)GranulometryColorScale.DEFAULT_OPACITY),p.getBoolean("map_labels",false),p.getBoolean("map_fixed",false),
             p.getFloat("map_fixed_min",8),p.getFloat("map_fixed_max",16),p.getBoolean("hist_all",true),p.getBoolean("hist_cracked",true),p.getBoolean("hist_values",false),n);
         crackChoice=CrackClassifierChoice.parse(p.getString("crack_classifier","RANDOM_FOREST"));
     }
     private void saveVisuals(){
-        getPreferences(MODE_PRIVATE).edit().putFloat("map_opacity",(float)visuals.mapOpacity).putBoolean("map_labels",visuals.mapLabels).putBoolean("map_fixed",visuals.mapFixed)
+        getPreferences(MODE_PRIVATE).edit().putFloat("map_opacity_v2",(float)visuals.mapOpacity).putBoolean("map_labels",visuals.mapLabels).putBoolean("map_fixed",visuals.mapFixed)
             .putFloat("map_fixed_min",(float)visuals.mapFixedMin).putFloat("map_fixed_max",(float)visuals.mapFixedMax).putBoolean("hist_all",visuals.showAll).putBoolean("hist_cracked",visuals.showCracked)
             .putBoolean("hist_values",visuals.showValues).putString("hist_normalization",visuals.normalization.name()).putString("crack_classifier",crackChoice.name()).apply();
     }
@@ -993,7 +1194,7 @@ public final class MainActivity extends ComponentActivity {
     private void showMapOptions(){
         LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(8),dp(20),dp(8));ScrollView scroll=new ScrollView(this);scroll.addView(content);
         TextView opacityLabel=text("",14,Color.WHITE);content.addView(opacityLabel);
-        SeekBar opacity=new SeekBar(this);opacity.setMax(70);opacity.setProgress((int)Math.round(visuals.mapOpacity*100));opacity.setTag("map_opacity");content.addView(opacity);
+        SeekBar opacity=new SeekBar(this);opacity.setMax(90);opacity.setProgress((int)Math.round(visuals.mapOpacity*100));opacity.setTag("map_opacity");content.addView(opacity);
         Runnable label=()->opacityLabel.setText("Opacidade da cor: "+opacity.getProgress()+"% (foto "+(100-opacity.getProgress())+"%)");label.run();
         opacity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int v,boolean u){label.run();}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});
         CheckBox labels=check(content,"Mostrar o diâmetro sobre cada pelota",visuals.mapLabels,"map_labels");

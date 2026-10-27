@@ -55,6 +55,21 @@ final class Mats {
         return gray;
     }
 
+    /** BufferedImage (qualquer tipo) para Mat BGR 8 bits; deve ser liberada. */
+    static Mat fromImage(BufferedImage image) {
+        BufferedImage bgr = image;
+        if (image.getType() != BufferedImage.TYPE_3BYTE_BGR) {
+            bgr = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
+            java.awt.Graphics2D g = bgr.createGraphics();
+            g.drawImage(image, 0, 0, null);
+            g.dispose();
+        }
+        byte[] data = ((DataBufferByte) bgr.getRaster().getDataBuffer()).getData();
+        Mat mat = new Mat(bgr.getHeight(), bgr.getWidth(), CvType.CV_8UC3);
+        mat.put(0, 0, data);
+        return mat;
+    }
+
     static BufferedImage toImage(Mat mat) {
         Mat src = mat;
         boolean temp = false;

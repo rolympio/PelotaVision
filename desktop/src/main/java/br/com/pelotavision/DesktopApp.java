@@ -10,14 +10,15 @@ import java.io.File;
 /** PelotaVision para Windows: ponto de entrada. Usa o mesmo nucleo de analise do Android. */
 public final class DesktopApp {
     public static final String NAME = "PelotaVision Windows";
-    public static final String VERSION = "0.5.1";
+    public static final String VERSION = "0.5.3";
     /** Versao do nucleo de analise compartilhado com o Android. */
-    public static final String CORE_VERSION = "0.14.2";
+    public static final String CORE_VERSION = "0.15.3";
 
     private DesktopApp() {}
 
     public static void main(String[] args) {
         if (args.length >= 3 && "--autoteste".equals(args[0])) { System.exit(selfTest(new File(args[1]), new File(args[2]))); return; }
+        if (args.length >= 3 && "--capturas".equals(args[0])) { System.exit(DesktopManual.run(new File(args[1]), new File(args[2]))); return; }
         try {
             loadOpenCv();
         } catch (Throwable e) {
@@ -72,7 +73,12 @@ public final class DesktopApp {
             log.append("files=").append(files.size()).append('\n');
             log.append("json_android_keys=").append(jsonOk).append('\n');
             if (session.active().circles.isEmpty() || out.result.circles.isEmpty() || !pending || !jsonOk) code = 3;
-            if (DesktopAnalysis.crackModel() == null || files.size() != 6 || !files.get(5).getName().endsWith("_mapa.png")) code = 2;
+            // 0.5.2: + _filtrada.png (só com realce) e _relatorio.pdf no fim; o PDF prova que o PDFBox está no pacote.
+            File last = files.get(files.size() - 1);
+            log.append("pdf=").append(last.getName().endsWith("_relatorio.pdf") ? last.getName() + " " + last.length() + " bytes" : "ausente").append('\n');
+            if (!last.getName().endsWith("_relatorio.pdf")) log.append("pdf_error=").append(new org.json.JSONObject(json).opt("pdf_error")).append('\n');
+            if (DesktopAnalysis.crackModel() == null || files.size() < 7 || files.size() > 8 || !files.get(5).getName().endsWith("_mapa.png")
+                    || !last.getName().endsWith("_relatorio.pdf")) code = 2;
         } catch (Throwable e) {
             log.append("error=").append(e).append('\n');
             code = 1;

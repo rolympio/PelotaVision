@@ -1,58 +1,88 @@
-PelotaVision Windows 0.2.0 - prototipo
-=====================================
+PelotaVision Windows 0.5.3 - prototipo
+======================================
 
-Nucleo de analise: o MESMO codigo do PelotaVision Android 0.11.0 (deteccao, elipses,
-sugestao de ajuste, triagem de trincas Random Forest, granulometria por numero).
-OpenCV oficial 4.12.0 para Windows x64.
+Nucleo de analise: o MESMO codigo do PelotaVision Android 0.15.3 (deteccao por bordas,
+LoG ou rede neural StarDist, elipses, sugestao de ajuste, triagem de trincas Random Forest
+ou MobileNetV3, granulometria por numero, curva acumulada com ajuste Rosin-Rammler,
+mapa granulometrico, relatorio PDF).
+OpenCV oficial 4.12.0 para Windows x64. PDF gerado com Apache PDFBox 3 (Apache 2.0).
 
 USO
-1. Extraia o .zip para uma pasta sua (ex.: Documentos\PelotaVision). Nao precisa instalar
-   nem de direitos de administrador.
-2. Abra PelotaVision.exe.
-3. Webcam: escolha a camera e a resolucao, "Abrir camera". A contagem ao vivo e rapida
+1. Duas formas, mesmo programa:
+   - Instalador: execute PelotaVision_Windows_<versao>_instalador.exe. Instala so para o
+     seu usuario (sem administrador), cria atalho no Menu Iniciar e aparece em
+     "Aplicativos instalados" para desinstalar. O Windows pode avisar "editor
+     desconhecido" (o instalador nao e assinado digitalmente): "Mais informacoes" >
+     "Executar assim mesmo".
+   - Portatil: extraia o .zip para uma pasta sua (ex.: Documentos\PelotaVision) e abra
+     PelotaVision.exe. Nao instala nada.
+2. Webcam: escolha a camera e a resolucao, "Abrir camera". A contagem ao vivo e rapida
    (640 px); a analise completa e feita na foto ("Capturar foto").
+   Se o cabo ou o hub USB cair, o app tenta reabrir a mesma camera por cerca de 30 s
+   (aviso na barra de status); durante a queda nao e possivel capturar.
    Ou use "Abrir imagem..." para analisar uma foto (jpg, png, webp, bmp, tif).
+3. Cena: Bancada ou Correia (pelotas pequenas e numerosas). Metodo: bordas, LoG ou rede
+   neural (modelos de DEMONSTRACAO, nao validados).
 4. ROI: "ROI..." abre o editor (retangulo ou circulo, alcas, "Imagem inteira").
-   A ROI vira a imagem ativa e a entrada da analise; mudou a ROI, toque em Segmentar
+   A ROI vira a imagem ativa e a entrada da analise; mudou a ROI, segmente de novo
    (salvar fica bloqueado ate reanalisar). Pelotas cruzando o limite ficam fora.
-5. Escala (todas no MESMO PLANO das pelotas):
+5. Segmentar:
+   - "Segmentar foto/ROI": analise rapida na imagem reduzida para analise (lado <= 3000 px).
+   - "Detalhada...": le a area nos pixels ORIGINAIS e analisa blocos sobrepostos (ate
+     3 minutos, limite de 8 megapixels por area). Opcoes: comparar contraste local e
+     reducao leve de ruido, pre-ajuste num bloco e super-resolucao FSRCNN 2x
+     (experimental). Contornos e trincas usam os pixels originais; SR so propoe objetos.
+     Clique de novo em "Detalhada" para ver o resumo dos blocos. Nao vale na cena Correia.
+   - "Luz / imagem escura...": mostra a previa e escolhe o realce (Automatico, Original,
+     Gama + CLAHE, Reducao de ruido + CLAHE, Retinex). So e aplicado numa ROI.
+     Com realce, a tela, a segmentacao e o mapa mostram a imagem filtrada; as medidas
+     continuam nos pixels originais.
+6. Escala (todas no MESMO PLANO das pelotas):
    - clique numa pelota inteira ou esfera > "Calibrar por esta pelota": eixo maior,
-     eixo menor (paquimetro) ou esfera de diametro conhecido; marca REF; esfera fica
-     fora das estatisticas por padrao;
+     eixo menor (paquimetro) ou esfera de diametro conhecido; marca REF;
    - "Calibrar pela largura da correia...": sugestao de bordas, 4 alcas/2 linhas,
-     confirmacao obrigatoria; variacao > 8% bloqueia;
+     confirmacao obrigatoria;
    - px/mm digitado, ou referencia de comprimento por 2 cliques;
-   - "Estimar por media conhecida...": HIPOTESE, marcada em tela, PNG e JSON.
-   Se a reanalise mudar o contorno da referencia escolhida, a calibracao e removida.
+   - "Estimar por media conhecida...": HIPOTESE, marcada em tela, PNG, JSON e PDF.
    Sem escala, os resultados ficam em pixels.
-6. Trincas: clique numa pelota para classificar (trinca visivel / sem trinca /
-   inconclusiva / restaurar automatico). "Trincas..." muda a sensibilidade e
-   reanalisa (descarta revisoes, com aviso).
-7. "Comparar ajustes..." mostra todas as opcoes da busca e permite aplicar outra com
-   os mesmos contornos. "Buscar melhor ajuste" refaz a busca (ate 30 s).
-8. "Salvar foto + dados..." grava: original (copia byte a byte, ou PNG sem perdas do
-   quadro da webcam), relatorio PNG no layout do Android (original/ROI sem marcacoes,
-   marcado, resumo, histograma), CSV por pelota (32 colunas) e do histograma iguais ao
-   Android, e JSON com as mesmas chaves do Android + bloco "source" (camera/driver).
+7. Trincas: clique numa pelota para classificar (trinca visivel / sem trinca /
+   inconclusiva / restaurar automatico). "Trincas..." muda a sensibilidade e reanalisa.
+8. Visualizacao: Original, Segmentacao ou Mapa granulometrico (opacidade 0-90%,
+   padrao 55%; escala relativa D10-D90 ou fixa). "Grafico..." configura o histograma
+   todas x trincadas.
+9. "Salvar foto + dados..." grava na pasta escolhida:
+   _original (copia byte a byte, ou PNG sem perdas do quadro da webcam),
+   _resultado.png (original/ROI sem marcacoes, segmentacao, resumo, histograma),
+   .csv por pelota e _granulometria.csv, .json (mesmas chaves do Android + "source"),
+   _mapa.png, _filtrada.png (so com realce) e _relatorio.pdf (resumo, iluminacao,
+   modelos, classes e uma figura por imagem).
 
 WEBCAM - CUIDADOS
 - Foco e exposicao automaticos mudam a imagem entre fotos. Marque "Travar foco" e
   "Travar exposicao" e use "Ajustes do driver..." para fixar manualmente. Nem toda
   webcam aceita; o JSON registra o que o driver informou.
+- As cameras aparecem por numero (0, 1, 2...): o OpenCV no Windows nao informa o nome.
 - A escala px/mm so vale para a mesma camera, altura, zoom e resolucao. Mudou qualquer
   um, recalibre.
 - Resolucao: uma webcam 1080p cobrindo 300 mm da cerca de 6,4 px/mm (~77 px numa pelota
   de 12 mm). Serve para contar e medir; para trincas e fraco.
-- O modelo de trincas foi treinado com poucas fotos de celular, com rotulos provisorios.
-  Em webcam nao tem nenhuma validacao.
 
 LIMITES
 - Distribuicao por numero, nao por massa. Foto 2D nao equivale a peneiramento.
 - Sem correcao de perspectiva, altura do leito ou distorcao de lente.
-- Ainda nao implementado no Windows: analise detalhada em blocos (original) e
-  super-resolucao FSRCNN; robustez de webcam (nome da camera, reconexao).
+- No PDF, os simbolos raiz, <= e >= aparecem escritos assim (fonte padrao do PDF).
 - A interface e a webcam nao sao testadas automaticamente (o CI nao tem tela/camera).
-- Prototipo de desenvolvimento. Nao ha validacao com amostras reais nem metrologica.
+- Prototipo de desenvolvimento. Modelos de trincas e redes neurais nao foram validados
+  com amostras reais de producao nem metrologicamente.
 
-Licencas: OpenCV (Apache 2.0, OpenCV_LICENSE.txt). Modelo FSRCNN em modelos\ (ver
-FSRCNN_LICENSE.txt / FSRCNN_NOTICE.txt). Runtime Java: Eclipse Temurin (GPLv2 + CPE).
+Licencas: OpenCV (Apache 2.0, OpenCV_LICENSE.txt). Apache PDFBox (Apache 2.0).
+Modelo FSRCNN em modelos\ (ver FSRCNN_LICENSE.txt / FSRCNN_NOTICE.txt).
+Runtime Java: Eclipse Temurin (GPLv2 + CPE).
+
+NOVO NA 0.5.3
+- Salvar foto + dados: nome do teste e pasta sugerida com data e hora do momento
+  (ex.: 2026-10-27_08-45-41_Disco_3). Nome do teste vai para o PDF e o JSON.
+- Calibracao pelo diametro interno do recipiente, com borda detectada e confirmacao.
+- Curva acumulada (% passante) com ajuste Rosin-Rammler, base numero ou massa estimada
+  (d^3), na tela e no PDF (pagina com histograma todas x trincadas + curva RR + formula).
+- O painel "Escala e histograma" abre pelo botao de mesmo nome.

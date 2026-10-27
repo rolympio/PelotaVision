@@ -137,7 +137,7 @@ public class PhotoExportTest {
             Method show=MainActivity.class.getDeclaredMethod("showCalibration");show.setAccessible(true);show.invoke(activity);
             Shadows.shadowOf(Looper.getMainLooper()).idle();AlertDialog dialog=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
             List<EditText> values=new ArrayList<>();edits(dialog.getWindow().getDecorView(),values);
-            List<android.widget.RadioButton> options=new ArrayList<>();radios(dialog.getWindow().getDecorView(),options);assertEquals(5,options.size());assertFalse(options.get(3).isEnabled());assertFalse(options.get(4).isEnabled());
+            List<android.widget.RadioButton> options=new ArrayList<>();radios(dialog.getWindow().getDecorView(),options);assertEquals(6,options.size());assertFalse(options.get(3).isEnabled());assertFalse(options.get(4).isEnabled());assertFalse(options.get(5).isEnabled());
             options.get(1).performClick();values.get(0).setText("96");values.get(1).setText("12");values.get(2).setText("1");
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();Granulometry.Distribution d=(Granulometry.Distribution)field("distribution").get(activity);
             assertEquals(8,d.settings.originalPixelsPerMm,0);assertEquals(12,d.meanMm,1e-9);assertEquals("reference_length",d.settings.calibrationSource);

@@ -125,8 +125,8 @@ public class VisualsDemoTest {
             ObjectCalibrationTest.call(a, "showMapOptions", new Class[]{});
             AlertDialog map = ObjectCalibrationTest.dialog();
             android.widget.SeekBar opacity = ObjectCalibrationTest.tag(map, "map_opacity");
-            assertEquals(70, opacity.getMax());
-            assertEquals(25, opacity.getProgress());
+            assertEquals(90, opacity.getMax());
+            assertEquals(55, opacity.getProgress());
             dialogShot(map, new File(dir, "Tela_5_opcoes_do_mapa.png"));
             map.dismiss();
             ObjectCalibrationTest.call(a, "showHistogramOptions", new Class[]{});
@@ -140,12 +140,12 @@ public class VisualsDemoTest {
             report.recycle();
             Bitmap mapped = MapComposer.compose(photo, all, d, v, null, false);
             assertNotNull(mapped);
-            // fundo da foto preservado fora das pelotas; dentro, cor a 25%
+            // fundo da foto preservado fora das pelotas; dentro, cor na opacidade padrão (55%)
             PelletDetector.Detection first = null;
             for (PelletDetector.Detection p : all.circles) if (GranulometryColorScale.colored(d, new Granulometry.Item(2 * p.radius, p.partial, p.needsReview))) { first = p; break; }
             assertNotNull(first);
             int inside = mapped.getPixel((int) first.x, (int) first.y), orig = photo.getPixel((int) first.x, (int) first.y);
-            int expected = GranulometryColorScale.blend(orig & 0xFFFFFF, GranulometryColorScale.relative(d).rgb(d.diameterMm(2 * first.radius)), .25);
+            int expected = GranulometryColorScale.blend(orig & 0xFFFFFF, GranulometryColorScale.relative(d).rgb(d.diameterMm(2 * first.radius)), GranulometryColorScale.DEFAULT_OPACITY);
             assertEquals(expected, inside & 0xFFFFFF);
             assertEquals(photo.getPixel(2, 2), mapped.getPixel(2, 2));
             BeltDemoTest.png(mapped, new File(dir, "Exportacao_mapa_granulometrico.png"));
