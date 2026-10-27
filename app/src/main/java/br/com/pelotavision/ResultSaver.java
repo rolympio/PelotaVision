@@ -22,7 +22,7 @@ import java.util.Locale;
 
 final class ResultSaver {
     private ResultSaver() {}
-    static final String APP_VERSION="0.15.2";
+    static final String APP_VERSION="0.15.3";
     static final class SavedResult {
         final String base;final Uri image;
         /** 0.15.0: relatório PDF; null quando a geração falhou (os demais arquivos continuam válidos). */

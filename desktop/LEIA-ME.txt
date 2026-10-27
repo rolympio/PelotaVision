@@ -1,14 +1,21 @@
-PelotaVision Windows 0.5.2 - prototipo
+PelotaVision Windows 0.5.3 - prototipo
 ======================================
 
-Nucleo de analise: o MESMO codigo do PelotaVision Android 0.15.2 (deteccao por bordas,
+Nucleo de analise: o MESMO codigo do PelotaVision Android 0.15.3 (deteccao por bordas,
 LoG ou rede neural StarDist, elipses, sugestao de ajuste, triagem de trincas Random Forest
-ou MobileNetV3, granulometria por numero, mapa granulometrico, relatorio PDF).
+ou MobileNetV3, granulometria por numero, curva acumulada com ajuste Rosin-Rammler,
+mapa granulometrico, relatorio PDF).
 OpenCV oficial 4.12.0 para Windows x64. PDF gerado com Apache PDFBox 3 (Apache 2.0).
 
 USO
-1. Extraia o .zip para uma pasta sua (ex.: Documentos\PelotaVision). Nao precisa instalar
-   nem de direitos de administrador. Abra PelotaVision.exe.
+1. Duas formas, mesmo programa:
+   - Instalador: execute PelotaVision_Windows_<versao>_instalador.exe. Instala so para o
+     seu usuario (sem administrador), cria atalho no Menu Iniciar e aparece em
+     "Aplicativos instalados" para desinstalar. O Windows pode avisar "editor
+     desconhecido" (o instalador nao e assinado digitalmente): "Mais informacoes" >
+     "Executar assim mesmo".
+   - Portatil: extraia o .zip para uma pasta sua (ex.: Documentos\PelotaVision) e abra
+     PelotaVision.exe. Nao instala nada.
 2. Webcam: escolha a camera e a resolucao, "Abrir camera". A contagem ao vivo e rapida
    (640 px); a analise completa e feita na foto ("Capturar foto").
    Se o cabo ou o hub USB cair, o app tenta reabrir a mesma camera por cerca de 30 s
@@ -71,3 +78,11 @@ LIMITES
 Licencas: OpenCV (Apache 2.0, OpenCV_LICENSE.txt). Apache PDFBox (Apache 2.0).
 Modelo FSRCNN em modelos\ (ver FSRCNN_LICENSE.txt / FSRCNN_NOTICE.txt).
 Runtime Java: Eclipse Temurin (GPLv2 + CPE).
+
+NOVO NA 0.5.3
+- Salvar foto + dados: nome do teste e pasta sugerida com data e hora do momento
+  (ex.: 2026-10-27_08-45-41_Disco_3). Nome do teste vai para o PDF e o JSON.
+- Calibracao pelo diametro interno do recipiente, com borda detectada e confirmacao.
+- Curva acumulada (% passante) com ajuste Rosin-Rammler, base numero ou massa estimada
+  (d^3), na tela e no PDF (pagina com histograma todas x trincadas + curva RR + formula).
+- O painel "Escala e histograma" abre pelo botao de mesmo nome.

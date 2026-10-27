@@ -46,6 +46,12 @@ Análise de imagens de pelotas de minério de ferro: localização e ajuste elí
 
 Releases: `v0.14.0-build34` (APK) e `windows-v0.5.0-build33` (pacote portátil).
 
+## Novo na 0.15.3 (Android) / Windows 0.5.3
+- **Rosin–Rammler:** curva acumulada (% passante, eixo log) com pontos nos limites de classe e ajuste RR por máxima verossimilhança, em base número ou massa estimada (∝ d³). Aparece na tela (Windows: painel próprio; Android: abas Histograma | Rosin–Rammler) e no PDF, numa página com o histograma todas × trincadas, a curva e a fórmula. Detalhes em `docs/rosin-rammler.md`.
+- **Salvar:** campo de nome do teste e pasta sugerida com data e hora do momento.
+- **Calibração pelo recipiente:** diâmetro interno com borda detectada automaticamente e confirmação do plano de medida (`docs/calibracao-recipiente.md`).
+- **Windows:** além do zip portátil, instalador por usuário (sem administrador, Inno Setup). O painel "Escala e histograma" abre por botão.
+
 ## Novo na 0.15.2 (Android) / Windows 0.5.2
 
 - **Relatório PDF com figuras individuais**: original, **filtrada** (só quando há realce de iluminação), segmentada, mapa granulométrico e resumo + histograma, cada uma com título e legenda próprios, duas por página quando cabem. Os painéis são recortados do `_resultado.png`, pixel a pixel iguais a ele.

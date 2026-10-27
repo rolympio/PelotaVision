@@ -111,6 +111,8 @@ jobs:
           VN=$(sed -n "s/^version = '\(.*\)'.*/\1/p" desktop/build.gradle)
           [ -n "$VN" ] || { echo "::error::versao nao encontrada"; exit 1; }
           echo "PV_DESKTOP_VERSION=$VN" >> "$GITHUB_ENV"
+          CORE=$(grep -oP "versionName '\K[^']+" app/build.gradle)
+          echo "PV_CORE_VERSION=$CORE" >> "$GITHUB_ENV"
           IN=pkg/input; rm -rf pkg; mkdir -p "$IN/modelos" pkg/dist
           cp desktop/build/libs/pelotavision-desktop.jar "$IN/"
           cp desktop/build/runtime-libs/*.jar "$IN/"
@@ -126,7 +128,7 @@ jobs:
           set +e
           JP_OUT=$("$JH/bin/jpackage" --type app-image --name PelotaVision --app-version "$VN" \
             --input "$IN" --main-jar pelotavision-desktop.jar --main-class br.com.pelotavision.DesktopApp \
-            --java-options "-Xmx3g" --vendor "PelotaVision" --description "PelotaVision Windows $VN (nucleo Android 0.15.2)" \
+            --java-options "-Xmx3g" --vendor "PelotaVision" --description "PelotaVision Windows $VN (nucleo Android $CORE)" \
             --dest pkg/dist 2>&1); JP_RC=$?
           set -e
           echo "$JP_OUT"
@@ -150,12 +152,42 @@ jobs:
           echo "PV_ZIP=$Z" >> "$GITHUB_ENV"
           echo "::notice title=Pacote Windows::$(cat SHA256_windows.txt) ($(du -h "$Z" | cut -f1))"
 
+      # 0.5.3: instalador por usuario (sem administrador), a partir da MESMA pasta do pacote portatil.
+      - name: Gerar instalador (Inno Setup)
+        run: |
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          if [ ! -f "$ISCC" ]; then choco install innosetup -y --no-progress > /dev/null; fi
+          [ -f "$ISCC" ] || { echo "::error title=Instalador::Inno Setup indisponivel no runner"; exit 1; }
+          mkdir -p pkg/installer
+          MSYS2_ARG_CONV_EXCL='*' "$ISCC" /Q "/DAppVersion=${PV_DESKTOP_VERSION}" "/DSourceDir=$(cygpath -w "$PWD/pkg/dist/PelotaVision")" "/DOutputDir=$(cygpath -w "$PWD/pkg/installer")" "$(cygpath -w "$PWD/desktop/installer/PelotaVision.iss")"
+          EXE="PelotaVision_Windows_${PV_DESKTOP_VERSION}_instalador.exe"
+          [ -f "pkg/installer/$EXE" ] || { echo "::error title=Instalador::$EXE nao foi gerado"; ls -la pkg/installer; exit 1; }
+          cp "pkg/installer/$EXE" .
+          sha256sum "$EXE" | tee -a SHA256_windows.txt
+          echo "PV_SETUP=$EXE" >> "$GITHUB_ENV"
+          echo "::notice title=Instalador Windows::$(sha256sum "$EXE") ($(du -h "$EXE" | cut -f1))"
+
+      - name: Testar instalador (instalar sem admin, autoteste, desinstalar)
+        run: |
+          DEST="$RUNNER_TEMP/pv-instalado"
+          rm -rf "$DEST" pkg/autoteste-instalado
+          MSYS2_ARG_CONV_EXCL='*' ./"$PV_SETUP" /VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER /NORESTART "/DIR=$(cygpath -w "$DEST")" "/LOG=$(cygpath -w "$RUNNER_TEMP/instalacao.log")"
+          for i in $(seq 1 60); do [ -f "$DEST/PelotaVision.exe" ] && [ -f "$DEST/unins000.exe" ] && break; sleep 2; done
+          [ -f "$DEST/PelotaVision.exe" ] || { echo "::error title=Instalador::PelotaVision.exe ausente apos instalar"; tail -40 "$RUNNER_TEMP/instalacao.log" || true; exit 1; }
+          "$DEST/PelotaVision.exe" --autoteste "verification/fixtures/1000411645.jpg" "pkg/autoteste-instalado"
+          grep -q '^exit=0$' pkg/autoteste-instalado/autoteste.txt
+          MSYS2_ARG_CONV_EXCL='*' "$DEST/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+          for i in $(seq 1 60); do [ ! -f "$DEST/PelotaVision.exe" ] && break; sleep 2; done
+          [ ! -f "$DEST/PelotaVision.exe" ] || { echo "::error title=Instalador::desinstalacao nao removeu o programa"; exit 1; }
+          echo "::notice title=Instalador testado::instalou sem administrador, autoteste exit=0, desinstalou"
+
       - name: Publicar artefato
         uses: actions/upload-artifact@v6
         with:
           name: PelotaVision-Windows-${{ github.sha }}
           path: |
             ${{ env.PV_ZIP }}
+            ${{ env.PV_SETUP }}
             SHA256_windows.txt
             desktop/build/parity/
           retention-days: 30
@@ -168,9 +200,11 @@ jobs:
           TAG="windows-v${PV_DESKTOP_VERSION}-build${GITHUB_RUN_NUMBER}"
           SHORT=$(echo "$GITHUB_SHA" | cut -c1-7)
           {
-            echo "PelotaVision Windows ${PV_DESKTOP_VERSION} - nucleo de analise do Android 0.15.2 - commit ${SHORT}."
+            echo "PelotaVision Windows ${PV_DESKTOP_VERSION} - nucleo de analise do Android ${PV_CORE_VERSION} - commit ${SHORT}."
             echo
-            echo "**Como usar:** baixe \`${PV_ZIP}\`, extraia para uma pasta (ex.: Documentos\\PelotaVision) e abra \`PelotaVision.exe\`. Nao precisa instalar nem de administrador."
+            echo "**Instalador:** baixe \`${PV_SETUP}\` e execute. Instala so para o seu usuario (sem administrador), cria atalho no Menu Iniciar e desinstala por Aplicativos instalados. Nao e assinado digitalmente: o Windows pode avisar \"editor desconhecido\" (Mais informacoes > Executar assim mesmo)."
+            echo
+            echo "**Portatil:** baixe \`${PV_ZIP}\`, extraia para uma pasta (ex.: Documentos\\PelotaVision) e abra \`PelotaVision.exe\`. Nao instala nada."
             echo
             echo "Execucao real do nucleo com OpenCV 4.12 nativo (imagens de verificacao do repositorio):"
             echo
@@ -178,5 +212,5 @@ jobs:
             echo
             echo "Prototipo de desenvolvimento. Nao representa validacao com amostras reais nem metrologica."
           } > notas.md
-          gh release create "$TAG" "$PV_ZIP" SHA256_windows.txt --target "$GITHUB_SHA" --title "PelotaVision Windows ${PV_DESKTOP_VERSION} (build ${GITHUB_RUN_NUMBER})" --notes-file notas.md --prerelease
+          gh release create "$TAG" "$PV_ZIP" "$PV_SETUP" SHA256_windows.txt --target "$GITHUB_SHA" --title "PelotaVision Windows ${PV_DESKTOP_VERSION} (build ${GITHUB_RUN_NUMBER})" --notes-file notas.md --prerelease
           echo "::notice title=Release::${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
