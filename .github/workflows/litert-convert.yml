@@ -57,11 +57,19 @@ jobs:
       - name: Gravar na branch
         if: always()
         run: |
+          set +e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A app/src/main/assets/*.tflite app/src/main/assets/*.tflite.json verification/litert-0.16.0 2>/dev/null || git add -A verification/litert-0.16.0
-          git commit -m "LiteRT: modelos .tflite convertidos no CI e paridade com o ONNX (rc ${{ steps.conv.outputs.rc }}) [skip ci]" || exit 0
-          git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}"
+          ls -la app/src/main/assets/*.tflite* 2>&1 | sed 's/^/::notice title=assets::/'
+          git add -A app/src/main/assets/ verification/litert-0.16.0 > /tmp/git.txt 2>&1
+          git status --short | head -20 | tr '\n' ' ' | sed 's/^/::notice title=git status::/'; echo
+          git commit -q -m "LiteRT: modelos .tflite convertidos no CI e paridade com o ONNX (rc ${{ steps.conv.outputs.rc }}) [skip ci]" >> /tmp/git.txt 2>&1 || { echo "::notice title=git::nada a gravar"; exit 0; }
+          for i in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" >> /tmp/git.txt 2>&1 && git push origin "HEAD:${GITHUB_REF_NAME}" >> /tmp/git.txt 2>&1 && { echo "::notice title=git::gravado na branch"; exit 0; }
+            sleep 5
+          done
+          echo "::error title=git push::$(tail -c 900 /tmp/git.txt | tr '\n' ' ')"
+          exit 1
       - name: Falha se não houve paridade
         if: steps.conv.outputs.rc != '0'
         run: exit 1
