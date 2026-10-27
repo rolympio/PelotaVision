@@ -85,4 +85,36 @@ public class RosinRammlerTest {
         assertArrayEquals(new double[]{1, 2, 5, 10}, RosinRammler.Chart.ticks(0.8, 12), 1e-12);
         assertArrayEquals(new double[]{7, 8, 9, 10, 20}, RosinRammler.Chart.ticks(6.5, 22), 1e-12);
     }
+
+    /** A figura do relatório mantém a 2ª série do histograma (pelotas trincadas, em quantidade) sobre a das todas. */
+    @Test public void reportFigureKeepsCrackedSeriesOverlaidOnHistogram() throws Exception {
+        Random r = new Random(21);
+        List<Granulometry.Item> items = new ArrayList<>();
+        List<CrackAnalysis.Entry> entries = new ArrayList<>();
+        for (int i = 0; i < 160; i++) {
+            double mm = 12.5 * Math.pow(-Math.log(1 - r.nextDouble()), 1 / 4.5);
+            items.add(new Granulometry.Item(mm * 10, false, false));
+            CrackAnalysis.Status st = mm > 13 && r.nextDouble() < .45 ? CrackAnalysis.Status.POSSIBLE : r.nextDouble() < .1 ? CrackAnalysis.Status.INCONCLUSIVE : CrackAnalysis.Status.NO_INDICATION;
+            entries.add(new CrackAnalysis.Entry(i + 1, st, new float[0], .5, CrackModel.ID));
+        }
+        Granulometry.Distribution d = Granulometry.compute(items, new Granulometry.Settings(10, 1, true, false), 1000, 1000, 1000, 1000);
+        CrackHistogram ch = CrackHistogram.compute(d, items, new CrackAnalysis(1000, 1000, 50, 1, entries));
+        assertTrue(ch.available);
+        assertTrue(ch.crackedTotal > 10);
+        java.awt.image.BufferedImage img = DesktopExport.distributionFigure(d, ch, HistogramView.DEFAULTS, RosinRammler.Basis.NUMBER);
+        assertTrue("padrão do Windows: série de trincadas ligada e em quantidade", HistogramView.DEFAULTS.showCracked && HistogramView.DEFAULTS.normalization == CrackHistogram.Normalization.ABSOLUTE);
+        // Laranja (trincadas, 65%) sobre branco/azul: só existe se a 2ª série foi desenhada no histograma (metade de cima).
+        int orange = 0;
+        for (int y = 0; y < 600; y += 2) for (int x = 0; x < img.getWidth(); x += 2) {
+            int c = img.getRGB(x, y), red = (c >> 16) & 255, green = (c >> 8) & 255, blue = c & 255;
+            if (red > 200 && green > 110 && green < 190 && blue < 120) orange++;
+        }
+        assertTrue("série de trincadas ausente na figura (" + orange + " px)", orange > 200);
+        String dir = System.getProperty("pelotavision.validationDir");
+        if (dir != null) {
+            java.io.File out = new java.io.File(dir, "rosin-rammler-windows");
+            out.mkdirs();
+            javax.imageio.ImageIO.write(img, "png", new java.io.File(out, "figura_relatorio_com_trincadas.png"));
+        }
+    }
 }

@@ -188,7 +188,11 @@ final class DesktopExport {
      * desenhada em 2× para o texto ficar nítido no PDF.
      */
     static BufferedImage distributionFigure(PhotoSession s, ReportVisuals visuals, RosinRammler.Basis basis) {
-        Granulometry.Distribution d = s.distribution();
+        return distributionFigure(s.distribution(), s.crackHistogram(), visuals, basis);
+    }
+
+    /** Histograma com a 2ª série (pelotas trincadas, mesmas classes e eixos) + curva RR. */
+    static BufferedImage distributionFigure(Granulometry.Distribution d, CrackHistogram cracks, ReportVisuals visuals, RosinRammler.Basis basis) {
         int w = 560, hh = 300, rh = 470, gap = 14, k = 2;
         BufferedImage img = new BufferedImage(w * k, (hh + gap + rh) * k, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = img.createGraphics();
@@ -196,7 +200,7 @@ final class DesktopExport {
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g.scale(k, k);
         g.setColor(Color.WHITE); g.fillRect(0, 0, w, hh + gap + rh);
-        HistogramView.paint(g, d, s.crackHistogram(), visuals, w, hh);
+        HistogramView.paint(g, d, cracks, visuals, w, hh);
         g.setColor(new Color(205, 214, 220)); g.drawLine(8, hh + gap / 2, w - 8, hh + gap / 2);
         Graphics2D r = (Graphics2D) g.create();
         r.translate(0, hh + gap);
