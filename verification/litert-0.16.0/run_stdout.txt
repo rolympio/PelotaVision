@@ -1,0 +1,169 @@
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1793136583.161082    2033 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1793136583.161364    2033 cudart_stub.cc:31] Could not find cuda drivers on your machine, GPU will not be used.
+I0000 00:00:1793136583.194714    2033 cpu_feature_guard.cc:227] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI AVX512_BF16 AVX_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1793136584.571540    2033 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1793136584.571954    2033 cudart_stub.cc:31] Could not find cuda drivers on your machine, GPU will not be used.
+[0;93m2026-10-27 21:29:44.865552172 [W:onnxruntime:Default, device_discovery.cc:133 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
+INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
+{
+ "tool": "tools/litert/convert_tflite.py",
+ "versions": {
+  "onnx2tf": "2.6.9",
+  "tensorflow": "2.21.0",
+  "onnx": "1.20.1",
+  "onnxruntime": "1.26.0",
+  "ai_edge_litert": "2.1.2",
+  "numpy": "2.2.6"
+ },
+ "models": [
+  {
+   "model": "pellet_stardist.onnx",
+   "onnx_sha256": "53c78a9ec69dafc90e45c281408c1050a5cc1763bf514750e5be1808c5c543dc",
+   "convert_seconds": 1.5,
+   "tflite": "pellet_stardist.tflite",
+   "tflite_sha256": "797248eef613a683edea915d1acfc4f33f227c9d69eb4734f6a26ec3f850da0e",
+   "tflite_bytes": 1959900,
+   "input_shape": [
+    1,
+    384,
+    384,
+    1
+   ],
+   "output_shape": [
+    1,
+    384,
+    384,
+    33
+   ],
+   "output_layout": "NHWC",
+   "parity_float32": {
+    "tiles": 4,
+    "max_abs_diff_prob": 1.430511474609375e-06,
+    "max_abs_diff_dist_px": 4.1961669921875e-05,
+    "ms_per_tile_onnxruntime_cpu": 81.78,
+    "ms_per_tile_tflite_cpu": 69.98,
+    "detection": [
+     {
+      "image": "verification/fixtures/1000411645.jpg",
+      "onnx": 174,
+      "tflite": 174,
+      "matched": 174,
+      "max_center_shift_rel_radius": 0.0,
+      "max_radius_rel_diff": 0.0
+     },
+     {
+      "image": "verification/fixtures/1000411646.jpg",
+      "onnx": 48,
+      "tflite": 48,
+      "matched": 48,
+      "max_center_shift_rel_radius": 0.0,
+      "max_radius_rel_diff": 0.0
+     },
+     {
+      "image": "verification/fixtures/1000411647.jpg",
+      "onnx": 276,
+      "tflite": 276,
+      "matched": 276,
+      "max_center_shift_rel_radius": 1e-05,
+      "max_radius_rel_diff": 0.0
+     },
+     {
+      "image": "verification/fixtures/crack_example.png",
+      "onnx": 205,
+      "tflite": 205,
+      "matched": 205,
+      "max_center_shift_rel_radius": 0.0,
+      "max_radius_rel_diff": 0.0
+     }
+    ]
+   },
+   "accepted": true
+  },
+  {
+   "model": "pellet_stardist_belt.onnx",
+   "onnx_sha256": "35e71a9dd717331acad59f34fe47a5846aa7bdf7bd4bbfc074c3dadccaff0acd",
+   "convert_seconds": 1.5,
+   "tflite": "pellet_stardist_belt.tflite",
+   "tflite_sha256": "e54c5988ec76a6bdb4e60d5cc5f1570e98fbe9df75b2a53bdc34baba6dc3a2cc",
+   "tflite_bytes": 1959908,
+   "input_shape": [
+    1,
+    384,
+    384,
+    1
+   ],
+   "output_shape": [
+    1,
+    384,
+    384,
+    33
+   ],
+   "output_layout": "NHWC",
+   "parity_float32": {
+    "tiles": 12,
+    "max_abs_diff_prob": 2.294778823852539e-06,
+    "max_abs_diff_dist_px": 0.0001049041748046875,
+    "ms_per_tile_onnxruntime_cpu": 73.43,
+    "ms_per_tile_tflite_cpu": 68.74,
+    "detection": [
+     {
+      "image": "verification/belt-0.9.0/input_correia.jpg",
+      "onnx": 2921,
+      "tflite": 2921,
+      "matched": 2921,
+      "max_center_shift_rel_radius": 2e-05,
+      "max_radius_rel_diff": 1e-05
+     },
+     {
+      "image": "ml_training/data_belt/raw/img422.jpg",
+      "onnx": 3495,
+      "tflite": 3495,
+      "matched": 3495,
+      "max_center_shift_rel_radius": 3e-05,
+      "max_radius_rel_diff": 0.0
+     },
+     {
+      "image": "ml_training/data_belt/raw/img919.jpg",
+      "onnx": 3316,
+      "tflite": 3316,
+      "matched": 3316,
+      "max_center_shift_rel_radius": 6e-05,
+      "max_radius_rel_diff": 0.0
+     }
+    ]
+   },
+   "accepted": true
+  },
+  {
+   "model": "crack_mobilenetv3.onnx",
+   "onnx_sha256": "6c77e8f9bef74a2f8ca537c668051eafb811a43d08ec444d32ec2fbda27cf0fc",
+   "convert_seconds": 2.3,
+   "tflite": "crack_mobilenetv3.tflite",
+   "tflite_sha256": "9ec52fab14a518392a57b8890ef85533c5cc01e7f77f2137e7ecd9cfc9c860cd",
+   "tflite_bytes": 6113056,
+   "input_shape": [
+    1,
+    128,
+    128,
+    1
+   ],
+   "output_shape": [
+    1,
+    2
+   ],
+   "output_layout": "NCHW",
+   "parity_float32": {
+    "crops": 132,
+    "max_abs_diff_p_cracked": 8.64267349243164e-06,
+    "mean_abs_diff_p_cracked": 2.1606965950041106e-06,
+    "policy_class_changes": 0,
+    "ms_per_crop_onnxruntime_cpu": 0.503,
+    "ms_per_crop_tflite_cpu": 0.517
+   },
+   "accepted": true
+  }
+ ]
+}
