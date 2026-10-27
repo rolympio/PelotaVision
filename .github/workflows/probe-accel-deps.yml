@@ -8,32 +8,29 @@ jobs:
     steps:
       - name: versions
         run: |
-          exec > >(tee -a $GITHUB_WORKSPACE/out.txt) 2>&1
-          for a in onnxruntime onnxruntime_gpu; do echo "== ORT $a"; curl -s https://repo1.maven.org/maven2/com/microsoft/onnxruntime/$a/maven-metadata.xml | grep -oE "<version>[^<]+" | sed 's/<version>//' | tail -8 | tr '\n' ' '; echo; done
-          for a in litert litert-api litert-gpu litert-gpu-api litert-support; do echo "== LiteRT $a"; curl -s https://dl.google.com/android/maven2/com/google/ai/edge/litert/$a/maven-metadata.xml | grep -oE "<version>[^<]+" | sed 's/<version>//' | tail -10 | tr '\n' ' '; echo; done
+          touch out.txt
       - name: inspect
         run: |
           set +e
           exec > >(tee -a $GITHUB_WORKSPACE/out.txt) 2>&1
           mkdir w && cd w
-          V=$(curl -s https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime_gpu/maven-metadata.xml | grep -oP "<release>\K[^<]+")
-          echo "ORT gpu release $V"
-          curl -sSLO https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime_gpu/$V/onnxruntime_gpu-$V.jar
-          ls -la *.jar; unzip -l onnxruntime_gpu-$V.jar | grep -E "native|\.dll|\.so" | head -40
-          unzip -q -o onnxruntime_gpu-$V.jar 'ai/onnxruntime/*'
-          javap -cp . 'ai.onnxruntime.OrtSession$SessionOptions' | grep -E "add(CUDA|CPU|DirectML)|setIntraOp|setOptimization" ; javap -cp . ai.onnxruntime.OrtEnvironment | grep -E "getAvailableProviders|getEnvironment\(\)"; javap -cp . ai.onnxruntime.OnnxTensor | grep -E "createTensor.*FloatBuffer|getFloatBuffer"
-          javap -cp . ai.onnxruntime.OrtProvider | head -30
-          for a in litert litert-gpu litert-gpu-api litert-api; do
-            L=$(curl -s https://dl.google.com/android/maven2/com/google/ai/edge/litert/$a/maven-metadata.xml | grep -oE "<version>[^<]+" | sed 's/<version>//' | grep -v -E "alpha|beta|rc" | tail -1)
-            echo "== $a $L"
-            curl -sSLf -o $a.aar https://dl.google.com/android/maven2/com/google/ai/edge/litert/$a/$L/$a-$L.aar || { echo "sem aar"; continue; }
-            curl -s https://dl.google.com/android/maven2/com/google/ai/edge/litert/$a/$L/$a-$L.pom | grep -A3 "<dependency>" | grep -E "artifactId|version" | tr -s ' ' | paste - - 
-            mkdir -p $a && (cd $a && unzip -q -o ../$a.aar classes.jar && unzip -l classes.jar | awk '{print $4}' | grep -E "\.class$" | grep -v '\$' | head -60)
+          B=https://dl.google.com/android/maven2/com/google/ai/edge/litert
+          get(){ curl -sSLf -o $1-$2.aar $B/$1/$2/$1-$2.aar && mkdir -p $1-$2 && (cd $1-$2 && unzip -q -o ../$1-$2.aar); }
+          for x in "litert 1.4.2" "litert-gpu 1.4.2" "litert-gpu-api 1.4.2" "litert-api 1.4.2" "litert 2.3.2" "litert-gpu 2.3.2" "litert-api 2.3.2"; do set -- $x; get $1 $2; echo "== $1-$2 files:"; (cd $1-$2 && find . -type f | grep -v -E "res/|\.class$" | tr '\n' ' '); echo; curl -s $B/$1/$2/$1-$2.pom | grep -E "<artifactId>|<version>" | tr -d ' ' | paste -sd' '; done
+          echo "== ELF p_align (16KB=0x4000) por .so"
+          python3 - <<'P'
+          import glob,struct
+          for f in sorted(glob.glob('*/jni/arm64-v8a/*.so')):
+              d=open(f,'rb').read(); phoff=struct.unpack_from('<Q',d,0x20)[0]; n=struct.unpack_from('<H',d,0x38)[0]
+              al=[struct.unpack_from('<Q',d,phoff+i*56+48)[0] for i in range(n) if struct.unpack_from('<I',d,phoff+i*56)[0]==1]
+              print(f, 'LOAD align', sorted(set(al)))
+          P
+          for c in org.tensorflow.lite.gpu.GpuDelegate org.tensorflow.lite.gpu.CompatibilityList 'org.tensorflow.lite.gpu.GpuDelegate$Options' 'org.tensorflow.lite.InterpreterApi$Options' 'org.tensorflow.lite.Interpreter$Options'; do
+            for a in litert-1.4.2 litert-gpu-1.4.2 litert-gpu-api-1.4.2 litert-api-1.4.2; do [ -f $a/classes.jar ] && javap -cp $a/classes.jar "$c" 2>/dev/null | grep -E "public" | grep -v -E "^Compiled" | tr '\n' ' ' && echo " ^^ $c em $a"; done
           done
-          for c in org.tensorflow.lite.Interpreter 'org.tensorflow.lite.Interpreter$Options' org.tensorflow.lite.gpu.GpuDelegate org.tensorflow.lite.gpu.CompatibilityList 'org.tensorflow.lite.gpu.GpuDelegate$Options' org.tensorflow.lite.gpu.GpuDelegateFactory 'org.tensorflow.lite.gpu.GpuDelegateFactory$Options'; do
-            for a in litert litert-gpu litert-gpu-api litert-api; do [ -f $a/classes.jar ] && javap -cp $a/classes.jar "$c" 2>/dev/null && echo "  ^ em $a"; done
+          for c in com.google.ai.edge.litert.CompiledModel 'com.google.ai.edge.litert.CompiledModel$Options' 'com.google.ai.edge.litert.CompiledModel$Companion' com.google.ai.edge.litert.Accelerator com.google.ai.edge.litert.Environment 'com.google.ai.edge.litert.Environment$Companion' com.google.ai.edge.litert.TensorBuffer; do
+            for a in litert-2.3.2 litert-api-2.3.2 litert-gpu-2.3.2; do [ -f $a/classes.jar ] && javap -cp $a/classes.jar "$c" 2>/dev/null | grep public | tr '\n' ' ' && echo " ^^ $c em $a"; done
           done
-
       - name: notas 0
         if: always()
         run: |
