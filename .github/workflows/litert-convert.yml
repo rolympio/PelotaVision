@@ -21,6 +21,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -50,8 +52,6 @@ jobs:
               p = dict(m.get('parity_float32', {})); det = p.pop('detection', None)
               print('::notice title=' + m['model'] + ' fp32::aceito=%s layout=%s %s' % (m.get('accepted'), m.get('output_layout'), json.dumps(p)))
               if det: print('::notice title=' + m['model'] + ' deteccao::' + json.dumps(det)[:900])
-              q = dict(m.get('parity_float16_weights_indicativo', {})); q.pop('detection', None)
-              if q: print('::notice title=' + m['model'] + ' fp16 (indicativo)::' + json.dumps(q)[:900])
           P
           tail -c 1500 /tmp/conv.txt | tr '\n' ' ' | sed 's/^/::notice title=stdout::/'
       - name: Gravar na branch

@@ -10,14 +10,18 @@ import java.io.File;
 /** PelotaVision para Windows: ponto de entrada. Usa o mesmo nucleo de analise do Android. */
 public final class DesktopApp {
     public static final String NAME = "PelotaVision Windows";
-    public static final String VERSION = "0.5.5";
+    public static final String VERSION = "0.5.6";
     /** Versao do nucleo de analise compartilhado com o Android. */
-    public static final String CORE_VERSION = "0.15.5";
+    public static final String CORE_VERSION = "0.16.0";
 
     private DesktopApp() {}
 
     public static void main(String[] args) {
-        if (args.length >= 3 && "--autoteste".equals(args[0])) { System.exit(selfTest(new File(args[1]), new File(args[2]))); return; }
+        if (args.length >= 3 && "--autoteste".equals(args[0])) {
+            // --aceleracao: o mesmo autoteste com a aceleração por hardware ligada (CI: prova que o ONNX Runtime carrega no pacote)
+            if (args.length >= 4 && "--aceleracao".equals(args[3])) System.setProperty(DesktopAnalysis.ACCEL_PROPERTY, "true");
+            System.exit(selfTest(new File(args[1]), new File(args[2]))); return;
+        }
         if (args.length >= 3 && "--capturas".equals(args[0])) { System.exit(DesktopManual.run(new File(args[1]), new File(args[2]))); return; }
         try {
             loadOpenCv();
@@ -47,6 +51,7 @@ public final class DesktopApp {
             log.append("neuralModel=").append(NeuralPelletDetector.status()).append('\n');
             log.append("crackNetworkAsset=").append(model(MobileNetCrackModel.MODEL).isFile()).append('\n');
             log.append("neuralBeltModel=").append(NeuralPelletDetector.status(true)).append('\n');
+            log.append("accel=").append(HardwareAcceleration.status().replace("\n", " | ")).append('\n');
             org.opencv.core.Mat bgr = Mats.readUpright(image);
             PhotoSession session = new PhotoSession(image, null, null, bgr);
             bgr.release();
@@ -70,6 +75,7 @@ public final class DesktopApp {
                     && json.contains("\"report_schema_version\": 2") && json.contains("\"granulometric_map\"") && json.contains("\"crack_histogram\"");
             session.release();
             log.append("crackModelLoaded=").append(DesktopAnalysis.crackModel() != null).append('\n');
+            log.append("accel_after=").append(HardwareAcceleration.status().replace("\n", " | ")).append('\n');
             log.append("files=").append(files.size()).append('\n');
             log.append("json_android_keys=").append(jsonOk).append('\n');
             if (session.active().circles.isEmpty() || out.result.circles.isEmpty() || !pending || !jsonOk) code = 3;

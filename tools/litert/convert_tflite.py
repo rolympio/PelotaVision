@@ -13,8 +13,8 @@ O ONNX continua sendo a referência. Para cada modelo:
      as pelotas são casadas uma a uma;
   4. grava <modelo>.tflite.json ao lado do .tflite, com o SHA-256 do ONNX de origem: o app recusa um
      .tflite cujo ONNX de origem não é o ONNX instalado (conversão desatualizada).
-Uma versão float16 dos pesos também é avaliada só como indicador do efeito de precisão reduzida, já que
-o GpuDelegate pode calcular em fp16; ela não é distribuída.
+O GpuDelegate pode calcular em fp16 no aparelho; esse efeito não é medido aqui, e sim no próprio aparelho,
+pela sonda de paridade do app (HardwareAcceleration), que recusa o motor fora da tolerância.
 """
 import argparse, hashlib, json, math, shutil, subprocess, sys, tempfile, time
 from pathlib import Path
@@ -249,7 +249,7 @@ def main(argv=None):
         meta = json.loads((assets / m['meta']).read_text(encoding='utf-8'))
         entry = dict(model=m['onnx'], onnx_sha256=sha256(onnx))
         try:
-            f32, f16, secs = convert(onnx, work)
+            f32, _, secs = convert(onnx, work)
             entry['convert_seconds'] = secs
             probe = (stardist_tiles(BELT_IMAGES if m.get('belt') else BENCH_IMAGES, m.get('belt'), 1)[0][None, None]
                      if m['kind'] == 'stardist' else mobilenet_crops(meta)[0][None, None].astype(np.float32))
@@ -262,14 +262,6 @@ def main(argv=None):
             par = (stardist_parity(onnx, dst, layout, m.get('belt')) if m['kind'] == 'stardist'
                    else mobilenet_parity(onnx, dst, layout, meta))
             entry['parity_float32'] = par
-            if f16 is not None:
-                try:
-                    lay16 = detect_layout(f16, ort_runner(onnx)(probe), probe)
-                    entry['parity_float16_weights_indicativo'] = (
-                        stardist_parity(onnx, f16, lay16, m.get('belt')) if m['kind'] == 'stardist'
-                        else mobilenet_parity(onnx, f16, lay16, meta))
-                except Exception as e:
-                    entry['parity_float16_weights_indicativo'] = dict(error=repr(e)[:300])
             # Critério de aceite do float32 (o que é distribuído): mesmas pelotas e mesmo escore.
             if m['kind'] == 'stardist':
                 det = par['detection']

@@ -117,6 +117,9 @@ final class MainFrame extends JFrame {
     private final JComboBox<String> crackBox = new JComboBox<>(new String[]{CrackClassifierChoice.RANDOM_FOREST.label, CrackClassifierChoice.MOBILENET.label, CrackClassifierChoice.COMPARISON.label});
     private final JComboBox<String> segExtra = new JComboBox<>(new String[]{"YOLO11-seg: indisponivel", "Hibrida: indisponivel"});
     private final JButton chartButton = new JButton("Grafico…");
+    // 0.5.6: aceleracao por hardware das redes (ONNX Runtime: CUDA, depois CPU). Desligada por padrao.
+    private final JCheckBox accelBox = new JCheckBox("Aceleracao GPU");
+    private final JButton accelInfo = new JButton("Estado…");
     ReportVisuals visuals = HistogramView.DEFAULTS;
 
     final CameraSource camera = new CameraSource();
@@ -171,7 +174,15 @@ final class MainFrame extends JFrame {
         opacitySlider.setPreferredSize(new Dimension(110, 24));
         opacitySlider.setToolTipText("Opacidade da cor no mapa (0-90%; padrao 55%)");
         top.add(row(new JLabel("Modelos de analise ·"), new JLabel("Segmentacao neural extra:"), segExtra, new JLabel("Trincas:"), crackBox,
-                new JLabel("Visualizacao:"), viewBox, new JLabel("Opacidade:"), opacitySlider, mapLabels, mapFixed, mapMin, new JLabel("a"), mapMax, chartButton));
+                new JLabel("Visualizacao:"), viewBox, new JLabel("Opacidade:"), opacitySlider, mapLabels, mapFixed, mapMin, new JLabel("a"), mapMax, chartButton,
+                Box.createHorizontalStrut(12), accelBox, accelInfo));
+        accelBox.setSelected(HardwareAcceleration.enabled());
+        accelBox.setToolTipText("<html>Executa as redes neurais (StarDist e MobileNetV3) no ONNX Runtime: GPU NVIDIA com CUDA; sem CUDA, CPU.<br>"
+                + "Cada rede so passa a usar o motor novo se der o mesmo resultado do OpenCV DNN numa sonda de paridade; senao continua no OpenCV.<br>"
+                + "A segmentacao classica (bordas, LoG) e a super-resolucao continuam na CPU. Desligada por padrao.</html>");
+        accelInfo.setToolTipText("Mostra em que motor cada rede esta rodando e os tempos medidos na sonda.");
+        accelBox.addActionListener(e -> toggleAcceleration(accelBox.isSelected()));
+        accelInfo.addActionListener(e -> JOptionPane.showMessageDialog(this, accelerationReport(), "Aceleracao por hardware", JOptionPane.INFORMATION_MESSAGE));
 
         JPanel side = new JPanel();
         side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
@@ -1054,6 +1065,31 @@ final class MainFrame extends JFrame {
     }
 
     void setStatus(String s) { status.setText(s); }
+
+    /** Recarrega as redes no motor escolhido, na fila de analise (nunca no meio de uma analise). */
+    private void toggleAcceleration(boolean on) {
+        prefs.putBoolean(DesktopAnalysis.ACCEL_PREF, on);
+        accelBox.setEnabled(false);
+        setStatus(on ? "Ligando a aceleracao: carregando as redes no ONNX Runtime e conferindo a paridade…" : "Desligando a aceleracao: redes voltam ao OpenCV DNN…");
+        worker.submit(() -> {
+            String st;
+            try { st = DesktopAnalysis.setAcceleration(on); } catch (Throwable t) { st = "Falha ao trocar o motor: " + t; }
+            final String report = st;
+            SwingUtilities.invokeLater(() -> {
+                accelBox.setEnabled(true);
+                setStatus(report.replace('\n', ' ').replace("Aceleração por hardware: ", "Aceleracao: "));
+                if (on && !report.contains("ONNX Runtime ·"))
+                    JOptionPane.showMessageDialog(this, report, "Aceleracao por hardware", JOptionPane.WARNING_MESSAGE);
+            });
+        });
+    }
+
+    private String accelerationReport() {
+        StringBuilder s = new StringBuilder(HardwareAcceleration.status());
+        s.append("\n\nCUDA requer GPU NVIDIA, driver atualizado e CUDA + cuDNN instalados no Windows (nao vao no pacote).");
+        s.append("\nSem CUDA, o ONNX Runtime roda na CPU. Sem paridade com o OpenCV DNN, a rede continua no OpenCV.");
+        return s.toString();
+    }
     void info(String s) { JOptionPane.showMessageDialog(this, s, DesktopApp.NAME, JOptionPane.INFORMATION_MESSAGE); }
     void error(String title, Throwable e) {
         String msg = e.getMessage() == null ? e.toString() : e.getMessage();

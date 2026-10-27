@@ -4,8 +4,6 @@ import org.json.JSONObject;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Size;
-import org.opencv.dnn.Dnn;
-import org.opencv.dnn.Net;
 import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
@@ -16,7 +14,8 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Localização por rede neural StarDist (polígonos estrelados), via OpenCV DNN (ONNX).
+ * Localização por rede neural StarDist (polígonos estrelados), via OpenCV DNN (ONNX) ou, com a aceleração
+ * por hardware ligada e aprovada na sonda de paridade, ONNX Runtime/LiteRT ({@link HardwareAcceleration}).
  * Espelho exato de ml_training/stardist/common.py: escala, normalização por percentis,
  * blocos fixos, máximos locais, NMS de polígonos convexos e descrição dos objetos.
  * A rede só PROPÕE objetos; a elipse final continua sendo medida nas bordas observadas
@@ -41,7 +40,7 @@ public final class NeuralPelletDetector {
     final int rays, tile, overlap;
     final double nominalRadius, normLow, normHigh, nmsOverlap, minRadiusNet;
     private final double[] cos, sin;
-    private final Net net;
+    private final InferenceBackend backend;
 
     private NeuralPelletDetector(File onnx, String metadataJson) throws Exception {
         metadata = new JSONObject(metadataJson);
@@ -58,19 +57,48 @@ public final class NeuralPelletDetector {
         if (rays < 8 || tile < 64 || overlap < 0 || overlap >= tile) throw new IllegalArgumentException("Metadado inválido.");
         cos = new double[rays]; sin = new double[rays];
         for (int k = 0; k < rays; k++) { double a = 2 * Math.PI * k / rays; cos[k] = Math.cos(a); sin[k] = Math.sin(a); }
-        net = Dnn.readNetFromONNX(onnx.getAbsolutePath());
-        if (net.empty()) throw new IllegalArgumentException("ONNX não carregado.");
-        net.setPreferableBackend(Dnn.DNN_BACKEND_OPENCV);
-        net.setPreferableTarget(Dnn.DNN_TARGET_CPU);
+        backend = HardwareAcceleration.open(onnx, new HardwareAcceleration.Model("StarDist " + id, sha256,
+                new int[]{1, 1, tile, tile}, probe(tile, nominalRadius), PROB_TOLERANCE, DIST_TOLERANCE_PX, tile * tile));
     }
+
+    /** Tolerâncias da sonda de paridade do motor acelerado contra o OpenCV DNN: probabilidade e distância (px da rede). */
+    static final double PROB_TOLERANCE = .02, DIST_TOLERANCE_PX = .5;
+
+    /**
+     * Entrada sintética e determinística para a sonda: fundo em gradiente com discos do raio nominal (bordas suaves)
+     * e textura fina, na escala normalizada da rede (~0..1). Exercita as duas cabeças (probabilidade e distâncias).
+     */
+    static float[] probe(int tile, double radius) {
+        float[] x = new float[tile * tile];
+        double step = 3.2 * radius;
+        for (int y = 0; y < tile; y++) for (int xx = 0; xx < tile; xx++) {
+            double v = .18 + .2 * xx / tile + .1 * y / tile;
+            double gx = (xx + .5 * step) % step - .5 * step, gy = (y + .3 * step) % step - .5 * step;
+            double rr = radius * (.8 + .4 * (((int) ((xx + .5 * step) / step) * 7 + (int) ((y + .3 * step) / step) * 3) % 5) / 4.);
+            double d = Math.hypot(gx, gy) - rr;
+            v += .55 / (1 + Math.exp(d / 1.5));
+            v += .03 * Math.sin(xx * .9) * Math.cos(y * .7);
+            x[y * tile + xx] = (float) v;
+        }
+        return x;
+    }
+
+    /** Motor em uso (para status e testes). */
+    public InferenceBackend backend() { return backend; }
+
+    /** Libera o motor (GPU). Espera uma detecção em andamento terminar. */
+    public synchronized void close() { backend.close(); }
 
     /** Instala o modelo para toda a aplicação. Falha não é fatal: o método neural fica indisponível. */
     public static synchronized boolean install(File onnx, String metadataJson) {
+        NeuralPelletDetector previous = installed;
         try {
             installed = new NeuralPelletDetector(onnx, metadataJson);
+            if (previous != null) previous.close();
             status = "Rede neural " + installed.id + (installed.demonstration ? " (DEMONSTRAÇÃO, treino em 7 cenas provisórias)" : "");
             return true;
         } catch (Throwable e) {
+            if (previous != null) previous.close();
             installed = null;
             status = "Rede neural indisponível: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
             return false;
@@ -81,11 +109,14 @@ public final class NeuralPelletDetector {
      * e o status avisa (ver forScene/status(boolean)). A bancada nunca usa este modelo.
      */
     public static synchronized boolean installBelt(File onnx, String metadataJson) {
+        NeuralPelletDetector previous = installedBelt;
         try {
             installedBelt = new NeuralPelletDetector(onnx, metadataJson);
+            if (previous != null) previous.close();
             beltStatus = "Rede neural de correia " + installedBelt.id + (installedBelt.demonstration ? " (DEMONSTRAÇÃO, pseudo-rótulos sem revisão humana)" : "");
             return true;
         } catch (Throwable e) {
+            if (previous != null) previous.close();
             installedBelt = null;
             beltStatus = "Rede neural de correia indisponível: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
             return false;
@@ -232,7 +263,8 @@ public final class NeuralPelletDetector {
 
     void candidatesForScale(Mat gray, double scale, double thr, List<Candidate> out) {
         int w2 = (int) Math.max(1, Math.rint(gray.cols() * scale)), h2 = (int) Math.max(1, Math.rint(gray.rows() * scale));
-        Mat small = new Mat(), blob = null, pred = null;
+        Mat small = new Mat();
+        int[] shape = {1, 1, tile, tile};
         try {
             Imgproc.resize(gray, small, new Size(w2, h2), 0, 0, scale < 1 ? Imgproc.INTER_AREA : Imgproc.INTER_LINEAR);
             byte[] pixels = new byte[w2 * h2];
@@ -243,20 +275,16 @@ public final class NeuralPelletDetector {
             List<Integer> xs = starts(w2), ys = starts(h2);
             double[][] bx = ownBounds(xs, w2), by = ownBounds(ys, h2);
             int area = tile * tile;
-            float[] input = new float[area], output = new float[(1 + rays) * area];
-            blob = new Mat(new int[]{1, 1, tile, tile}, CvType.CV_32F);
+            float[] input = new float[area], output;
             for (int ty = 0; ty < ys.size(); ty++) for (int tx = 0; tx < xs.size(); tx++) {
                 int x0 = xs.get(tx), y0 = ys.get(ty), th = Math.min(tile, h2 - y0), tw = Math.min(tile, w2 - x0);
                 java.util.Arrays.fill(input, fill);
                 for (int y = 0; y < th; y++) for (int x = 0; x < tw; x++)
                     input[y * tile + x] = (float) ((pixels[(y0 + y) * w2 + x0 + x] & 255) - st[0]) / span;
-                blob.put(new int[]{0, 0, 0, 0}, input);
-                net.setInput(blob);
-                if (pred != null) pred.release();
-                pred = net.forward();
-                if (pred.dims() != 4 || pred.size(1) != 1 + rays || pred.size(2) != tile || pred.size(3) != tile)
-                    throw new IllegalStateException("Saída da rede inesperada.");
-                pred.get(new int[]{0, 0, 0, 0}, output);
+                try { output = backend.run(input, shape); }
+                catch (RuntimeException e) { throw e; }
+                catch (Exception e) { throw new IllegalStateException("Falha na rede: " + e.getMessage(), e); }
+                if (output.length != (1 + rays) * area) throw new IllegalStateException("Saída da rede inesperada.");
                 for (int y = 0; y < th; y++) for (int x = 0; x < tw; x++) {
                     float p = output[y * tile + x];
                     if (!(p > thr)) continue;
@@ -281,8 +309,6 @@ public final class NeuralPelletDetector {
             }
         } finally {
             small.release();
-            if (blob != null) blob.release();
-            if (pred != null) pred.release();
         }
     }
 

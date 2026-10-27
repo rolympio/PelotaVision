@@ -87,8 +87,43 @@ final class DesktopAnalysis {
         return crackModel;
     }
 
+    /** Preferência (Preferences do MainFrame) e propriedade de sistema que ligam a aceleração por hardware. */
+    static final String ACCEL_PREF = "hwAccel", ACCEL_PROPERTY = "pelotavision.accel";
+
+    /** Registra o ONNX Runtime como motor da plataforma e aplica a escolha salva (padrão: desligada). */
+    static void configureAcceleration() {
+        try {
+            HardwareAcceleration.setProvider(OnnxRuntimeProvider.INSTANCE);
+        } catch (Throwable e) { // jar do ONNX Runtime ausente: só o OpenCV DNN
+            HardwareAcceleration.setProvider(null);
+        }
+        boolean on = Boolean.getBoolean(ACCEL_PROPERTY);
+        if (!on) {
+            try { on = java.util.prefs.Preferences.userNodeForPackage(MainFrame.class).getBoolean(ACCEL_PREF, false); }
+            catch (Throwable ignored) {}
+        }
+        HardwareAcceleration.setEnabled(on);
+    }
+
+    /** Liga ou desliga a aceleração e recarrega as redes no motor escolhido. Devolve o estado por modelo. */
+    static synchronized String setAcceleration(boolean on) {
+        HardwareAcceleration.setEnabled(on);
+        File onnx = DesktopApp.model(NeuralPelletDetector.MODEL), meta = DesktopApp.model(NeuralPelletDetector.METADATA);
+        NeuralPelletDetector.install(onnx, readOrEmpty(meta));
+        File beltOnnx = DesktopApp.model(NeuralPelletDetector.BELT_MODEL), beltMeta = DesktopApp.model(NeuralPelletDetector.BELT_METADATA);
+        if (beltOnnx.isFile()) NeuralPelletDetector.installBelt(beltOnnx, readOrEmpty(beltMeta));
+        if (network != null) {
+            network.close();
+            network = null;
+            File n = DesktopApp.model(MobileNetCrackModel.MODEL), m = DesktopApp.model(MobileNetCrackModel.METADATA);
+            network = MobileNetCrackModel.load(n, m.isFile() ? readOrEmpty(m) : "");
+        }
+        return HardwareAcceleration.status();
+    }
+
     /** Instala as redes StarDist (bancada e, em slot separado, correia) da pasta modelos (pacote) ou pelotavision.modelDir (testes). */
     static synchronized void installNeuralModel() {
+        if (HardwareAcceleration.provider() == null) configureAcceleration();
         if (!NeuralPelletDetector.available()) {
             File onnx = DesktopApp.model(NeuralPelletDetector.MODEL), meta = DesktopApp.model(NeuralPelletDetector.METADATA);
             NeuralPelletDetector.install(onnx, readOrEmpty(meta));
@@ -122,7 +157,7 @@ final class DesktopAnalysis {
                 File onnx = DesktopApp.model(MobileNetCrackModel.MODEL), meta = DesktopApp.model(MobileNetCrackModel.METADATA);
                 network = MobileNetCrackModel.load(onnx, meta.isFile() ? readOrEmpty(meta) : "");
             }
-        } else network = null;
+        } else if (network != null) { network.close(); network = null; }
         CrackClassifierChoice.Resolution r = CrackClassifierChoice.resolve(requested, crackModel() != null, network != null, MobileNetCrackModel.lastError);
         lastResolution = r;
         return new CrackDetector(crackModel(), r.effective.needsNetwork() ? network : null, r.effective);
