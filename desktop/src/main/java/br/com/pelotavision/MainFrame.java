@@ -780,19 +780,17 @@ final class MainFrame extends JFrame {
     private void save() {
         PhotoSession s = session;
         if (s == null || !s.canSave()) { info(s != null && s.needsAnalysis() ? "A area mudou: segmente antes de salvar." : "Analise uma foto antes de salvar."); return; }
-        JFileChooser chooser = new JFileChooser();
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        chooser.setDialogTitle("Pasta para os resultados");
+        // 0.5.3: cada gravação vai para uma pasta própria, sugerida com data/hora do momento + nome do teste.
         File def = new File(FileSystemView.getFileSystemView().getDefaultDirectory(), "PelotaVision");
-        File last = new File(prefs.get("saveDir", def.getPath()));
-        chooser.setCurrentDirectory(last.getParentFile());
-        chooser.setSelectedFile(last);
-        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
-        File folder = chooser.getSelectedFile();
-        prefs.put("saveDir", folder.getPath());
+        File root = new File(prefs.get("saveRoot", def.getPath()));
+        SaveDialog.Choice choice = SaveDialog.show(this, root, prefs.get("lastTestName", ""));
+        if (choice == null) return;
+        File folder = choice.folder;
+        prefs.put("saveRoot", choice.parent.getPath());
+        prefs.put("lastTestName", choice.testName == null ? "" : choice.testName);
         try {
-            List<File> files = DesktopExport.save(folder, s, config());
-            StringBuilder t = new StringBuilder("Arquivos salvos em\n" + folder + "\n\n");
+            List<File> files = DesktopExport.save(folder, s, config(), choice.testName);
+            StringBuilder t = new StringBuilder((choice.testName == null ? "" : "Teste: " + choice.testName + "\n") + "Arquivos salvos em\n" + folder + "\n\n");
             for (File f : files) t.append(f.getName()).append('\n');
             JOptionPane.showMessageDialog(this, t.toString(), "Resultado salvo", JOptionPane.INFORMATION_MESSAGE);
             setStatus("Resultados salvos em " + folder);

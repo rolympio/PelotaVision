@@ -36,6 +36,12 @@ final class DesktopExport {
     private DesktopExport() {}
 
     static List<File> save(File folder, PhotoSession s, DesktopAnalysis.Config cfg) throws Exception {
+        return save(folder, s, cfg, null);
+    }
+
+    /** 0.5.3: {@code testName} (opcional) vai para o JSON ("test_name") e para o cabeçalho do PDF. */
+    static List<File> save(File folder, PhotoSession s, DesktopAnalysis.Config cfg, String testName) throws Exception {
+        testName = SaveNaming.cleanTestName(testName);
         if (!s.canSave()) throw new IllegalStateException("Segmente a area atual antes de salvar.");
         if (!folder.isDirectory() && !folder.mkdirs()) throw new IOException("Nao foi possivel criar a pasta " + folder);
         String base = "PelotaVision_" + new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.ROOT).format(new Date());
@@ -85,6 +91,8 @@ final class DesktopExport {
         }
         File json = new File(folder, base + ".json");
         JSONObject report = report(s, cfg, viewport, composite, base, extension);
+        report.put("test_name", testName == null ? JSONObject.NULL : testName);
+        report.put("output_folder", folder.getName());
         LowLightInfo light = s.lowLight();
         report.put("low_light", light == null ? JSONObject.NULL : light.toJson());
         JSONObject imagery = new JSONObject();

@@ -28,7 +28,10 @@ final class ResultSaver {
         /** 0.15.0: relatório PDF; null quando a geração falhou (os demais arquivos continuam válidos). */
         final Uri pdf;
         SavedResult(String base,Uri image){this(base,image,null);}
-        SavedResult(String base,Uri image,Uri pdf){this.base=base;this.image=image;this.pdf=pdf;}
+        /** 0.15.3: subpasta da gravação (null = raiz PelotaVision). */
+        final String folder;
+        SavedResult(String base,Uri image,Uri pdf){this(base,image,pdf,null);}
+        SavedResult(String base,Uri image,Uri pdf,String folder){this.base=base;this.image=image;this.pdf=pdf;this.folder=folder;}
     }
     static SavedResult save(Context context,Bitmap photo,File original,String originalMime,
                        PelletDetector.Result result,PelletDetector.Parameters parameters,
@@ -70,6 +73,14 @@ final class ResultSaver {
      * filtrada, segmentada e mapa como figuras separadas. As medidas continuam nos pixels originais.
      */
     static SavedResult save(Context context,Bitmap photo,File original,String originalMime,PelletDetector.Result result,PelletDetector.Parameters parameters,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,DetectionTuner.Report suggestions,DetectionTuner.Option applied,boolean cropRoi,DetailedAnalysis.Report detailed,ReportVisuals visuals,CrackClassifierChoice.Resolution crackChoice,String networkId,LowLightInfo lowLight,Bitmap filtered) throws Exception {
+        return save(context,photo,original,originalMime,result,parameters,cracks,distribution,region,excludedByRegion,suggestions,applied,cropRoi,detailed,visuals,crackChoice,networkId,lowLight,filtered,null,null);
+    }
+    /** 0.15.3: {@code folder} = subpasta desta gravação em Imagens/PelotaVision e Download/PelotaVision (null = direto na pasta PelotaVision); {@code testName} vai para o JSON e o PDF. */
+    static SavedResult save(Context context,Bitmap photo,File original,String originalMime,PelletDetector.Result result,PelletDetector.Parameters parameters,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,DetectionTuner.Report suggestions,DetectionTuner.Option applied,boolean cropRoi,DetailedAnalysis.Report detailed,ReportVisuals visuals,CrackClassifierChoice.Resolution crackChoice,String networkId,LowLightInfo lowLight,Bitmap filtered,String folder,String testName) throws Exception {
+        testName=SaveNaming.cleanTestName(testName);
+        folder=folder==null||folder.trim().isEmpty()?null:SaveNaming.sanitizeFolder(folder);
+        final String pictures=folder==null?"Pictures/PelotaVision":"Pictures/PelotaVision/"+folder;
+        final String downloads=folder==null?"Download/PelotaVision":"Download/PelotaVision/"+folder;
         if(filtered!=null&&(lowLight==null||!lowLight.enhanced()))filtered=null;
         if(filtered!=null&&(filtered.getWidth()!=photo.getWidth()||filtered.getHeight()!=photo.getHeight()))throw new IllegalArgumentException("Imagem filtrada incompatível com a foto.");
         Bitmap shown=filtered!=null?filtered:photo;
@@ -84,27 +95,28 @@ final class ResultSaver {
         try {
             String extension="image/png".equals(originalMime)?"png":"image/webp".equals(originalMime)?"webp":"jpg";
             Uri source=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    base+"_original."+extension,originalMime,"Pictures/PelotaVision");pending.add(source);
+                    base+"_original."+extension,originalMime,pictures);pending.add(source);
             try(InputStream input=new FileInputStream(original);OutputStream output=stream(resolver,source)) {
                 byte[] bytes=new byte[65536];int count;while((count=input.read(bytes))!=-1)output.write(bytes,0,count);
             }
             annotated=PhotoComposer.compose(photo,result,cracks,distribution,region,excludedByRegion,cropRoi,crackHistogram,visuals,filtered);
             Uri image=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    base+"_resultado.png","image/png","Pictures/PelotaVision");pending.add(image);
+                    base+"_resultado.png","image/png",pictures);pending.add(image);
             try(OutputStream output=stream(resolver,image)) {if(!annotated.compress(Bitmap.CompressFormat.PNG,100,output))throw new IOException("Falha ao gravar a imagem.");}
             String filteredFile=null;
             if(filtered!=null){
                 try{filteredPanel=PhotoComposer.panel(filtered,result,cracks,distribution,region,cropRoi,false);
-                    Uri filteredUri=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,base+"_filtrada.png","image/png","Pictures/PelotaVision");pending.add(filteredUri);
+                    Uri filteredUri=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,base+"_filtrada.png","image/png",pictures);pending.add(filteredUri);
                     try(OutputStream output=stream(resolver,filteredUri)){if(!filteredPanel.compress(Bitmap.CompressFormat.PNG,100,output))throw new IOException("Falha ao gravar a imagem filtrada.");}filteredFile=base+"_filtrada.png";
                 }catch(OutOfMemoryError e){if(filteredPanel!=null){filteredPanel.recycle();filteredPanel=null;}}
             }
             String mapFile=null;
             try{map=MapComposer.compose(shown,result,distribution,visuals,region,cropRoi);
-                if(map!=null){Uri mapUri=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,base+"_mapa.png","image/png","Pictures/PelotaVision");pending.add(mapUri);
+                if(map!=null){Uri mapUri=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,base+"_mapa.png","image/png",pictures);pending.add(mapUri);
                     try(OutputStream output=stream(resolver,mapUri)){if(!map.compress(Bitmap.CompressFormat.PNG,100,output))throw new IOException("Falha ao gravar o mapa.");}mapFile=base+"_mapa.png";}
             }catch(OutOfMemoryError e){mapFile=null;if(map!=null){map.recycle();map=null;}}
             JSONObject json=new JSONObject();json.put("app","PelotaVision "+APP_VERSION);json.put("report_schema_version",ReportJson.SCHEMA_VERSION);json.put("created_at_epoch_ms",System.currentTimeMillis());
+            json.put("test_name",testName==null?JSONObject.NULL:testName);json.put("output_folder",folder==null?JSONObject.NULL:folder);json.put("files_location",folder==null?"Imagens e Downloads / PelotaVision":"Imagens e Downloads / PelotaVision / "+folder);
             json.put("analysis_models",ReportJson.analysisModelsJson(applied,crackChoice,networkId));
             json.put("crack_histogram",ReportJson.crackHistogramJson(crackHistogram,visuals));
             Object mapJson=ReportJson.mapJson(distribution,visuals);if(mapJson instanceof JSONObject)((JSONObject)mapJson).put("file",mapFile==null?JSONObject.NULL:mapFile);json.put("granulometric_map",mapJson);
@@ -160,7 +172,7 @@ final class ResultSaver {
                     bin.put("count",distribution.count(i));bin.put("percent_by_number",distribution.percent(i));bins.put(bin);
                 }
                 histogram.put("bins",bins);json.put("histogram",histogram);
-                Uri grainUri=create(resolver,MediaStore.Downloads.EXTERNAL_CONTENT_URI,base+"_granulometria.csv","text/csv","Download/PelotaVision");pending.add(grainUri);
+                Uri grainUri=create(resolver,MediaStore.Downloads.EXTERNAL_CONTENT_URI,base+"_granulometria.csv","text/csv",downloads);pending.add(grainUri);
                 try(OutputStream output=stream(resolver,grainUri)){output.write(grainCsv.getBytes(StandardCharsets.UTF_8));}
             }
             JSONObject cfg=new JSONObject();cfg.put("min_radius_fraction",parameters.minRadiusFraction);cfg.put("max_radius_fraction",parameters.maxRadiusFraction);cfg.put("log_threshold",parameters.threshold);json.put("parameters",cfg);
@@ -188,19 +200,19 @@ final class ResultSaver {
                 json.put("pdf_file",base+"_relatorio.pdf");
                 List<Bitmap> owned=new ArrayList<>();byte[] pdf;
                 try{pdf=PdfReport.render(json,PdfReport.figures(json,annotated,filteredPanel,map,owned));}finally{for(Bitmap b:owned)b.recycle();}
-                candidate=create(resolver,MediaStore.Downloads.EXTERNAL_CONTENT_URI,base+"_relatorio.pdf","application/pdf","Download/PelotaVision");
+                candidate=create(resolver,MediaStore.Downloads.EXTERNAL_CONTENT_URI,base+"_relatorio.pdf","application/pdf",downloads);
                 try(OutputStream output=stream(resolver,candidate)){output.write(pdf);}
                 pending.add(candidate);pdfUri=candidate;
             }catch(Exception|OutOfMemoryError|LinkageError e){
                 if(candidate!=null&&pdfUri==null)try{resolver.delete(candidate,null,null);}catch(Exception ignored){}
                 json.put("pdf_file",JSONObject.NULL);json.put("pdf_error",e.getClass().getSimpleName()+": "+e.getMessage());}
-            Uri jsonUri=create(resolver,MediaStore.Downloads.EXTERNAL_CONTENT_URI,base+".json","application/json","Download/PelotaVision");pending.add(jsonUri);
+            Uri jsonUri=create(resolver,MediaStore.Downloads.EXTERNAL_CONTENT_URI,base+".json","application/json",downloads);pending.add(jsonUri);
             try(OutputStream output=stream(resolver,jsonUri)){output.write(json.toString(2).getBytes(StandardCharsets.UTF_8));}
-            Uri csvUri=create(resolver,MediaStore.Downloads.EXTERNAL_CONTENT_URI,base+".csv","text/csv","Download/PelotaVision");pending.add(csvUri);
+            Uri csvUri=create(resolver,MediaStore.Downloads.EXTERNAL_CONTENT_URI,base+".csv","text/csv",downloads);pending.add(csvUri);
             try(OutputStream output=stream(resolver,csvUri)){output.write(csv.getBytes(StandardCharsets.UTF_8));}
             ContentValues visible=new ContentValues();visible.put(MediaStore.MediaColumns.IS_PENDING,0);
             for(Uri uri:pending)if(resolver.update(uri,visible,null,null)!=1)throw new IOException("Não foi possível concluir a gravação.");
-            return new SavedResult(base,image,pdfUri);
+            return new SavedResult(base,image,pdfUri,folder);
         } catch(Exception|OutOfMemoryError e) {for(Uri uri:pending)try{resolver.delete(uri,null,null);}catch(Exception ignored){}throw e;}
         finally {if(annotated!=null)annotated.recycle();if(map!=null)map.recycle();if(filteredPanel!=null)filteredPanel.recycle();}
     }

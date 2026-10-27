@@ -35,6 +35,7 @@ public class DesktopPdfReportTest {
         json.put("app", "PelotaVision Windows 0.5.2 (nucleo 0.15.2)");
         json.put("annotated_file", "PelotaVision_teste_resultado.png");
         json.put("files_location", "mesma pasta deste PDF");
+        json.put("test_name", "Disco 3 · umidade 9,2%");
         json.put("pdf_file", "PelotaVision_teste_relatorio.pdf");
         json.put("count", 12);
         json.put("method", "gradient+ellipse_boundary_v1");
@@ -64,7 +65,7 @@ public class DesktopPdfReportTest {
         try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(pdf)) {
             String text = new org.apache.pdfbox.text.PDFTextStripper().getText(d);
             for (String s : new String[]{"Relatório de análise de pelotas", "ILUMINAÇÃO E TRATAMENTO DE IMAGEM ESCURA", "Redução de ruído + CLAHE",
-                    "DISTRIBUIÇÃO GRANULOMÉTRICA", "Figura 1 · Imagem original", "Figura 2 · Imagem filtrada", "Figura 3 · Imagem segmentada", "Figura 4 · Mapa granulométrico", "Figura 5 · Resumo"})
+                    "DISTRIBUIÇÃO GRANULOMÉTRICA", "Figura 1 · Imagem original", "Figura 2 · Imagem filtrada", "Figura 3 · Imagem segmentada", "Figura 4 · Mapa granulométrico", "Figura 5 · Resumo", "Disco 3 · umidade 9,2%"})
                 assertTrue("PDF sem \"" + s + "\"", text.contains(s));
         }
         File dir = new File(System.getProperty("pelotavision.validationDir", "../verification"), "pdf-windows-0.5.2");

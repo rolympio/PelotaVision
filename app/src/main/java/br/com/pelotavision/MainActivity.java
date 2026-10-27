@@ -462,7 +462,37 @@ public final class MainActivity extends ComponentActivity {
         }catch(Exception|OutOfMemoryError e){if(ready!=null)ready.recycle();final String reason=e instanceof java.util.concurrent.CancellationException?"Processamento cancelado; resultado anterior preservado.":e instanceof IllegalArgumentException&&e.getMessage()!=null?e.getMessage():"Não foi possível concluir a análise detalhada. Reduza a ROI ou desative SR e tente novamente.";runOnUiThread(()->{if(!isDestroyed()){closeTuneProgress();mode=Mode.PHOTO;applyRegion(interestRegion);hint.setText(reason);toast(reason);}});
         }finally{if(input!=null)input.close();if(small!=null&&small!=previewGray)small.release();if(previewGray!=null)previewGray.release();}
     }
+    /** 0.15.3: antes de gravar, pede o nome do teste e sugere a pasta com a data e a hora deste momento. */
     private void savePhoto() {
+        if(mode!=Mode.PHOTO||photoBitmap==null||photoResult==null||photoFile==null)return;
+        if(roiNeedsAnalysis){toast("Segmente a área ativa antes de salvar.");return;}
+        final java.util.Date[] stamp={new java.util.Date()};
+        final boolean[] edited={false},programmatic={false};
+        String lastTest=getPreferences(MODE_PRIVATE).getString("last_test_name","");
+        LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(8),dp(20),dp(8));ScrollView scroll=new ScrollView(this);scroll.addView(content);
+        content.addView(text("Nome do teste (opcional)",14,Color.WHITE));
+        EditText test=new EditText(this);test.setTag("save_test_name");test.setSingleLine();test.setTextColor(Color.WHITE);test.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);test.setHint("Ex.: Disco 3 · umidade 9,2%");test.setText(lastTest);content.addView(test);
+        content.addView(text("Pasta desta gravação",14,Color.WHITE));
+        EditText folder=new EditText(this);folder.setTag("save_folder");folder.setSingleLine();folder.setTextColor(Color.WHITE);folder.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);folder.setText(SaveNaming.suggestedFolder(stamp[0],lastTest));content.addView(folder);
+        TextView where=text("",12,Color.LTGRAY);where.setTag("save_where");content.addView(where);
+        Runnable preview=()->{try{String f=SaveNaming.sanitizeFolder(folder.getText().toString());where.setText("Imagens: Pictures/PelotaVision/"+f+"\nDados e PDF: Download/PelotaVision/"+f);}catch(IllegalArgumentException e){where.setText(e.getMessage());}};
+        Runnable suggest=()->{programmatic[0]=true;folder.setText(SaveNaming.suggestedFolder(stamp[0],test.getText().toString()));programmatic[0]=false;preview.run();};
+        test.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence c,int a,int b,int d){}public void onTextChanged(CharSequence c,int a,int b,int d){}public void afterTextChanged(android.text.Editable e){if(!edited[0])suggest.run();}});
+        folder.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence c,int a,int b,int d){}public void onTextChanged(CharSequence c,int a,int b,int d){}public void afterTextChanged(android.text.Editable e){if(!programmatic[0])edited[0]=true;preview.run();}});
+        preview.run();
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Salvar foto + dados").setView(scroll)
+            .setNegativeButton("Cancelar",null).setNeutralButton("Hora atual",null).setPositiveButton("Salvar",null).create();
+        dialog.setOnShowListener(d->{
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{stamp[0]=new java.util.Date();edited[0]=false;suggest.run();});
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String name;try{name=SaveNaming.sanitizeFolder(folder.getText().toString());}catch(IllegalArgumentException e){where.setText(e.getMessage());return;}
+                String testName=SaveNaming.cleanTestName(test.getText().toString());
+                getPreferences(MODE_PRIVATE).edit().putString("last_test_name",testName==null?"":testName).apply();
+                dialog.dismiss();savePhoto(name,testName);});
+        });
+        dialog.show();
+    }
+    private void savePhoto(String outputFolder,String testName) {
         if(mode!=Mode.PHOTO||photoBitmap==null||photoResult==null||photoFile==null)return;
         if(roiNeedsAnalysis){toast("Segmente a área ativa antes de salvar.");return;}
         refreshDistribution();
@@ -480,11 +510,12 @@ public final class MainActivity extends ComponentActivity {
         setBusy(Mode.SAVING,"Salvando…");
         worker.execute(()-> {
             try {
-                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork,exportedLight,exportedFiltered);
+                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork,exportedLight,exportedFiltered,outputFolder,testName);
                 runOnUiThread(()-> {if(!isDestroyed()){
-                    mode=Mode.PHOTO;updateControls();hint.setText(saved.pdf!=null?"Relatório PDF salvo em Downloads / PelotaVision.":"Histograma salvo no arquivo _resultado.png. Dados em Downloads / PelotaVision.");
+                    mode=Mode.PHOTO;updateControls();final String dir=saved.folder==null?"PelotaVision":"PelotaVision/"+saved.folder;
+                    hint.setText(saved.pdf!=null?"Relatório PDF salvo em Downloads / "+dir+".":"Histograma salvo no arquivo _resultado.png. Dados em Downloads / "+dir+".");
                     new AlertDialog.Builder(this).setTitle("Resultado salvo")
-                        .setMessage((saved.pdf!=null?"Relatório PDF: Downloads/PelotaVision/"+saved.base+"_relatorio.pdf (resumo, iluminação, modelos, classes e uma figura por imagem: original, filtrada, segmentada, mapa e histograma).\n\n":"O PDF não pôde ser gerado; os demais arquivos foram salvos.\n\n")+"O relatório "+saved.base+"_resultado.png contém a imagem sem marcações, a imagem com elipses e possíveis trincas e o histograma (todas × trincadas). O mapa granulométrico com legenda fica em "+saved.base+"_mapa.png. Quando selecionada, a ROI é ampliada nos dois painéis. O arquivo _original preserva os bytes da entrada."+(exportedFiltered!=null?"\n\nFiltro de iluminação aplicado: a imagem filtrada está em "+saved.base+"_filtrada.png e a segmentação e o mapa foram desenhados sobre ela. As medidas seguem nos pixels originais.":""))
+                        .setMessage((testName==null?"":"Teste: "+testName+"\n")+"Imagens em Pictures/"+dir+"; dados e PDF em Download/"+dir+".\n\n"+(saved.pdf!=null?"Relatório PDF: "+saved.base+"_relatorio.pdf (resumo, iluminação, modelos, classes e uma figura por imagem: original, filtrada, segmentada, mapa e histograma).\n\n":"O PDF não pôde ser gerado; os demais arquivos foram salvos.\n\n")+"O relatório "+saved.base+"_resultado.png contém a imagem sem marcações, a imagem com elipses e possíveis trincas e o histograma (todas × trincadas). O mapa granulométrico com legenda fica em "+saved.base+"_mapa.png. Quando selecionada, a ROI é ampliada nos dois painéis. O arquivo _original preserva os bytes da entrada."+(exportedFiltered!=null?"\n\nFiltro de iluminação aplicado: a imagem filtrada está em "+saved.base+"_filtrada.png e a segmentação e o mapa foram desenhados sobre ela. As medidas seguem nos pixels originais.":""))
                         .setNegativeButton("Fechar",null).setNeutralButton("Abrir imagem",(d,w)->openSavedImage(saved.image)).setPositiveButton(saved.pdf!=null?"Abrir PDF":"OK",(d,w)->{if(saved.pdf!=null)openSavedPdf(saved.pdf);}).show();
                 }});
             } catch(Exception|OutOfMemoryError e) {runOnUiThread(()-> {if(!isDestroyed()){mode=Mode.PHOTO;updateControls();toast("Falha ao salvar: "+e.getMessage());}});}

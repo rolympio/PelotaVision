@@ -160,9 +160,11 @@ public class CrackExportTest {
  private static void setField(MainActivity activity,String name,Object value)throws Exception{java.lang.reflect.Field f=MainActivity.class.getDeclaredField(name);f.setAccessible(true);f.set(activity,value);}
  public static class FakeMediaStore extends android.content.ContentProvider {
   final File root;final Map<android.net.Uri,File> files=new HashMap<>();int published=0;
+  /** 0.15.3: RELATIVE_PATH de cada arquivo, pelo nome. */
+  final Map<String,String> paths=new HashMap<>();
   FakeMediaStore(File root){this.root=root;}
   @Override public boolean onCreate(){return true;}
-  @Override public android.net.Uri insert(android.net.Uri uri,android.content.ContentValues values){android.net.Uri item=android.content.ContentUris.withAppendedId(uri,files.size()+1);files.put(item,new File(root,values.getAsString(android.provider.MediaStore.MediaColumns.DISPLAY_NAME)));return item;}
+  @Override public android.net.Uri insert(android.net.Uri uri,android.content.ContentValues values){android.net.Uri item=android.content.ContentUris.withAppendedId(uri,files.size()+1);files.put(item,new File(root,values.getAsString(android.provider.MediaStore.MediaColumns.DISPLAY_NAME)));paths.put(values.getAsString(android.provider.MediaStore.MediaColumns.DISPLAY_NAME),values.getAsString(android.provider.MediaStore.MediaColumns.RELATIVE_PATH));return item;}
   @Override public android.os.ParcelFileDescriptor openFile(android.net.Uri uri,String mode)throws FileNotFoundException{return android.os.ParcelFileDescriptor.open(files.get(uri),android.os.ParcelFileDescriptor.MODE_READ_WRITE|android.os.ParcelFileDescriptor.MODE_CREATE|android.os.ParcelFileDescriptor.MODE_TRUNCATE);}
   @Override public int update(android.net.Uri uri,android.content.ContentValues values,String selection,String[] args){published++;return 1;}
   @Override public int delete(android.net.Uri uri,String selection,String[] args){File file=files.remove(uri);if(file!=null)file.delete();return 1;}

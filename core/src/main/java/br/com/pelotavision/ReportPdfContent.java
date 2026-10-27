@@ -67,6 +67,8 @@ public final class ReportPdfContent {
 
     private static void header(List<Block> out, JSONObject j) {
         out.add(Block.title("Relatório de análise de pelotas"));
+        String test = j.isNull("test_name") ? "" : j.optString("test_name", "").trim();
+        if (!test.isEmpty()) out.add(Block.table(Collections.singletonList(new String[]{"Teste", test})));
         long ms = j.optLong("created_at_epoch_ms", System.currentTimeMillis());
         String when = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss", new Locale("pt", "BR")).format(new Date(ms));
         out.add(Block.line(j.optString("app", "PelotaVision") + "  ·  " + when, 10));
