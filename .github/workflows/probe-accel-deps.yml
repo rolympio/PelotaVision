@@ -8,16 +8,19 @@ jobs:
     steps:
       - name: versions
         run: |
+          exec > >(tee -a $GITHUB_WORKSPACE/out.txt) 2>&1
           for a in onnxruntime onnxruntime_gpu; do echo "== ORT $a"; curl -s https://repo1.maven.org/maven2/com/microsoft/onnxruntime/$a/maven-metadata.xml | grep -oE "<version>[^<]+" | sed 's/<version>//' | tail -8 | tr '\n' ' '; echo; done
           for a in litert litert-api litert-gpu litert-gpu-api litert-support; do echo "== LiteRT $a"; curl -s https://dl.google.com/android/maven2/com/google/ai/edge/litert/$a/maven-metadata.xml | grep -oE "<version>[^<]+" | sed 's/<version>//' | tail -10 | tr '\n' ' '; echo; done
       - name: inspect
         run: |
+          set +e
+          exec > >(tee -a $GITHUB_WORKSPACE/out.txt) 2>&1
           mkdir w && cd w
           V=$(curl -s https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime_gpu/maven-metadata.xml | grep -oP "<release>\K[^<]+")
           echo "ORT gpu release $V"
           curl -sSLO https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime_gpu/$V/onnxruntime_gpu-$V.jar
           ls -la *.jar; unzip -l onnxruntime_gpu-$V.jar | grep -E "native|\.dll|\.so" | head -40
-          unzip -q -o onnxruntime_gpu-$V.jar 'ai/onnxruntime/OrtSession$SessionOptions.class' 'ai/onnxruntime/OrtEnvironment.class' 'ai/onnxruntime/OnnxTensor.class' 'ai/onnxruntime/OrtProvider.class'
+          unzip -q -o onnxruntime_gpu-$V.jar 'ai/onnxruntime/*'
           javap -cp . 'ai.onnxruntime.OrtSession$SessionOptions' | grep -E "add(CUDA|CPU|DirectML)|setIntraOp|setOptimization" ; javap -cp . ai.onnxruntime.OrtEnvironment | grep -E "getAvailableProviders|getEnvironment\(\)"; javap -cp . ai.onnxruntime.OnnxTensor | grep -E "createTensor.*FloatBuffer|getFloatBuffer"
           javap -cp . ai.onnxruntime.OrtProvider | head -30
           for a in litert litert-gpu litert-gpu-api litert-api; do
@@ -30,3 +33,52 @@ jobs:
           for c in org.tensorflow.lite.Interpreter 'org.tensorflow.lite.Interpreter$Options' org.tensorflow.lite.gpu.GpuDelegate org.tensorflow.lite.gpu.CompatibilityList 'org.tensorflow.lite.gpu.GpuDelegate$Options' org.tensorflow.lite.gpu.GpuDelegateFactory 'org.tensorflow.lite.gpu.GpuDelegateFactory$Options'; do
             for a in litert litert-gpu litert-gpu-api litert-api; do [ -f $a/classes.jar ] && javap -cp $a/classes.jar "$c" 2>/dev/null && echo "  ^ em $a"; done
           done
+
+      - name: notas 0
+        if: always()
+        run: |
+          python3 - <<'P'
+          t=open('out.txt').read().replace('\n',' ¶ ')
+          ch=[t[k:k+850] for k in range(0,len(t),850)]
+          for c in ch[0:10]: print('::notice title=probe::'+c)
+          P
+      - name: notas 1
+        if: always()
+        run: |
+          python3 - <<'P'
+          t=open('out.txt').read().replace('\n',' ¶ ')
+          ch=[t[k:k+850] for k in range(0,len(t),850)]
+          for c in ch[10:20]: print('::notice title=probe::'+c)
+          P
+      - name: notas 2
+        if: always()
+        run: |
+          python3 - <<'P'
+          t=open('out.txt').read().replace('\n',' ¶ ')
+          ch=[t[k:k+850] for k in range(0,len(t),850)]
+          for c in ch[20:30]: print('::notice title=probe::'+c)
+          P
+      - name: notas 3
+        if: always()
+        run: |
+          python3 - <<'P'
+          t=open('out.txt').read().replace('\n',' ¶ ')
+          ch=[t[k:k+850] for k in range(0,len(t),850)]
+          for c in ch[30:40]: print('::notice title=probe::'+c)
+          P
+      - name: notas 4
+        if: always()
+        run: |
+          python3 - <<'P'
+          t=open('out.txt').read().replace('\n',' ¶ ')
+          ch=[t[k:k+850] for k in range(0,len(t),850)]
+          for c in ch[40:50]: print('::notice title=probe::'+c)
+          P
+      - name: notas 5
+        if: always()
+        run: |
+          python3 - <<'P'
+          t=open('out.txt').read().replace('\n',' ¶ ')
+          ch=[t[k:k+850] for k in range(0,len(t),850)]
+          for c in ch[50:60]: print('::notice title=probe::'+c)
+          P
