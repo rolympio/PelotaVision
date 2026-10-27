@@ -1,7 +1,7 @@
-PelotaVision Windows 0.5.3 - prototipo
+PelotaVision Windows 0.5.4 - prototipo
 ======================================
 
-Nucleo de analise: o MESMO codigo do PelotaVision Android 0.15.3 (deteccao por bordas,
+Nucleo de analise: o MESMO codigo do PelotaVision Android 0.15.4 (deteccao por bordas,
 LoG ou rede neural StarDist, elipses, sugestao de ajuste, triagem de trincas Random Forest
 ou MobileNetV3, granulometria por numero, curva acumulada com ajuste Rosin-Rammler,
 mapa granulometrico, relatorio PDF).
@@ -86,3 +86,12 @@ NOVO NA 0.5.3
 - Curva acumulada (% passante) com ajuste Rosin-Rammler, base numero ou massa estimada
   (d^3), na tela e no PDF (pagina com histograma todas x trincadas + curva RR + formula).
 - O painel "Escala e histograma" abre pelo botao de mesmo nome.
+
+NOVO NA 0.5.4
+- ROI ao vivo: com a camera aberta, "ROI ao vivo..." escolhe a area sobre o quadro atual.
+  A contagem rapida roda so nela (com mais resolucao) e o histograma e a curva
+  Rosin-Rammler atualizam a cada contagem. A foto capturada herda a ROI.
+  Trincas e a analise completa continuam na foto.
+- Recipiente maior que o quadro (webcam 16:9 sobre a panela, borda cortada em cima e
+  embaixo) passa a ser detectado e aceito, desde que a borda apareca em lados opostos.
+- Novo icone (programa, atalhos e instalador).

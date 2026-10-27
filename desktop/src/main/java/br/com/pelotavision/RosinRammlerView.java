@@ -28,7 +28,10 @@ final class RosinRammlerView extends JPanel {
     @Override protected void paintComponent(Graphics g0) {
         super.paintComponent(g0);
         Graphics2D g = (Graphics2D) g0.create();
-        paint(g, fit, getWidth(), getHeight(), 1f, true);
+        java.awt.Insets in = getInsets();
+        g.translate(in.left, in.top);
+        g.clipRect(0, 0, getWidth() - in.left - in.right, getHeight() - in.top - in.bottom);
+        paint(g, fit, getWidth() - in.left - in.right, getHeight() - in.top - in.bottom, 1f, true);
         g.dispose();
     }
 

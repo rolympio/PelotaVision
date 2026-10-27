@@ -12,8 +12,14 @@ public final class ContainerCalibration {
     private ContainerCalibration() {}
     /** Above this rim ovality the photo is too oblique; the calibration does not rectify perspective. */
     public static final double MAX_OVALITY=.06;
-    /** Fraction of the circumference that must lie inside the photo. */
-    public static final double MIN_VISIBLE=.85;
+    /**
+     * Fraction of the circumference that must lie inside the photo. 0.15.4: a container larger than the
+     * frame (webcam 16:9 over a sieve pan) is accepted when the visible arcs surround the center: the
+     * diameter across them is measured, not extrapolated.
+     */
+    public static final double MIN_VISIBLE=.55;
+    /** Largest continuous stretch of rim outside the photo; one-sided views (big gap) stay blocked. */
+    public static final double MAX_GAP_DEGREES=100;
 
     public enum Plane {
         RIM("Borda superior interna","rim_inner_edge"),
@@ -39,6 +45,21 @@ public final class ContainerCalibration {
         public double originalDiameter(int ow,int oh,int w,int h){return 2*r*Math.sqrt((double)ow/w*((double)oh/h));}
         /** Fraction of the circumference inside the analyzed photo. */
         public double visibleFraction(int w,int h){int in=0,n=360;for(int i=0;i<n;i++){double t=2*Math.PI*i/n,x=cx+r*Math.cos(t),y=cy+r*Math.sin(t);if(x>=0&&y>=0&&x<=w-1&&y<=h-1)in++;}return in/(double)n;}
+        /** Largest continuous arc (degrees) of the circle outside the photo; 0 when fully inside. */
+        public double largestGapDegrees(int w,int h){
+            int n=360;boolean[] in=new boolean[n];int count=0;
+            for(int i=0;i<n;i++){double t=2*Math.PI*i/n,x=cx+r*Math.cos(t),y=cy+r*Math.sin(t);in[i]=x>=0&&y>=0&&x<=w-1&&y<=h-1;if(in[i])count++;}
+            if(count==0)return 360;if(count==n)return 0;
+            int first=0;while(!in[first])first++;
+            int best=0,run=0;for(int k=0;k<n;k++){int i=(first+k)%n;if(in[i]){best=Math.max(best,run);run=0;}else run++;}
+            return Math.max(best,run)*360./n;
+        }
+        /** Null when enough of the rim is inside the photo and on both sides; otherwise the reason. */
+        public String framingProblem(int w,int h){
+            double v=visibleFraction(w,h),gap=largestGapDegrees(w,h);
+            if(v>=MIN_VISIBLE&&gap<=MAX_GAP_DEGREES)return null;
+            return String.format(java.util.Locale.ROOT,"O círculo sai da foto: %.0f%% da borda visível, maior trecho fora %.0f°. A borda precisa aparecer em pelo menos %.0f%% e em lados opostos (nenhum trecho fora maior que %.0f°).",100*v,gap,100*MIN_VISIBLE,MAX_GAP_DEGREES);
+        }
         public Circle scaled(double sx,double sy){return new Circle(cx*sx,cy*sy,r*Math.sqrt(sx*sy),automatic);}
         public Circle manual(){return new Circle(cx,cy,r,false);}
     }
@@ -74,7 +95,7 @@ public final class ContainerCalibration {
             if(plane==null)throw new IllegalArgumentException("Escolha o plano da medida.");
             if(!Double.isFinite(mm)||mm<=0)throw new IllegalArgumentException("Informe o diâmetro interno real do recipiente em mm.");
             if(ow<=0||oh<=0||w<=0||h<=0)throw new IllegalArgumentException("Dimensões da foto indisponíveis.");
-            if(c.visibleFraction(w,h)<MIN_VISIBLE)throw new IllegalArgumentException("O círculo sai da foto. Enquadre o recipiente inteiro; mais de 15% da borda está fora da imagem.");
+            String framing=c.framingProblem(w,h);if(framing!=null)throw new IllegalArgumentException(framing);
             double px=c.originalDiameter(ow,oh,w,h);
             if(px<40)throw new IllegalArgumentException("Recipiente pequeno demais na foto (menos de 40 px na original).");
             double ovality=detection==null?Double.NaN:detection.rimOvality;

@@ -119,6 +119,8 @@ final class MainFrame extends JFrame {
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> { Thread t = new Thread(r, "PelotaVision-analise"); t.setDaemon(true); return t; });
     private final ExecutorService liveWorker = Executors.newSingleThreadExecutor(r -> { Thread t = new Thread(r, "PelotaVision-ao-vivo"); t.setDaemon(true); return t; });
     private final AtomicBoolean liveBusy = new AtomicBoolean();
+    /** 0.5.4: ROI do ao vivo, em pixels do quadro da câmera; null = quadro inteiro. Vai junto para a foto capturada. */
+    private volatile InterestRegion liveRoi;
     private volatile long lastLive;
     private volatile Mode mode = Mode.IDLE;
     private volatile AtomicBoolean cancel;
@@ -131,6 +133,7 @@ final class MainFrame extends JFrame {
     MainFrame() {
         super(DesktopApp.NAME + " " + DesktopApp.VERSION + " · nucleo " + DesktopApp.CORE_VERSION);
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+        setIconImages(appIcons());
         addWindowListener(new WindowAdapter() { @Override public void windowClosing(WindowEvent e) { shutdown(); } });
         for (int[] r : RESOLUTIONS) resolutionBox.addItem(r[0] + " x " + r[1]);
         resolutionBox.setSelectedIndex(Math.min(RESOLUTIONS.length - 1, prefs.getInt("resolution", 2)));
@@ -263,6 +266,17 @@ final class MainFrame extends JFrame {
         probeCameras();
     }
 
+    /** Ícone da janela e da barra de tarefas (mesmo desenho do .ico do instalador e do Android). */
+    static List<java.awt.Image> appIcons() {
+        List<java.awt.Image> out = new java.util.ArrayList<>();
+        for (int size : new int[]{16, 32, 48, 64, 128, 256}) {
+            try (java.io.InputStream in = MainFrame.class.getResourceAsStream("/icon/pelotavision_" + size + ".png")) {
+                if (in != null) out.add(javax.imageio.ImageIO.read(in));
+            } catch (java.io.IOException ignored) { }
+        }
+        return out;
+    }
+
     RosinRammler.Basis rrBasis() { return RosinRammler.Basis.values()[Math.max(0, rrBasisBox.getSelectedIndex())]; }
 
     /** Curva RR da distribuição exibida (null = sem gráfico). */
@@ -386,6 +400,7 @@ final class MainFrame extends JFrame {
                 CameraSource.Info i = camera.open(index, res[0], res[1], lockFocus.isSelected(), lockExposure.isSelected(), this::onFrame);
                 SwingUtilities.invokeLater(() -> {
                     mode = Mode.LIVE;
+                    liveRoi = null; // outra camera/resolucao: a ROI anterior nao vale mais
                     view.setViewport(null);
                     view.setReference(null);
                     view.setOverlay(null, null);
@@ -411,11 +426,21 @@ final class MainFrame extends JFrame {
                 Mat gray = null;
                 try {
                     gray = Mats.gray(copy);
-                    PelletDetector.Result r = DesktopAnalysis.live(gray, cfg);
+                    InterestRegion roi = liveRoi;
+                    if (roi != null && (roi.right > gray.cols() + 1e-7 || roi.bottom > gray.rows() + 1e-7)) { liveRoi = null; roi = null; } // resolução mudou
+                    PelletDetector.Result r = DesktopAnalysis.live(gray, cfg, roi);
+                    Granulometry.Distribution dist = liveDistribution(r, cfg.scale);
+                    RosinRammler.Fit fit = dist == null ? null : RosinRammler.fit(dist, cfg.rrBasis);
+                    final boolean inRoi = roi != null;
                     SwingUtilities.invokeLater(() -> {
                         if (mode != Mode.LIVE || !liveBox.isSelected()) return;
                         view.setOverlay(r, null);
-                        view.setBanner("AO VIVO: " + r.circles.size() + " propostas (contagem rapida; analise completa na foto)");
+                        // 0.5.4: gráficos acompanham o ao vivo (sem a série de trincadas: a triagem roda na foto).
+                        histogram.display(dist, null, visuals);
+                        rrView.display(fit);
+                        view.setBanner("AO VIVO" + (inRoi ? " · ROI" : "") + ": " + r.circles.size() + " propostas"
+                                + (dist == null || dist.included == 0 ? "" : " · D50 " + HistogramView.fmt(dist.d50) + " " + dist.settings.unit())
+                                + " (contagem rapida; trincas e analise completa na foto)");
                     });
                 } catch (RuntimeException ignored) {
                 } finally {
@@ -427,18 +452,62 @@ final class MainFrame extends JFrame {
         }
     }
 
+    /**
+     * Distribuição da contagem ao vivo: na escala vigente (mesma resolução da câmera) ou em pixels.
+     * Referências de outra imagem/resolução recusam a escala; aí o gráfico fica em px, sem erro.
+     */
+    static Granulometry.Distribution liveDistribution(PelletDetector.Result r, Granulometry.Settings scale) {
+        try {
+            if (scale == null || scale.pixelsOnly()) return ReportTables.pixelHistogram(r);
+            return Granulometry.compute(PhotoSession.items(r), scale, r.width, r.height, r.width, r.height);
+        } catch (RuntimeException e) {
+            try { return ReportTables.pixelHistogram(r); } catch (RuntimeException ignored) { return null; }
+        }
+    }
+
     private void capture() {
         Mat frame = camera.snapshot();
         if (frame == null) { info("Ainda nao ha quadro da camera."); return; }
         CameraSource.Info i = camera.currentInfo();
-        loadPhoto(new PhotoSession(null, Mats.toImage(frame), i == null ? null : i.copy(), frame));
+        int fw = frame.cols(), fh = frame.rows();
+        PhotoSession s = new PhotoSession(null, Mats.toImage(frame), i == null ? null : i.copy(), frame);
         frame.release();
+        // 0.5.4: a ROI do ao vivo vale para a foto capturada (mesmas coordenadas, ou reduzidas se a foto foi amostrada).
+        InterestRegion roi = liveRoi;
+        if (roi != null) {
+            double k = s.width / (double) fw;
+            try { s.setRegion(new InterestRegion(roi.shape, roi.left * k, roi.top * k, roi.right * k, roi.bottom * k)); }
+            catch (IllegalArgumentException ignored) { }
+        }
+        loadPhoto(s);
+    }
+
+    /** ROI sobre o quadro atual da câmera; a contagem e os gráficos ao vivo passam a usar só essa área. */
+    private void editLiveRegion() {
+        Mat frame = camera.snapshot();
+        if (frame == null) { info("Ainda nao ha quadro da camera."); return; }
+        BufferedImage img = Mats.toImage(frame);
+        int w = frame.cols(), h = frame.rows();
+        frame.release();
+        InterestRegion current = liveRoi;
+        if (current != null && (current.right > w + 1e-7 || current.bottom > h + 1e-7)) current = null;
+        RegionEditorDialog d = new RegionEditorDialog(this, img, current);
+        d.setVisible(true);
+        if (!d.applied) return;
+        liveRoi = d.chosen;
+        view.setViewport(liveRoi == null ? null : new AnalysisWindow(w, h, liveRoi));
+        view.setOverlay(null, null);
+        setStatus(liveRoi == null ? "Ao vivo: quadro inteiro." : "Ao vivo: contagem e graficos so na ROI. A foto capturada herda esta ROI.");
+        updateControls();
     }
 
     private void backToLive() {
         if (!camera.isRunning()) { info("Abra a camera primeiro."); return; }
         mode = Mode.LIVE;
-        view.setViewport(null);
+        InterestRegion roi = liveRoi;
+        BufferedImage current = view.image();
+        view.setViewport(roi == null || current == null || roi.right > current.getWidth() + 1e-7 || roi.bottom > current.getHeight() + 1e-7 ? null
+                : new AnalysisWindow(current.getWidth(), current.getHeight(), roi));
         view.setReference(null);
         view.setOverlay(null, null);
         view.setMap(null, visuals);
@@ -689,7 +758,10 @@ final class MainFrame extends JFrame {
     }
     void manualLoad(PhotoSession s) { loadPhoto(s); }
 
-    private void editRegion() { editRegion(session == null ? null : session.region()); }
+    private void editRegion() {
+        if (mode == Mode.LIVE) { editLiveRegion(); return; }
+        editRegion(session == null ? null : session.region());
+    }
 
     private void editRegion(InterestRegion initial) {
         PhotoSession s = session;
@@ -867,7 +939,8 @@ final class MainFrame extends JFrame {
         captureButton.setEnabled(!busy && running && !camera.isReconnecting());
         backLiveButton.setEnabled(!busy && running && mode != Mode.LIVE);
         openButton.setEnabled(!busy);
-        roiButton.setEnabled(!busy && photo);
+        roiButton.setEnabled(!busy && (photo || (mode == Mode.LIVE && running)));
+        roiButton.setText(mode == Mode.LIVE ? (liveRoi == null ? "ROI ao vivo…" : "ROI ao vivo ✓…") : "ROI…");
         analyzeButton.setEnabled(!busy && photo);
         analyzeButton.setText(session != null && session.region() != null ? "Segmentar ROI" : "Segmentar foto");
         detailButton.setEnabled(!busy && photo);
