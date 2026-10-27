@@ -75,7 +75,10 @@ def ort_runner(path):
 
 def convert(onnx_path, work):
     out = work / onnx_path.stem
-    cmd = [sys.executable, '-m', 'onnx2tf', '-i', str(onnx_path), '-o', str(out), '-b', '1', '-n']
+    # O onnx2tf reescreve o ONNX de entrada (simplificação): converte sempre uma CÓPIA, nunca o embarcado.
+    src = work / ('src_' + onnx_path.name)
+    shutil.copyfile(onnx_path, src)
+    cmd = [sys.executable, '-m', 'onnx2tf', '-i', str(src), '-o', str(out), '-b', '1', '-n']
     t0 = time.time()
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
@@ -283,6 +286,11 @@ def main(argv=None):
             entry['error'] = repr(e)[:3000]
             ok = False
         report['models'].append(entry)
+    # Os ONNX embarcados são a referência: a conversão não pode alterá-los.
+    for e in report['models']:
+        if 'onnx_sha256' in e and sha256(assets / e['model']) != e['onnx_sha256']:
+            e['error'] = 'ONNX embarcado foi alterado durante a conversão'
+            ok = False
     (out / 'litert_conversion.json').write_text(json.dumps(report, indent=1, ensure_ascii=False), encoding='utf-8')
     print(json.dumps(report, indent=1, ensure_ascii=False))
     return 0 if ok else 1
