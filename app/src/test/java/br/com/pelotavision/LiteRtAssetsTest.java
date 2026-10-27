@@ -2,6 +2,9 @@ package br.com.pelotavision;
 
 import org.json.JSONObject;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -14,6 +17,7 @@ import static org.junit.Assert.*;
  * 0.16.0: os .tflite embarcados correspondem aos ONNX embarcados (o app recusa conversão desatualizada) e a
  * transposição NHWC → NCHW da saída do LiteRT está correta. A GPU em si só roda no aparelho.
  */
+@RunWith(RobolectricTestRunner.class) @Config(sdk=33,manifest=Config.NONE)
 public class LiteRtAssetsTest {
     private static final File ASSETS = new File("src/main/assets");
 

@@ -89,7 +89,7 @@ public class HardwareAccelerationTest {
                 }
                 assertTrue(name + ": centro/raio relativos " + worst, worst < 1e-3);
                 record(String.format(Locale.ROOT, "StarDist %s: %d pelotas nos dois motores, maior diferenca relativa %.2e | OpenCV DNN %.0f ms, %s %.0f ms (%.2fx)",
-                        name, a.circles.size(), worst, (t1 - t0) / 1e6, desc.contains("CUDA") ? "ORT CUDA" : "ORT CPU", (t2 - t1) / 1e6, (t1 - t0) / (double) Math.max(1, t2 - t1)));
+                        name, a.circles.size(), worst, (t1 - t0) / 1e6, desc.startsWith("ONNX Runtime · CUDA") ? "ORT CUDA" : "ORT CPU", (t2 - t1) / 1e6, (t1 - t0) / (double) Math.max(1, t2 - t1)));
             }
         } finally { ref.close(); ort.close(); }
     }
