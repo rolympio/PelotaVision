@@ -2,7 +2,7 @@
  "source_onnx": "crack_mobilenetv3.onnx",
  "onnx_sha256": "6c77e8f9bef74a2f8ca537c668051eafb811a43d08ec444d32ec2fbda27cf0fc",
  "tflite": "crack_mobilenetv3.tflite",
- "tflite_sha256": "9ec52fab14a518392a57b8890ef85533c5cc01e7f77f2137e7ecd9cfc9c860cd",
+ "tflite_sha256": "5ebc5c71f0eb8f1079b86ea9d1aee7e24a604db83ce267e718a7b60bdeffb2ce",
  "input_shape": [
   1,
   128,
@@ -28,8 +28,8 @@
   "max_abs_diff_p_cracked": 8.64267349243164e-06,
   "mean_abs_diff_p_cracked": 2.1606965950041106e-06,
   "policy_class_changes": 0,
-  "ms_per_crop_onnxruntime_cpu": 0.503,
-  "ms_per_crop_tflite_cpu": 0.517
+  "ms_per_crop_onnxruntime_cpu": 0.556,
+  "ms_per_crop_tflite_cpu": 0.551
  },
  "generated_by": "tools/litert/convert_tflite.py"
 }

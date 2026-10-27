@@ -2,7 +2,7 @@
  "source_onnx": "pellet_stardist_belt.onnx",
  "onnx_sha256": "35e71a9dd717331acad59f34fe47a5846aa7bdf7bd4bbfc074c3dadccaff0acd",
  "tflite": "pellet_stardist_belt.tflite",
- "tflite_sha256": "e54c5988ec76a6bdb4e60d5cc5f1570e98fbe9df75b2a53bdc34baba6dc3a2cc",
+ "tflite_sha256": "99fafef4636305866461cdd521d12c874cd50cda5e4809825f5e15f55b9ca79b",
  "input_shape": [
   1,
   384,
@@ -29,8 +29,8 @@
   "tiles": 12,
   "max_abs_diff_prob": 2.294778823852539e-06,
   "max_abs_diff_dist_px": 0.0001049041748046875,
-  "ms_per_tile_onnxruntime_cpu": 73.43,
-  "ms_per_tile_tflite_cpu": 68.74,
+  "ms_per_tile_onnxruntime_cpu": 67.75,
+  "ms_per_tile_tflite_cpu": 63.28,
   "detection": [
    {
     "image": "verification/belt-0.9.0/input_correia.jpg",
