@@ -227,7 +227,7 @@ public final class MainActivity extends ComponentActivity {
         android.widget.FrameLayout chartSlot=new android.widget.FrameLayout(this);this.chartSlot=chartSlot;chartSlot.setVisibility(View.GONE);root.addView(chartSlot,new LinearLayout.LayoutParams(-1,dp(180)));
         histogram=new HistogramView(this);histogram.setOnClickListener(v->showHistogramOptions());chartSlot.addView(histogram,new android.widget.FrameLayout.LayoutParams(-1,-1));
         rosinRammler=new RosinRammlerView(this);rosinRammler.setTag("rosin_rammler_chart");rosinRammler.setOnClickListener(v->showRosinRammlerOptions());chartSlot.addView(rosinRammler,new android.widget.FrameLayout.LayoutParams(-1,-1));
-        selectChart(getPreferences(MODE_PRIVATE).getBoolean("chart_rr",false));
+        setChartsVisibility(View.GONE);
         LinearLayout tools=row();root.addView(tools);
         profileLabel=text("Pelotas médias",11,Color.rgb(151,174,187));profileLabel.setTag("suggestion_label");profileLabel.setOnClickListener(v->{if(photoDetailReport!=null&&!roiNeedsAnalysis)showDetailSummary();else showSuggestions();});tools.addView(profileLabel,new LinearLayout.LayoutParams(0,-2,1));
         CheckBox numberBox=new CheckBox(this);numberBox.setText("Números");numberBox.setTextSize(11);numberBox.setTextColor(Color.WHITE);numberBox.setChecked(true);
@@ -1135,7 +1135,12 @@ public final class MainActivity extends ComponentActivity {
         histogram.display(distribution,crackHistogram,visuals);
         if(rosinRammler!=null)rosinRammler.display(RosinRammler.fit(distribution,rrBasis()));
     }
-    private void setChartsVisibility(int visibility){if(chartSlot!=null)chartSlot.setVisibility(visibility);if(chartTabs!=null)chartTabs.setVisibility(visibility);}
+    private void setChartsVisibility(int visibility){
+        if(chartSlot!=null)chartSlot.setVisibility(visibility);if(chartTabs!=null)chartTabs.setVisibility(visibility);
+        // Oculto: os dois gráficos ficam GONE (contrato anterior); visível: só a aba escolhida aparece.
+        if(visibility==View.VISIBLE)selectChart(getPreferences(MODE_PRIVATE).getBoolean("chart_rr",false));
+        else{histogram.setVisibility(visibility);if(rosinRammler!=null)rosinRammler.setVisibility(visibility);}
+    }
     private void selectChart(boolean rr){
         getPreferences(MODE_PRIVATE).edit().putBoolean("chart_rr",rr).apply();
         histogram.setVisibility(rr?View.INVISIBLE:View.VISIBLE);rosinRammler.setVisibility(rr?View.VISIBLE:View.INVISIBLE);
