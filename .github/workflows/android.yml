@@ -109,6 +109,8 @@ jobs:
 
       - name: Publicar APK
         if: success()
+        # Cota de artefatos do Actions esgotada nao pode bloquear a Release (o entregavel de fato).
+        continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
           name: PelotaVision-apk-${{ github.sha }}
@@ -119,6 +121,8 @@ jobs:
 
       - name: Publicar relatorios
         if: always()
+        # Cota de artefatos do Actions esgotada nao pode bloquear a Release (o entregavel de fato).
+        continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
           name: relatorios-${{ github.sha }}
