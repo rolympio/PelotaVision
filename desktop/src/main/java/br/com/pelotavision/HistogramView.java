@@ -31,7 +31,12 @@ final class HistogramView extends JPanel {
         super.paintComponent(g0);
         Graphics2D g = (Graphics2D) g0.create();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        paint(g, distribution, cracks, visuals, getWidth(), getHeight());
+        // A moldura com título ocupa as bordas do componente: desenha só na área interna (antes o texto
+        // da 1ª linha ficava por cima do título "Histograma por numero").
+        java.awt.Insets in = getInsets();
+        g.translate(in.left, in.top);
+        g.clipRect(0, 0, getWidth() - in.left - in.right, getHeight() - in.top - in.bottom);
+        paint(g, distribution, cracks, visuals, getWidth() - in.left - in.right, getHeight() - in.top - in.bottom);
         g.dispose();
     }
 
