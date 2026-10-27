@@ -240,8 +240,9 @@ final class DesktopAnalysis {
     }
 
     /** Analise ao vivo, igual ao Android: lado maior 640 px, 8 escalas, sem busca e sem trincas. */
-    static PelletDetector.Result live(Mat gray, Config cfg) {
-        DetectionTuner.Option option = cfg.option();
+    static PelletDetector.Result live(Mat gray, Config cfg) { return liveOption(gray, cfg.option()); }
+
+    static PelletDetector.Result liveOption(Mat gray, DetectionTuner.Option option) {
         PelletDetector.Result seeds = DetectionTuner.seeds(gray, option, 640, 8);
         return new EllipseFitter().refine(gray, seeds, option.belt);
     }
@@ -250,13 +251,16 @@ final class DesktopAnalysis {
      * 0.5.4: contagem ao vivo só na ROI. O recorte é analisado no mesmo lado de trabalho (640 px), então a ROI
      * ganha resolução; pelotas que cruzam o limite ficam fora (como na foto). Coordenadas no quadro inteiro.
      */
-    static PelletDetector.Result live(Mat gray, Config cfg, InterestRegion roi) {
-        if (roi == null) return live(gray, cfg);
+    static PelletDetector.Result live(Mat gray, Config cfg, InterestRegion roi) { return live(gray, cfg.option(), roi); }
+
+    /** 0.5.5: mesma contagem rápida com um ajuste explícito (busca genética com a cena parada). */
+    static PelletDetector.Result live(Mat gray, DetectionTuner.Option option, InterestRegion roi) {
+        if (roi == null) return liveOption(gray, option);
         AnalysisWindow w = new AnalysisWindow(gray.cols(), gray.rows(), roi);
-        if (w.width < 32 || w.height < 32) return live(gray, cfg);
+        if (w.width < 32 || w.height < 32) return liveOption(gray, option);
         Mat crop = w.cropGray(gray);
         try {
-            return w.toGlobal(w.filterLocal(live(crop, cfg)));
+            return w.toGlobal(w.filterLocal(liveOption(crop, option)));
         } finally {
             crop.release();
         }
