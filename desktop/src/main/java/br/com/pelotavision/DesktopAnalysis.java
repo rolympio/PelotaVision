@@ -245,4 +245,20 @@ final class DesktopAnalysis {
         PelletDetector.Result seeds = DetectionTuner.seeds(gray, option, 640, 8);
         return new EllipseFitter().refine(gray, seeds, option.belt);
     }
+
+    /**
+     * 0.5.4: contagem ao vivo só na ROI. O recorte é analisado no mesmo lado de trabalho (640 px), então a ROI
+     * ganha resolução; pelotas que cruzam o limite ficam fora (como na foto). Coordenadas no quadro inteiro.
+     */
+    static PelletDetector.Result live(Mat gray, Config cfg, InterestRegion roi) {
+        if (roi == null) return live(gray, cfg);
+        AnalysisWindow w = new AnalysisWindow(gray.cols(), gray.rows(), roi);
+        if (w.width < 32 || w.height < 32) return live(gray, cfg);
+        Mat crop = w.cropGray(gray);
+        try {
+            return w.toGlobal(w.filterLocal(live(crop, cfg)));
+        } finally {
+            crop.release();
+        }
+    }
 }

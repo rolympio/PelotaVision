@@ -23,7 +23,8 @@ public final class ContainerRimDetector {
     public static ContainerCalibration.Detection detect(byte[] gray,int w,int h){
         if(gray==null||gray.length!=w*h||Math.min(w,h)<64)return null;
         float[] s=blur(blur(toFloat(gray),w,h),w,h);
-        int m=Math.min(w,h),rMin=Math.max(12,(int)(.15*m)),rMax=(int)(.53*m);
+        // 0.15.4: the rim may be larger than the short side (16:9 webcam over a pan): search up to the long side.
+        int m=Math.min(w,h),rMin=Math.max(12,(int)(.15*m)),rMax=(int)(.53*Math.max(w,h));
         int[][] centers=centers(s,w,h,rMin,rMax);
         Ring best=null;
         for(int[] c:centers){Ring ring=ring(s,w,h,c[0],c[1],rMin,rMax);if(ring!=null&&(best==null||ring.score>best.score))best=ring;}
@@ -31,6 +32,8 @@ public final class ContainerRimDetector {
         Fit rim=refineRim(s,w,h,best);
         if(rim==null)return null;
         ContainerCalibration.Circle rimCircle=new ContainerCalibration.Circle(rim.cx,rim.cy,rim.r,true);
+        // Same framing rule as the confirmation: no proposal the user could not commit.
+        if(rimCircle.framingProblem(w,h)!=null)return null;
         Fit level=pelletLevel(s,w,h,rim,best.polarity);
         String note;ContainerCalibration.Circle levelCircle=null;double levelCoverage=Double.NaN;
         if(level==null)note="Nível das pelotas não encontrado: pouco contraste entre parede e material ou pelotas longe da parede.";
@@ -102,10 +105,12 @@ public final class ContainerRimDetector {
         for(int k=0;k<RAYS;k++)rho[k]=edge(s,w,h,cx,cy,k,model[k]*(1-window),model[k]*(1+window),ring.polarity,minStrength);
         coef=harmonics(rho);if(coef==null)return null;
         Fit f=new Fit();f.cx=cx+coef[1];f.cy=cy+coef[2];f.r=coef[0];f.ovality=2*Math.hypot(coef[3],coef[4])/coef[0];
-        int good=0;double tol=Math.max(1,.02*coef[0]);
+        int good=0,visible=0;double tol=Math.max(1,.02*coef[0]);
+        for(int k=0;k<RAYS;k++){double tv=2*Math.PI*k/RAYS;if(inside(f.cx+f.r*Math.cos(tv),f.cy+f.r*Math.sin(tv),w,h))visible++;}
         for(int k=0;k<RAYS;k++){if(!Double.isFinite(rho[k]))continue;double t=2*Math.PI*k/RAYS,m=coef[0]+coef[1]*Math.cos(t)+coef[2]*Math.sin(t)+coef[3]*Math.cos(2*t)+coef[4]*Math.sin(2*t);if(Math.abs(rho[k]-m)<=tol)good++;}
-        f.coverage=good/(double)RAYS;
-        if(f.coverage<.6)return null;
+        // Coverage of the VISIBLE rim (equals the whole rim when the container is fully framed).
+        f.coverage=visible==0?0:Math.min(1,good/(double)visible);
+        if(visible<RAYS*ContainerCalibration.MIN_VISIBLE||f.coverage<.6)return null;
         return f;
     }
     /** Strongest edge of the given polarity along one ray, sub-pixel; NaN if weak or outside. */
@@ -163,11 +168,16 @@ public final class ContainerRimDetector {
                 if(sign*(v-cut)>0){double ahead=sample(s,w,h,rim.cx+(rr-1.5)*c,rim.cy+(rr-1.5)*si);if(sign*(ahead-cut)<=0){prev=v;continue;}
                     double frac=(cut-prev)/(v-prev);double edge=rr+.5*(1-Math.max(0,Math.min(1,frac)));xs[n]=rim.cx+edge*c;ys[n]=rim.cy+edge*si;n++;break;}
                 prev=v;}}
-        if(n<RAYS*.5)return null;
+        int visibleRays=0;for(int k=0;k<RAYS;k++){double t=2*Math.PI*k/RAYS;if(inside(rim.cx+rim.r*.9*Math.cos(t),rim.cy+rim.r*.9*Math.sin(t),w,h))visibleRays++;}
+        if(n<visibleRays*.5)return null;
         Fit f=robustCircle(xs,ys,n,true);
         if(f==null)return null;
         double ratio=f.r/rim.r,offset=Math.hypot(f.cx-rim.cx,f.cy-rim.cy)/rim.r;
-        if(ratio<.55||ratio>1.0||offset>.12||f.coverage<.75)return null;
+        // Sector coverage relative to the sectors that are inside the photo at the pellet level.
+        int visibleSectors=0;for(int q=0;q<12;q++){double t=2*Math.PI*(q+.5)/12;if(inside(f.cx+f.r*Math.cos(t),f.cy+f.r*Math.sin(t),w,h))visibleSectors++;}
+        double sectorCoverage=visibleSectors==0?0:f.coverage*12/visibleSectors;
+        if(ratio<.55||ratio>1.0||offset>.12||sectorCoverage<.75)return null;
+        f.coverage=Math.min(1,sectorCoverage);
         return f;
     }
 

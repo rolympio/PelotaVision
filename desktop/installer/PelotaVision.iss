@@ -32,6 +32,7 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\PelotaVision.exe
+SetupIconFile=PelotaVision.ico
 UninstallDisplayName=PelotaVision {#AppVersion}
 CloseApplications=yes
 SetupLogging=yes

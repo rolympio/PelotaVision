@@ -128,6 +128,7 @@ jobs:
           set +e
           JP_OUT=$("$JH/bin/jpackage" --type app-image --name PelotaVision --app-version "$VN" \
             --input "$IN" --main-jar pelotavision-desktop.jar --main-class br.com.pelotavision.DesktopApp \
+            --icon desktop/installer/PelotaVision.ico \
             --java-options "-Xmx3g" --vendor "PelotaVision" --description "PelotaVision Windows $VN (nucleo Android $CORE)" \
             --dest pkg/dist 2>&1); JP_RC=$?
           set -e

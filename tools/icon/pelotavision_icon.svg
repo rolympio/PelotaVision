@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="512" height="512">
+  <rect width="108" height="108" rx="22" fill="#101A23"/>
+  <path d="M16,32V16h16M76,16h16v16M92,76v16h-16M32,92h-16v-16" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="35" cy="36" r="9.5" fill="#483C35"/>
+  <circle cx="34.24" cy="35.24" r="8.55" fill="#5E4F46"/>
+  <circle cx="31.39" cy="32.2" r="2.66" fill="#7C6C62"/>
+  <circle cx="54" cy="34" r="10" fill="#433831"/>
+  <circle cx="53.2" cy="33.2" r="9" fill="#564840"/>
+  <circle cx="50.2" cy="30" r="2.8" fill="#74665C"/>
+  <circle cx="73" cy="37" r="9" fill="#463A33"/>
+  <circle cx="72.28" cy="36.28" r="8.1" fill="#5A4C43"/>
+  <circle cx="69.58" cy="33.4" r="2.52" fill="#786A60"/>
+  <circle cx="28" cy="56" r="8.5" fill="#413730"/>
+  <circle cx="27.32" cy="55.32" r="7.65" fill="#54473F"/>
+  <circle cx="24.77" cy="52.6" r="2.38" fill="#726459"/>
+  <circle cx="45" cy="54" r="10.5" fill="#473B34"/>
+  <circle cx="44.16" cy="53.16" r="9.45" fill="#5C4E45"/>
+  <circle cx="41.01" cy="49.8" r="2.94" fill="#7A6B61"/>
+  <circle cx="65" cy="56" r="9" fill="#40362F"/>
+  <circle cx="64.28" cy="55.28" r="8.1" fill="#52453D"/>
+  <circle cx="61.58" cy="52.4" r="2.52" fill="#706258"/>
+  <circle cx="82" cy="57" r="8" fill="#463A33"/>
+  <circle cx="81.36" cy="56.36" r="7.2" fill="#5A4C43"/>
+  <circle cx="78.96" cy="53.8" r="2.24" fill="#786A60"/>
+  <circle cx="33" cy="76" r="10" fill="#433831"/>
+  <circle cx="32.2" cy="75.2" r="9" fill="#564840"/>
+  <circle cx="29.2" cy="72" r="2.8" fill="#74665C"/>
+  <circle cx="51" cy="75" r="9" fill="#483C35"/>
+  <circle cx="50.28" cy="74.28" r="8.1" fill="#5E4F46"/>
+  <circle cx="47.58" cy="71.4" r="2.52" fill="#7C6C62"/>
+  <circle cx="70" cy="73" r="12.5" fill="#6E5C51"/>
+  <circle cx="69" cy="72" r="11.25" fill="#8A7568"/>
+  <circle cx="65.25" cy="68" r="3.5" fill="#AE9A8F"/>
+  <polyline points="65,68 69,72 67,76 73,80" stroke="#3A2E27" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="70" cy="73" rx="16.5" ry="15.5" stroke="#52D8BE" stroke-width="3.2" fill="none"/>
+</svg>

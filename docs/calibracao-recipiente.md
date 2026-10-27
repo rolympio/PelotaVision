@@ -6,7 +6,7 @@ Disponível no Android (Escala / mm → **Calibrar pelo diâmetro interno do rec
 
 `ContainerRimDetector` (núcleo, Java puro, igual nas duas plataformas) roda numa cópia em cinza com lado maior de 640 px:
 
-1. Votação de Hough pelo gradiente para centros de círculos grandes (raio de 15% a 53% do menor lado); as pelotas são pequenas demais para vencer.
+1. Votação de Hough pelo gradiente para centros de círculos grandes (raio de 15% do menor lado até 53% do maior lado; desde a 0.15.4 o recipiente pode ser maior que a altura do quadro); as pelotas são pequenas demais para vencer.
 2. Perfil radial em 360 raios: o raio cuja borda persiste em quase toda a circunferência (percentil 30 da derivada radial, janela de ±9%). Num aro dobrado, escolhe a borda interna.
 3. Borda subpixel por raio e ajuste robusto `r(θ) = r0 + a1 cos θ + b1 sin θ + a2 cos 2θ + b2 sin 2θ`. Os termos de 1ª ordem corrigem o centro; os de 2ª ordem medem a **ovalização** `(rmax − rmin)/r`.
 4. **Nível das pelotas:** em cada raio, a primeira transição parede → material indo para dentro; círculo ajustado à envoltória externa (pontos em vãos entre pelotas são descartados).
@@ -36,7 +36,12 @@ Mesmo no nível das pelotas, uma camada em monte deixa as pelotas do centro mais
 ## Bloqueios e rastreabilidade
 
 - Ovalização da borda acima de 6% bloqueia (foto oblíqua; não há correção de perspectiva). Acima de ~15% a detecção não converge e o círculo precisa ser posto à mão.
-- Mais de 15% da circunferência fora da foto bloqueia.
+- Enquadramento (0.15.4):
+  - a borda precisa estar ao menos 55% dentro da foto;
+  - nenhum trecho contínuo fora pode passar de 100°.
+  - Uma panela maior que a altura de uma webcam 16:9, cortada em cima e embaixo, é aceita: os arcos esquerdo e direito cercam o centro e o diâmetro é medido, não extrapolado.
+  - Vista de um lado só continua bloqueada.
+- Com a borda cortada, a ovalização vertical é menos observável (só pelos arcos laterais); confira o resultado contra uma pelota ou esfera de diâmetro conhecido.
 - A referência é invalidada se a imagem analisada mudar de dimensão.
 - JSON: `physical_scale.source = container_inner_diameter_user_confirmed` e `physical_scale.container_reference` (plano, diâmetro real, px na original, ovalização, razão borda/nível, centro e raio). O PDF mostra a linha "Recipiente".
 - Após aplicar, o app propõe uma ROI circular no interior da borda (só vale após Aplicar no editor de ROI).

@@ -59,8 +59,36 @@ public class ContainerCalibrationTest {
         byte[] flat = new byte[480 * 400];
         Arrays.fill(flat, (byte) 110);
         assertNull(ContainerRimDetector.detect(flat, 480, 400));
-        // Recipiente grande demais: a borda sai da foto pela esquerda e pela direita.
-        assertNull(ContainerRimDetector.detect(synthetic(300, 400, 150, 200, 190, 160, 1, 1, 3), 300, 400));
+        // Visto de um lado só: o centro fica perto da borda da foto e a lacuna (~150°) impede medir o diâmetro.
+        assertNull(ContainerRimDetector.detect(synthetic(400, 400, 40, 200, 150, 125, 1, 1, 3), 400, 400));
+    }
+
+    /**
+     * 0.15.4: recipiente maior que a foto, cortado em lados OPOSTOS (webcam 16:9 sobre a panela). Os dois arcos
+     * visíveis cercam o centro, então o diâmetro é medido (não extrapolado) e a proposta é aceita.
+     */
+    @Test public void containerCutOnOppositeSidesIsDetected() {
+        ContainerCalibration.Detection d = ContainerRimDetector.detect(synthetic(300, 400, 150, 200, 190, 160, 1, 1, 3), 300, 400);
+        assertNotNull(d);
+        assertEquals(190, d.rim.r, 190 * .02);
+        assertEquals(150, d.rim.cx, 3);
+        assertTrue(d.rim.visibleFraction(300, 400) < .85);
+        assertNull(d.rim.framingProblem(300, 400));
+        ContainerCalibration.select(d.rim, ContainerCalibration.Plane.RIM, 300, d, 300, 400, 300, 400); // confirmável
+        assertTrue(d.rim.largestGapDegrees(300, 400) > 60 && d.rim.largestGapDegrees(300, 400) <= ContainerCalibration.MAX_GAP_DEGREES);
+    }
+
+    @Test public void framingRuleMeasuresLargestGap() {
+        assertEquals(0, new ContainerCalibration.Circle(190, 150, 100, false).largestGapDegrees(380, 300), 0);
+        // Cortado só à esquerda: uma lacuna grande, bloqueia.
+        ContainerCalibration.Circle left = new ContainerCalibration.Circle(40, 150, 140, false);
+        assertTrue(left.largestGapDegrees(380, 300) > ContainerCalibration.MAX_GAP_DEGREES);
+        assertNotNull(left.framingProblem(380, 300));
+        // Cortado em cima e embaixo (como a webcam 1920x1080 sobre a panela): duas lacunas de ~60°, aceita.
+        ContainerCalibration.Circle pan = new ContainerCalibration.Circle(879, 547, 591, false);
+        assertEquals(.73, pan.visibleFraction(1920, 1080), .03);
+        assertTrue(pan.largestGapDegrees(1920, 1080) < 70);
+        assertNull(pan.framingProblem(1920, 1080));
     }
 
     @Test public void scaleUsesOriginalPixelsAndPlane() {
@@ -121,5 +149,20 @@ public class ContainerCalibrationTest {
         assertNotNull(d.pelletLevel);
         double ratio = d.pelletLevel.r / d.rim.r;
         assertTrue("razao nivel/borda " + ratio, ratio > .80 && ratio < .88);
+    }
+
+    /** Foto real da webcam (27/10/2026, 1920x1080): panela inox maior que a altura do quadro, borda cortada em cima e embaixo. */
+    @Test public void realWebcamPanCutTopAndBottom() throws Exception {
+        String dir = System.getProperty("pelotavision.validationDir", "../verification");
+        BufferedImage img = javax.imageio.ImageIO.read(new File(dir, "container/panela_webcam_1920x1080.png"));
+        assertNotNull(img);
+        ContainerCalibration.Detection d = ContainerFeature.suggest(img);
+        assertNotNull("borda não detectada", d);
+        // Borda interna: Ø ~1182 px (arcos esquerdo e direito visíveis), centro ~ (879, 547).
+        assertEquals(1182, 2 * d.rim.r, 1182 * .015);
+        assertEquals(879, d.rim.cx, 12);
+        assertTrue(d.rim.visibleFraction(1920, 1080) < .85);
+        assertNull(d.rim.framingProblem(1920, 1080));
+        assertTrue("ovalizacao " + d.rimOvality, d.rimOvality < ContainerCalibration.MAX_OVALITY);
     }
 }
