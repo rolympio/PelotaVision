@@ -239,8 +239,14 @@ def main(argv=None):
     p.add_argument('--out', type=Path, required=True)
     p.add_argument('--skip-dev', action='store_true', help='só o ajuste final (teste rápido)')
     p.add_argument('--epochs', type=int, default=EPOCHS)
+    p.add_argument('--variants', default=','.join(VARIANTS), help='subconjunto de ' + ','.join(VARIANTS))
+    p.add_argument('--lobo-prefix', default='', help='deixa de fora UM grupo dev com este prefixo por vez (os demais dev sempre treinam)')
+    p.add_argument('--lobo-limit', type=int, default=0, help='teste rápido: só os N primeiros grupos do LOBO')
+    p.add_argument('--model-id', default='mobilenetv3_small_cracks_20261025_v1')
     a = p.parse_args(argv)
     EPOCHS = a.epochs
+    variants = {k: VARIANTS[k] for k in a.variants.split(',') if k in VARIANTS}
+    assert variants, 'nenhuma variante válida'
     import torch
     torch.set_num_threads(max(1, os.cpu_count() or 1))
     random.seed(SEED)
@@ -273,8 +279,32 @@ def main(argv=None):
                 rf[(r['model'], r['split'], r['group_id'], r['instance_id'])] = float(r['p_cracked'])
 
     results, preds = {}, []
-    for name, synth in VARIANTS.items():
+    for name, synth in variants.items():
         res = {'uses_synthetic_training': synth}
+        if a.lobo_prefix:
+            # 2027-10-27: rajadas das fotos de bancada; a pelota física inteira (todas as escalas) sai junta.
+            lg = sorted({r['group_id'] for r in dev if r['group_id'].startswith(a.lobo_prefix)})
+            if a.lobo_limit:
+                lg = lg[:a.lobo_limit]
+            idx = [i for i, r in enumerate(dev) if r['group_id'] in set(lg)]
+            oof = {}
+            for gi, g in enumerate(lg):
+                tr = [r for r in dev if r['group_id'] != g] + (extra if synth else [])
+                te = [i for i in idx if dev[i]['group_id'] == g]
+                m = fit(torch, tensors(tr, cache), lab(tr), wts(tr), SEED + 500 + gi, log, f'{name} lobo-{g}')
+                for i, v in zip(te, predict(torch, m, tensors([dev[i] for i in te], cache))):
+                    oof[i] = float(v)
+            bl = {}
+            for sc, sel in (('original', [i for i in idx if not dev[i]['source_id'].endswith('_x03')]),
+                            ('reduzida_x0.3', [i for i in idx if dev[i]['source_id'].endswith('_x03')]), ('ambas', idx)):
+                yy = lab([dev[i] for i in sel])
+                ss = np.array([oof[i] for i in sel])
+                bl[sc] = {'n': len(sel), 'cracked': int(yy.sum()), 'groups': len({dev[i]['group_id'] for i in sel}),
+                          'auc': auc(yy, ss), **binary(yy, ss), 'app_policy_0.4_0.6': app_policy(yy, ss)}
+            res['bench_lobo'] = bl
+            preds += [(name, 'bench_lobo', dev[i], v) for i, v in oof.items()]
+            log(f'{name}: bancada LOBO AUC original {bl["original"]["auc"]:.3f} reduzida {bl["reduzida_x0.3"]["auc"]:.3f} '
+                f'{bl["ambas"]["confusion_[[TN,FP],[FN,TP]]"]}')
         if not a.skip_dev:
             oof = np.zeros(len(dev))
             for gi, g in enumerate(groups):
@@ -321,7 +351,7 @@ def main(argv=None):
     # Paridade e latência: onnxruntime e OpenCV DNN (mesmo motor do app), e referência para o teste Java.
     ref = []
     timing = {}
-    for name in VARIANTS:
+    for name in variants:
         onnx = a.out / f'{name}.onnx'
         Xh = tensors(hold, cache)
         entry = {}
@@ -355,7 +385,7 @@ def main(argv=None):
     photo = cv2.imread(spec['image'], cv2.IMREAD_GRAYSCALE)
     circles = json.loads(Path(spec['circles']).read_text(encoding='utf-8'))
     hold_ids = [r['instance_id'] for r in hold][:12]
-    final = [v for v in VARIANTS if v.endswith('synthetic')][0]
+    final = [v for v in variants if v.endswith('synthetic')][0] if any(v.endswith('synthetic') for v in variants) else list(variants)[0]
     net = cv2.dnn.readNetFromONNX(str(a.out / f'{final}.onnx'))
     items = circles.get('circles') or circles.get('detections') or circles
     by_id = {}
@@ -386,12 +416,16 @@ def main(argv=None):
     }
     (a.out / 'metrics.json').write_text(json.dumps(summary, indent=1, ensure_ascii=False, allow_nan=True), encoding='utf-8')
     fr = results[final]
-    meta = {'id': 'mobilenetv3_small_cracks_20261025_v1', 'file': 'crack_mobilenetv3.onnx', 'sha256': fr['onnx_sha256'],
+    nreal = sum(1 for r in dev if r['label'] == 'cracked')
+    meta = {'id': a.model_id, 'file': 'crack_mobilenetv3.onnx', 'sha256': fr['onnx_sha256'],
             'variant': final, 'input_size': SIZE, 'crop_half_radius': HALF, 'mask_radius': MASK, 'fill': FILL,
             'output': 'prob[0,1] = p_cracked (softmax, NÃO calibrado)',
             'status': 'experimental_not_validated',
-            'note': 'Treinado com 29 trincas reais provisórias + sintéticos; testado em 1 foto (7 trincas). '
-                    'Não substitui o Random Forest; só para comparação.',
+            'note': (f'Treinado com {nreal} recortes reais de trinca (inclui fotos de bancada de 26/10/2026 em duas escalas) + sintéticos; '
+                     'holdout de 1 foto (7 trincas) e validação por rajada nas fotos de bancada. Escore não calibrado.'
+                     if a.lobo_prefix else 'Treinado com 29 trincas reais provisórias + sintéticos; testado em 1 foto (7 trincas). '
+                     'Não substitui o Random Forest; só para comparação.'),
+            'bench_lobo': fr.get('bench_lobo'),
             'holdout_auc': fr['holdout']['auc'], 'holdout_auc_ci95': fr['holdout']['auc_ci95'],
             'parity_reference': ref}
     (a.out / 'crack_mobilenetv3.json').write_text(json.dumps(meta, indent=1, ensure_ascii=False, allow_nan=True), encoding='utf-8')

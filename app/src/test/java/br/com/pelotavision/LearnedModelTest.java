@@ -7,7 +7,7 @@ public class LearnedModelTest {
  private File dir(){return new File(System.getProperty("pelotavision.validationDir"),"ml-0.5.0");}
  @Test public void packagedForestMatchesAllTrainingReferenceVectors()throws Exception{
   CrackModel model;try(InputStream in=RuntimeEnvironment.getApplication().getAssets().open("crack_forest.pvrf")){model=new CrackModel(in);}
-  int n=0;for(String line:Files.readAllLines(new File(dir(),"reference_vectors.csv").toPath())){String[] a=line.split(",");float[] f=new float[72];for(int j=0;j<72;j++)f[j]=Float.parseFloat(a[j]);assertEquals(Double.parseDouble(a[72]),model.score(f),1e-12);n++;}assertEquals(209,n);
+  int n=0;for(String line:Files.readAllLines(new File(new File(System.getProperty("pelotavision.validationDir"),"ml-0.15.5"),"reference_vectors.csv").toPath())){String[] a=line.split(",");float[] f=new float[72];for(int j=0;j<72;j++)f[j]=Float.parseFloat(a[j]);assertEquals(Double.parseDouble(a[72]),model.score(f),1e-12);n++;}assertEquals(209,n);
   try{new CrackModel(new ByteArrayInputStream(new byte[16]));fail("Corrupt model accepted");}catch(IOException expected){}
  }
  @Test public void learnedScoreAndDetectorMethodSurviveRoiReviewAndExport()throws Exception{

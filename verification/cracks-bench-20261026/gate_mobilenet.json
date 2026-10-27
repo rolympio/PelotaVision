@@ -1,0 +1,17 @@
+{
+ "fixado_em": "2026-10-27, antes do treino no CI",
+ "referencia_mnv3_embarcada": {
+  "id": "mobilenetv3_small_cracks_20261025_v1",
+  "bancada_externo_auc_ambas": 0.9713669950738916,
+  "bancada_externo_recall_ambas": 0.7857142857142857,
+  "holdout_antigo_auc": 0.96,
+  "holdout_antigo_fn_limiar_0.5": 0
+ },
+ "criterio_para_substituir_o_asset": {
+  "bancada_lobo_auc_ambas_min": 0.9514,
+  "bancada_lobo_recall_ambas_min": 0.7857142857142857,
+  "holdout_antigo_auc_min": 0.94,
+  "holdout_antigo_fn_max": 1
+ },
+ "nota": "bancada: modelo embarcado em teste externo; retreinado em LOBO (rajada inteira fora). Critério conservador: só troca se não piorar na bancada e no holdout antigo."
+}

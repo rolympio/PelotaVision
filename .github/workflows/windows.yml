@@ -183,6 +183,8 @@ jobs:
           echo "::notice title=Instalador testado::instalou sem administrador, autoteste exit=0, desinstalou"
 
       - name: Publicar artefato
+        # Cota de artefatos do Actions esgotada nao pode bloquear a Release (o entregavel de fato).
+        continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
           name: PelotaVision-Windows-${{ github.sha }}

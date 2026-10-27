@@ -46,6 +46,10 @@ Análise de imagens de pelotas de minério de ferro: localização e ajuste elí
 
 Releases: `v0.14.0-build34` (APK) e `windows-v0.5.0-build33` (pacote portátil).
 
+## Novo na 0.15.5 (Android) / Windows 0.5.5
+- **Trincas:** a MobileNetV3 passa a ser o padrão; o Random Forest fica como reserva, retreinado com as fotos de bancada de 26/10. Nas 57 fotos de pelota isolada (21 rajadas) nunca vistas, a MobileNetV3 embarcada teve AUC 0,97–0,98 contra 0,74–0,79 do RF. No holdout antigo, 0,96 contra 0,49. Detalhes em `verification/cracks-bench-20261026/`.
+- **Windows · ao vivo estável:** com a cena parada, busca genética do ajuste e consenso temporal (menos fantasmas, contagem e D50 com ±). Mapa granulométrico também no ao vivo. Ver `docs/ao-vivo-estavel.md`.
+
 ## Novo na 0.15.4 (Android) / Windows 0.5.4
 - **Calibração pelo recipiente:** o detector aceita recipiente maior que o quadro (webcam 16:9 sobre a panela, borda cortada em cima e embaixo) quando a borda aparece em lados opostos (≥ 55% visível, nenhum trecho fora > 100°).
 - **Windows · ROI ao vivo:** contagem rápida só na ROI escolhida sobre o quadro da câmera; histograma e Rosin–Rammler atualizam a cada contagem; a foto capturada herda a ROI.

@@ -129,6 +129,8 @@ def from_instances(inst_path, meta_path, out_dir):
         stem = Path(it['image']).stem
         group = meta.get('group_by', 'image')
         group_id = f'{meta["source_id"]}:{meta.get("campaign", stem) if group == "campaign" else stem}'
+        if it.get('group_id'):  # pelota física/rajada definida na importação (vale para todas as escalas)
+            group_id = it['group_id']
         rows.append(_row(out_dir, Path('crops') / meta['source_id'] / stem / f'{stem}_{it["instance_id"]}.png', crop, cx, cy, it['r'],
                          label=label, group_id=group_id, material_type=meta['material_type'], origin=meta['origin'],
                          source_id=meta['source_id'], source_image=it['image'], source_sha256=src_sha,

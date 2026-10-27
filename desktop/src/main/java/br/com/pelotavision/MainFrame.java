@@ -75,6 +75,10 @@ final class MainFrame extends JFrame {
     private final JCheckBox lockFocus = new JCheckBox("Travar foco");
     private final JCheckBox lockExposure = new JCheckBox("Travar exposicao");
     private final JCheckBox liveBox = new JCheckBox("Contagem ao vivo", true);
+    // 0.5.5: cena parada -> busca genética do ajuste + consenso temporal (menos fantasmas, medida estável).
+    private final JCheckBox liveTuneBox = new JCheckBox("Otimizar quando parado", true);
+    private final LiveStabilizer stabilizer = new LiveStabilizer();
+    private volatile long lastThumb;
     private final JButton captureButton = new JButton("Capturar foto");
     private final JButton openButton = new JButton("Abrir imagem…");
     private final JButton backLiveButton = new JButton("Voltar ao vivo");
@@ -155,7 +159,7 @@ final class MainFrame extends JFrame {
 
         JPanel top = new JPanel();
         top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
-        top.add(row(new JLabel("Camera:"), cameraBox, resolutionBox, lockFocus, lockExposure, cameraButton, driverButton, liveBox,
+        top.add(row(new JLabel("Camera:"), cameraBox, resolutionBox, lockFocus, lockExposure, cameraButton, driverButton, liveBox, liveTuneBox,
                 Box.createHorizontalStrut(12), captureButton, openButton, backLiveButton));
         top.add(row(new JLabel("Cena:"), sceneBox, new JLabel("Perfil:"), profileBox, new JLabel("Metodo:"), methodBox, new JLabel("Sensibilidade %:"), sensitivity, autoSuggest,
                 numbers, Box.createHorizontalStrut(12), roiButton, analyzeButton, detailButton, lightButton, cancelButton, saveButton));
@@ -163,7 +167,7 @@ final class MainFrame extends JFrame {
         top.add(extraToolbar);
         segExtra.setEnabled(false);
         segExtra.setToolTipText("<html>YOLO11-seg: sem mascaras de instancia com rotulo humano; codigo e pesos Ultralytics sao AGPL-3.0 (revisao de licenca antes de distribuir).<br>Hibrida: sem regra de fusao validada.</html>");
-        crackBox.setToolTipText("<html>Random Forest e o padrao. MobileNetV3 e experimental: poucas trincas reais (rotulos provisorios), testada em uma foto.<br>Recortes dos pixels originais (nunca da super-resolucao). Escore nao calibrado. U-Net de trincas: indisponivel (sem mascaras reais).</html>");
+        crackBox.setToolTipText("<html>MobileNetV3 e o padrao: acertou mais que o Random Forest em dois testes independentes (foto de 7 trincas; 57 fotos de bancada nunca vistas).<br>RF fica como reserva. Ainda sem validacao em producao.<br>Recortes dos pixels originais (nunca da super-resolucao). Escore nao calibrado. U-Net de trincas: indisponivel (sem mascaras reais).</html>");
         opacitySlider.setPreferredSize(new Dimension(110, 24));
         opacitySlider.setToolTipText("Opacidade da cor no mapa (0-90%; padrao 55%)");
         top.add(row(new JLabel("Modelos de analise ·"), new JLabel("Segmentacao neural extra:"), segExtra, new JLabel("Trincas:"), crackBox,
@@ -251,7 +255,7 @@ final class MainFrame extends JFrame {
         mapMax.addActionListener(e -> applyVisuals());
         chartButton.addActionListener(e -> chartOptions());
         crackBox.addActionListener(e -> {
-            prefs.put("crackChoice", CrackClassifierChoice.values()[crackBox.getSelectedIndex()].name());
+            prefs.put("crackChoice2", CrackClassifierChoice.values()[crackBox.getSelectedIndex()].name());
             // Mesmos contornos, so a triagem de trincas e refeita com o classificador escolhido.
             if (mode == Mode.PHOTO && session != null && session.analyzed() && !session.needsAnalysis() && session.output() != null) analyze(false, session.output().applied);
         });
@@ -259,6 +263,10 @@ final class MainFrame extends JFrame {
         applyScaleButton.addActionListener(e -> applyScaleFromFields());
         clearScaleButton.addActionListener(e -> { pxPerMm.setText(""); setScale(null); });
         liveBox.addActionListener(e -> { if (!liveBox.isSelected() && mode == Mode.LIVE) { view.setOverlay(null, null); view.setBanner(null); } });
+        liveTuneBox.setToolTipText("<html>Quando nada se mexe por ~1 s: busca genetica do ajuste (metodo, perfil, sensibilidade) em 3 quadros parados,<br>"
+                + "pontuando qualidade e concordancia entre quadros. Depois so mostra pelotas confirmadas em varios quadros.<br>"
+                + "Qualquer movimento cancela e recomeca. A aptidao e heuristica, nao acuracia.</html>");
+        liveTuneBox.addActionListener(e -> { stabilizer.enabled = liveTuneBox.isSelected(); stabilizer.restart(); });
         view.setClickListener(this::onImageClick);
         installExtensions();
         updateControls();
@@ -315,7 +323,8 @@ final class MainFrame extends JFrame {
         opacitySlider.setValue((int) Math.round(visuals.mapOpacity * 100));
         mapLabels.setSelected(visuals.mapLabels); mapFixed.setSelected(visuals.mapFixed);
         mapMin.setText(HistogramView.fmt2(visuals.mapFixedMin)); mapMax.setText(HistogramView.fmt2(visuals.mapFixedMax));
-        crackBox.setSelectedIndex(CrackClassifierChoice.parse(prefs.get("crackChoice", "RANDOM_FOREST")).ordinal());
+        // 0.5.5: chave nova para o novo padrao (MobileNetV3) valer uma vez; a antiga era gravada sempre.
+        crackBox.setSelectedIndex(CrackClassifierChoice.parse(prefs.get("crackChoice2", CrackClassifierChoice.DEFAULT.name())).ordinal());
         viewBox.setSelectedIndex(1);
     }
 
@@ -400,6 +409,8 @@ final class MainFrame extends JFrame {
                 CameraSource.Info i = camera.open(index, res[0], res[1], lockFocus.isSelected(), lockExposure.isSelected(), this::onFrame);
                 SwingUtilities.invokeLater(() -> {
                     mode = Mode.LIVE;
+                    stabilizer.resetAll();
+                    view.setViewMode(viewBox.getSelectedIndex());
                     liveRoi = null; // outra camera/resolucao: a ROI anterior nao vale mais
                     view.setViewport(null);
                     view.setReference(null);
@@ -418,7 +429,16 @@ final class MainFrame extends JFrame {
         BufferedImage img = Mats.toImage(frame);
         SwingUtilities.invokeLater(() -> { if (mode == Mode.LIVE) view.setImage(img, true); });
         long now = System.currentTimeMillis();
-        if (liveBox.isSelected() && now - lastLive > 300 && liveBusy.compareAndSet(false, true)) {
+        if (now - lastThumb >= 100) {
+            lastThumb = now;
+            try { stabilizer.onThumb(LiveStabilizer.thumbnail(frame), now); } catch (RuntimeException ignored) { }
+        }
+        if (!liveBox.isSelected()) return;
+        if (stabilizer.shouldTune(liveTuneBox.isSelected()) && liveBusy.compareAndSet(false, true)) {
+            startLiveTuning(frame.clone());
+            return;
+        }
+        if (now - lastLive > 300 && liveBusy.compareAndSet(false, true)) {
             lastLive = now;
             Mat copy = frame.clone();
             DesktopAnalysis.Config cfg = config();
@@ -426,22 +446,10 @@ final class MainFrame extends JFrame {
                 Mat gray = null;
                 try {
                     gray = Mats.gray(copy);
-                    InterestRegion roi = liveRoi;
-                    if (roi != null && (roi.right > gray.cols() + 1e-7 || roi.bottom > gray.rows() + 1e-7)) { liveRoi = null; roi = null; } // resolução mudou
-                    PelletDetector.Result r = DesktopAnalysis.live(gray, cfg, roi);
-                    Granulometry.Distribution dist = liveDistribution(r, cfg.scale);
-                    RosinRammler.Fit fit = dist == null ? null : RosinRammler.fit(dist, cfg.rrBasis);
-                    final boolean inRoi = roi != null;
-                    SwingUtilities.invokeLater(() -> {
-                        if (mode != Mode.LIVE || !liveBox.isSelected()) return;
-                        view.setOverlay(r, null);
-                        // 0.5.4: gráficos acompanham o ao vivo (sem a série de trincadas: a triagem roda na foto).
-                        histogram.display(dist, null, visuals);
-                        rrView.display(fit);
-                        view.setBanner("AO VIVO" + (inRoi ? " · ROI" : "") + ": " + r.circles.size() + " propostas"
-                                + (dist == null || dist.included == 0 ? "" : " · D50 " + HistogramView.fmt(dist.d50) + " " + dist.settings.unit())
-                                + " (contagem rapida; trincas e analise completa na foto)");
-                    });
+                    InterestRegion roi = liveRoi(gray.cols(), gray.rows());
+                    PelletDetector.Result raw = DesktopAnalysis.live(gray, cfg, roi);
+                    PelletDetector.Result shown = stabilizer.consolidate(raw);
+                    showLive(raw, shown, cfg, roi != null);
                 } catch (RuntimeException ignored) {
                 } finally {
                     copy.release();
@@ -450,6 +458,81 @@ final class MainFrame extends JFrame {
                 }
             });
         }
+    }
+
+    /** ROI do ao vivo válida para este quadro (a resolução pode ter mudado). */
+    private InterestRegion liveRoi(int w, int h) {
+        InterestRegion roi = liveRoi;
+        if (roi != null && (roi.right > w + 1e-7 || roi.bottom > h + 1e-7)) { liveRoi = null; roi = null; }
+        return roi;
+    }
+
+    /** Escala válida para o quadro da câmera (referência de outra imagem/resolução: null, gráfico em px). */
+    static Granulometry.Settings liveScale(Granulometry.Settings scale, int w, int h) {
+        if (scale == null || scale.pixelsOnly()) return null;
+        try { scale.analyzedPixelsPerMm(w, h, w, h); return scale; } catch (RuntimeException e) { return null; }
+    }
+
+    /** Atualiza marcações, mapa, gráficos e faixa com o resultado exibido (estável ou do quadro). */
+    private void showLive(PelletDetector.Result raw, PelletDetector.Result shown, DesktopAnalysis.Config cfg, boolean inRoi) {
+        Granulometry.Distribution dist = liveDistribution(shown, cfg.scale);
+        RosinRammler.Fit fit = dist == null ? null : RosinRammler.fit(dist, cfg.rrBasis);
+        if (dist != null && dist.included > 0) stabilizer.recordD50(dist.d50);
+        String banner = stabilizer.banner(raw, shown, dist, inRoi);
+        SwingUtilities.invokeLater(() -> {
+            if (mode != Mode.LIVE || !liveBox.isSelected()) return;
+            view.setOverlay(shown, null);
+            // 0.5.5: o mapa granulométrico também acompanha o ao vivo (antes o ao vivo forçava as marcações).
+            view.setMap(dist, visuals);
+            histogram.display(dist, null, visuals);
+            rrView.display(fit);
+            view.setBanner(banner);
+        });
+    }
+
+    /** Coleta quadros parados e roda a busca genética no worker do ao vivo; aplica o melhor ajuste aos controles. */
+    private void startLiveTuning(Mat first) {
+        DesktopAnalysis.Config cfg = config();
+        DetectionTuner.Option start = cfg.option();
+        liveWorker.execute(() -> {
+            List<Mat> grays = new java.util.ArrayList<>();
+            try {
+                grays.add(Mats.gray(first));
+                for (int i = 1; i < LiveStabilizer.TUNE_FRAMES; i++) {
+                    Thread.sleep(LiveStabilizer.TUNE_FRAME_GAP_MS);
+                    if (!stabilizer.still()) return;
+                    Mat f = camera.snapshot();
+                    if (f == null) return;
+                    try { grays.add(Mats.gray(f)); } finally { f.release(); }
+                }
+                int w = grays.get(0).cols(), h = grays.get(0).rows();
+                InterestRegion roi = liveRoi(w, h);
+                DetectionAssessment.Context ctx = new DetectionAssessment.Context(liveScale(cfg.scale, w, h), w, h, roi, cfg.minimumExpectedMm);
+                SwingUtilities.invokeLater(() -> { if (mode == Mode.LIVE) view.setBanner(stabilizer.progress()); });
+                List<Mat> owned = grays;
+                grays = new java.util.ArrayList<>(); // tune() libera os quadros
+                LiveTuner.Run run = stabilizer.tune(owned, start, roi, ctx,
+                        () -> SwingUtilities.invokeLater(() -> { if (mode == Mode.LIVE) view.setBanner(stabilizer.progress()); }));
+                if (run == null) return;
+                DetectionTuner.Option best = run.best.option;
+                SwingUtilities.invokeLater(() -> {
+                    // O melhor ajuste vira o ajuste atual: o ao vivo passa a usá-lo e a foto capturada parte dele.
+                    profileBox.setSelectedIndex(best.profile);
+                    methodBox.setSelectedIndex(best.method);
+                    sensitivity.setValue(best.sensitivity);
+                    setStatus(String.format(Locale.ROOT, "Busca genetica concluida em %.1f s (%d ajustes, %d geracoes): %s. Ajuste aplicado aos controles.",
+                            run.durationMs / 1000.0, run.evaluated.size(), run.generations, run.best.summary()));
+                });
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (RuntimeException e) {
+                SwingUtilities.invokeLater(() -> setStatus("Busca ao vivo interrompida: " + e.getMessage()));
+            } finally {
+                first.release();
+                for (Mat g : grays) g.release();
+                liveBusy.set(false);
+            }
+        });
     }
 
     /**
@@ -504,6 +587,7 @@ final class MainFrame extends JFrame {
     private void backToLive() {
         if (!camera.isRunning()) { info("Abra a camera primeiro."); return; }
         mode = Mode.LIVE;
+        stabilizer.resetAll();
         InterestRegion roi = liveRoi;
         BufferedImage current = view.image();
         view.setViewport(roi == null || current == null || roi.right > current.getWidth() + 1e-7 || roi.bottom > current.getHeight() + 1e-7 ? null
@@ -511,7 +595,7 @@ final class MainFrame extends JFrame {
         view.setReference(null);
         view.setOverlay(null, null);
         view.setMap(null, visuals);
-        view.setViewMode(1); // ao vivo: sempre marcacoes
+        view.setViewMode(viewBox.getSelectedIndex()); // 0.5.5: ao vivo respeita Original / Segmentacao / Mapa
         view.setBanner(null);
         view.setMeasure(null, null);
         updateControls();

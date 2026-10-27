@@ -2,7 +2,7 @@ package br.com.pelotavision;
 import java.io.*;
 /** Portable inference of the bundled scikit-learn forest. Scores are not calibrated probabilities. */
 public final class CrackModel {
- public static final String ID="random_forest_20261018_v1";
+ public static final String ID="random_forest_20261027_v2";
  public static final int FEATURES=72;
  private static final class Tree {int[] f,l,r;double[] threshold,p;Tree(int n){f=new int[n];l=new int[n];r=new int[n];threshold=new double[n];p=new double[n];}}
  private final Tree[] trees;

@@ -1,7 +1,7 @@
-PelotaVision Windows 0.5.4 - prototipo
+PelotaVision Windows 0.5.5 - prototipo
 ======================================
 
-Nucleo de analise: o MESMO codigo do PelotaVision Android 0.15.4 (deteccao por bordas,
+Nucleo de analise: o MESMO codigo do PelotaVision Android 0.15.5 (deteccao por bordas,
 LoG ou rede neural StarDist, elipses, sugestao de ajuste, triagem de trincas Random Forest
 ou MobileNetV3, granulometria por numero, curva acumulada com ajuste Rosin-Rammler,
 mapa granulometrico, relatorio PDF).
@@ -95,3 +95,14 @@ NOVO NA 0.5.4
 - Recipiente maior que o quadro (webcam 16:9 sobre a panela, borda cortada em cima e
   embaixo) passa a ser detectado e aceito, desde que a borda apareca em lados opostos.
 - Novo icone (programa, atalhos e instalador).
+
+NOVO NA 0.5.5
+- Ao vivo estavel ("Otimizar quando parado", ligado por padrao): quando nada se mexe por
+  ~1 s, busca genetica do melhor ajuste em 3 quadros parados (metodo, perfil, sensibilidade)
+  e consenso temporal: so aparecem pelotas confirmadas em varios quadros. A faixa mostra
+  pelotas confirmadas +-, D50 +-, fantasmas descartados e o ajuste escolhido (aplicado aos
+  controles). Qualquer movimento cancela e recomeca.
+- Mapa granulometrico funciona no ao vivo (Visualizacao: Mapa).
+- Trincas: a MobileNetV3 passa a ser o padrao (melhor que o Random Forest em dois testes
+  independentes); o RF fica como reserva, retreinado com as fotos de bancada de 26/10.
+

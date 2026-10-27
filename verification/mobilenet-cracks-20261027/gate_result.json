@@ -1,0 +1,21 @@
+{
+ "checks": {
+  "bancada_auc": [
+   0.9550492610837439,
+   true
+  ],
+  "bancada_recall": [
+   0.9107142857142857,
+   true
+  ],
+  "holdout_auc": [
+   0.9752380952380952,
+   true
+  ],
+  "holdout_fn": [
+   0,
+   true
+  ]
+ },
+ "aprovado": true
+}

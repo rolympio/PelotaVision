@@ -24,7 +24,7 @@ final class DesktopAnalysis {
         int crackSensitivity = 50;  // padrao Android
         double minimumExpectedMm = 5;
         Granulometry.Settings scale; // escala vigente (entra no contexto da busca, como no Android)
-        CrackClassifierChoice crackChoice = CrackClassifierChoice.RANDOM_FOREST; // Modelos de analise
+        CrackClassifierChoice crackChoice = CrackClassifierChoice.DEFAULT; // Modelos de analise (0.5.5: MobileNetV3)
         ReportVisuals visuals = HistogramView.DEFAULTS; // mapa e grafico (gravados no relatorio)
         /** 0.5.3: base da curva Rosin–Rammler exibida e destacada no relatório (as duas vão para o JSON). */
         RosinRammler.Basis rrBasis = RosinRammler.Basis.NUMBER;
@@ -106,9 +106,9 @@ final class DesktopAnalysis {
 
     static String crackModelNote() {
         CrackClassifierChoice.Resolution r = lastResolution;
-        String base = crackModel() == null ? crackNote : "Random Forest experimental (crack_forest.pvrf), sem novo treinamento.";
+        String base = crackModel() == null ? crackNote : "Random Forest (reserva, crack_forest.pvrf).";
         if (r == null || r.effective == CrackClassifierChoice.RANDOM_FOREST) return r != null && r.message != null ? r.message : base;
-        return r.effective == CrackClassifierChoice.MOBILENET ? "MobileNetV3 experimental (nao validada); o RF continua o padrao." : base + " Comparacao com MobileNetV3 registrada (status do RF).";
+        return r.effective == CrackClassifierChoice.MOBILENET ? "MobileNetV3 (padrao); melhor que o RF em dois testes independentes, ainda sem validacao em producao." : base + " Comparacao com MobileNetV3 registrada (status do RF).";
     }
 
     private static MobileNetCrackModel network;
@@ -116,7 +116,7 @@ final class DesktopAnalysis {
 
     /** Rede carregada so quando escolhida; liberada quando o RF volta a ser usado. */
     static synchronized CrackDetector crackDetector(CrackClassifierChoice requested) {
-        if (requested == null) requested = CrackClassifierChoice.RANDOM_FOREST;
+        if (requested == null) requested = CrackClassifierChoice.DEFAULT;
         if (requested.needsNetwork()) {
             if (network == null) {
                 File onnx = DesktopApp.model(MobileNetCrackModel.MODEL), meta = DesktopApp.model(MobileNetCrackModel.METADATA);
@@ -240,8 +240,9 @@ final class DesktopAnalysis {
     }
 
     /** Analise ao vivo, igual ao Android: lado maior 640 px, 8 escalas, sem busca e sem trincas. */
-    static PelletDetector.Result live(Mat gray, Config cfg) {
-        DetectionTuner.Option option = cfg.option();
+    static PelletDetector.Result live(Mat gray, Config cfg) { return liveOption(gray, cfg.option()); }
+
+    static PelletDetector.Result liveOption(Mat gray, DetectionTuner.Option option) {
         PelletDetector.Result seeds = DetectionTuner.seeds(gray, option, 640, 8);
         return new EllipseFitter().refine(gray, seeds, option.belt);
     }
@@ -250,13 +251,16 @@ final class DesktopAnalysis {
      * 0.5.4: contagem ao vivo só na ROI. O recorte é analisado no mesmo lado de trabalho (640 px), então a ROI
      * ganha resolução; pelotas que cruzam o limite ficam fora (como na foto). Coordenadas no quadro inteiro.
      */
-    static PelletDetector.Result live(Mat gray, Config cfg, InterestRegion roi) {
-        if (roi == null) return live(gray, cfg);
+    static PelletDetector.Result live(Mat gray, Config cfg, InterestRegion roi) { return live(gray, cfg.option(), roi); }
+
+    /** 0.5.5: mesma contagem rápida com um ajuste explícito (busca genética com a cena parada). */
+    static PelletDetector.Result live(Mat gray, DetectionTuner.Option option, InterestRegion roi) {
+        if (roi == null) return liveOption(gray, option);
         AnalysisWindow w = new AnalysisWindow(gray.cols(), gray.rows(), roi);
-        if (w.width < 32 || w.height < 32) return live(gray, cfg);
+        if (w.width < 32 || w.height < 32) return liveOption(gray, option);
         Mat crop = w.cropGray(gray);
         try {
-            return w.toGlobal(w.filterLocal(live(crop, cfg)));
+            return w.toGlobal(w.filterLocal(liveOption(crop, option)));
         } finally {
             crop.release();
         }
