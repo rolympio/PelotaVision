@@ -77,6 +77,13 @@ final class MainFrame extends JFrame {
     private final JCheckBox liveBox = new JCheckBox("Contagem ao vivo", true);
     // 0.5.5: cena parada -> busca genética do ajuste + consenso temporal (menos fantasmas, medida estável).
     private final JCheckBox liveTuneBox = new JCheckBox("Otimizar quando parado", true);
+    /** 0.16.0: estratégia da otimização ao vivo; a rápida é o padrão (a genética da 0.5.5 continua disponível). */
+    private final JComboBox<String> liveSearchBox = new JComboBox<>(new String[]{"Busca rapida", "Busca genetica"});
+    /** 0.16.0: filtro de luz e escala também no ao vivo. */
+    private volatile LiveFrameAnalysis.Light liveLight = LiveFrameAnalysis.Light.OFF;
+    private volatile boolean liveShowFiltered = true;
+    private volatile LiveFrameAnalysis.ScaleTransfer liveScaleOverride;
+    private final JButton liveScaleButton = new JButton("Escala ao vivo…");
     private final LiveStabilizer stabilizer = new LiveStabilizer();
     private volatile long lastThumb;
     private final JButton captureButton = new JButton("Capturar foto");
@@ -159,7 +166,7 @@ final class MainFrame extends JFrame {
 
         JPanel top = new JPanel();
         top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
-        top.add(row(new JLabel("Camera:"), cameraBox, resolutionBox, lockFocus, lockExposure, cameraButton, driverButton, liveBox, liveTuneBox,
+        top.add(row(new JLabel("Camera:"), cameraBox, resolutionBox, lockFocus, lockExposure, cameraButton, driverButton, liveBox, liveTuneBox, liveSearchBox, liveScaleButton,
                 Box.createHorizontalStrut(12), captureButton, openButton, backLiveButton));
         top.add(row(new JLabel("Cena:"), sceneBox, new JLabel("Perfil:"), profileBox, new JLabel("Metodo:"), methodBox, new JLabel("Sensibilidade %:"), sensitivity, autoSuggest,
                 numbers, Box.createHorizontalStrut(12), roiButton, analyzeButton, detailButton, lightButton, cancelButton, saveButton));
@@ -263,10 +270,19 @@ final class MainFrame extends JFrame {
         applyScaleButton.addActionListener(e -> applyScaleFromFields());
         clearScaleButton.addActionListener(e -> { pxPerMm.setText(""); setScale(null); });
         liveBox.addActionListener(e -> { if (!liveBox.isSelected() && mode == Mode.LIVE) { view.setOverlay(null, null); view.setBanner(null); } });
-        liveTuneBox.setToolTipText("<html>Quando nada se mexe por ~1 s: busca genetica do ajuste (metodo, perfil, sensibilidade) em 3 quadros parados,<br>"
+        liveTuneBox.setToolTipText("<html>Quando nada se mexe por ~1 s: busca do ajuste (metodo, perfil, sensibilidade) em 3 quadros parados,<br>"
                 + "pontuando qualidade e concordancia entre quadros. Depois so mostra pelotas confirmadas em varios quadros.<br>"
                 + "Qualquer movimento cancela e recomeca. A aptidao e heuristica, nao acuracia.</html>");
         liveTuneBox.addActionListener(e -> { stabilizer.enabled = liveTuneBox.isSelected(); stabilizer.restart(); });
+        liveSearchBox.setSelectedIndex(prefs.getBoolean("liveGenetic", false) ? 1 : 0);
+        stabilizer.genetic = liveSearchBox.getSelectedIndex() == 1;
+        liveSearchBox.setToolTipText("<html>Busca rapida (padrao): triagem metodo x perfil e refino da sensibilidade, em paralelo; o LoG reaproveita o espaco de escala.<br>"
+                + "Busca genetica: a da 0.5.5 (8 individuos, ate 6 geracoes, uma avaliacao por vez). Mesma aptidao nas duas.</html>");
+        liveSearchBox.addActionListener(e -> { stabilizer.genetic = liveSearchBox.getSelectedIndex() == 1; prefs.putBoolean("liveGenetic", stabilizer.genetic); stabilizer.restart(); });
+        liveLight = LiveFrameAnalysis.Light.fromName(prefs.get("liveLight", "OFF"));
+        liveShowFiltered = prefs.getBoolean("liveShowFiltered", true);
+        liveScaleButton.setToolTipText("Escala do ao vivo: borda do recipiente detectada no quadro atual, px/mm do quadro, ou a da ultima foto.");
+        liveScaleButton.addActionListener(e -> liveScaleDialog());
         view.setClickListener(this::onImageClick);
         installExtensions();
         updateControls();
@@ -427,7 +443,8 @@ final class MainFrame extends JFrame {
     private void onFrame(Mat frame) {
         if (mode != Mode.LIVE) return;
         BufferedImage img = Mats.toImage(frame);
-        SwingUtilities.invokeLater(() -> { if (mode == Mode.LIVE) view.setImage(img, true); });
+        boolean filteredView = liveBox.isSelected() && liveLight != LiveFrameAnalysis.Light.OFF && liveShowFiltered;
+        if (!filteredView) SwingUtilities.invokeLater(() -> { if (mode == Mode.LIVE) view.setImage(img, true); });
         long now = System.currentTimeMillis();
         if (now - lastThumb >= 100) {
             lastThumb = now;
@@ -447,7 +464,21 @@ final class MainFrame extends JFrame {
                 try {
                     gray = Mats.gray(copy);
                     InterestRegion roi = liveRoi(gray.cols(), gray.rows());
-                    PelletDetector.Result raw = DesktopAnalysis.live(gray, cfg, roi);
+                    LiveFrameAnalysis.Light light = liveLight;
+                    PelletDetector.Result raw;
+                    if (light == LiveFrameAnalysis.Light.OFF) raw = DesktopAnalysis.live(gray, cfg, roi);
+                    else {
+                        // 0.16.0: mesmo filtro de luz da foto; propostas no quadro filtrado, elipses nos pixels originais.
+                        LiveFrameAnalysis.Request req = new LiveFrameAnalysis.Request(cfg.option(), LiveFrameAnalysis.toFraction(roi, gray.cols(), gray.rows()),
+                                light, null, cfg.rrBasis, liveShowFiltered);
+                        try (LiveFrameAnalysis.Output out = LiveFrameAnalysis.run(gray, req)) {
+                            raw = out.result;
+                            if (out.filtered != null) {
+                                BufferedImage f = Mats.toImage(out.filtered);
+                                SwingUtilities.invokeLater(() -> { if (mode == Mode.LIVE) view.setImage(f, true); });
+                            }
+                        }
+                    }
                     PelletDetector.Result shown = stabilizer.consolidate(raw);
                     showLive(raw, shown, cfg, roi != null);
                 } catch (RuntimeException ignored) {
@@ -475,7 +506,8 @@ final class MainFrame extends JFrame {
 
     /** Atualiza marcações, mapa, gráficos e faixa com o resultado exibido (estável ou do quadro). */
     private void showLive(PelletDetector.Result raw, PelletDetector.Result shown, DesktopAnalysis.Config cfg, boolean inRoi) {
-        Granulometry.Distribution dist = liveDistribution(shown, cfg.scale);
+        LiveFrameAnalysis.ScaleTransfer transfer = liveScaleTransfer(cfg);
+        Granulometry.Distribution dist = transfer != null ? LiveFrameAnalysis.distribution(shown, transfer) : liveDistribution(shown, cfg.scale);
         RosinRammler.Fit fit = dist == null ? null : RosinRammler.fit(dist, cfg.rrBasis);
         if (dist != null && dist.included > 0) stabilizer.recordD50(dist.d50);
         String banner = stabilizer.banner(raw, shown, dist, inRoi);
@@ -533,6 +565,69 @@ final class MainFrame extends JFrame {
                 liveBusy.set(false);
             }
         });
+    }
+
+    /** Escala do ao vivo: a calibrada no próprio ao vivo, senão a da foto aberta (transferida pela resolução). */
+    private LiveFrameAnalysis.ScaleTransfer liveScaleTransfer(DesktopAnalysis.Config cfg) {
+        LiveFrameAnalysis.ScaleTransfer o = liveScaleOverride;
+        if (o != null) return o;
+        PhotoSession s = session;
+        if (cfg.scale == null || cfg.scale.pixelsOnly() || s == null) return null;
+        try { return new LiveFrameAnalysis.ScaleTransfer(cfg.scale, s.originalWidth, s.originalHeight, "da ultima foto"); }
+        catch (RuntimeException e) { return null; }
+    }
+
+    /** 0.16.0: escala no ao vivo (recipiente no quadro, px/mm do quadro, ou voltar à da foto). */
+    private void liveScaleDialog() {
+        if (!camera.isRunning()) { info("Abra a camera primeiro."); return; }
+        String[] options = {"Recipiente: detectar a borda neste quadro", "Informar px/mm do quadro", "Usar a escala da foto aberta", "Sem escala (px)"};
+        LiveFrameAnalysis.ScaleTransfer cur = liveScaleOverride;
+        Object c = JOptionPane.showInputDialog(this, cur == null ? "Escala atual: a da foto aberta (se houver) ou pixels." : "Escala atual: " + cur.origin,
+                "Escala ao vivo", JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+        if (c == null) return;
+        if (c == options[3]) { liveScaleOverride = new LiveFrameAnalysis.ScaleTransfer(Granulometry.Settings.pixels(10), 1, 1, "pixels"); setStatus("Ao vivo em pixels."); return; }
+        if (c == options[2]) { liveScaleOverride = null; setStatus("Ao vivo usa a escala da foto aberta (se a proporcao do quadro for a mesma)."); return; }
+        Mat frame = camera.snapshot();
+        if (frame == null) { info("Ainda nao ha quadro da camera."); return; }
+        Mat gray = Mats.gray(frame);
+        frame.release();
+        try {
+            double bin = parseOr(binWidth.getText(), 1);
+            if (c == options[1]) {
+                String v = JOptionPane.showInputDialog(this, "px/mm no quadro " + gray.cols() + "x" + gray.rows() + ":");
+                if (v == null) return;
+                double ppm = Double.parseDouble(v.trim().replace(',', '.'));
+                liveScaleOverride = new LiveFrameAnalysis.ScaleTransfer(new Granulometry.Settings(ppm, bin, excludePartial.isSelected(), excludeReview.isSelected()),
+                        gray.cols(), gray.rows(), "px/mm informado no ao vivo");
+                setStatus("Escala do ao vivo: " + liveScaleOverride.describe(gray.cols(), gray.rows()));
+                return;
+            }
+            String v = JOptionPane.showInputDialog(this, "Diametro interno do recipiente (mm):", prefs.get("containerMm", ""));
+            if (v == null) return;
+            double mm = Double.parseDouble(v.trim().replace(',', '.'));
+            prefs.put("containerMm", v.trim());
+            LiveFrameAnalysis.ScaleTransfer t = LiveFrameAnalysis.containerOnFrame(gray, mm, ContainerCalibration.Plane.RIM, bin, excludePartial.isSelected(), excludeReview.isSelected());
+            if (t == null) { info("Borda nao encontrada com seguranca. Enquadre o recipiente (borda visivel em lados opostos) ou informe px/mm."); return; }
+            BufferedImage img = Mats.toImage(gray);
+            java.awt.Graphics2D g2 = img.createGraphics();
+            g2.setColor(new java.awt.Color(82, 216, 190));
+            g2.setStroke(new java.awt.BasicStroke(Math.max(2f, img.getWidth() / 400f)));
+            g2.drawOval((int) Math.round(t.circle.cx - t.circle.r), (int) Math.round(t.circle.cy - t.circle.r), (int) Math.round(2 * t.circle.r), (int) Math.round(2 * t.circle.r));
+            g2.dispose();
+            double f = Math.min(640.0 / img.getWidth(), 420.0 / img.getHeight());
+            JLabel pic = new JLabel(new javax.swing.ImageIcon(img.getScaledInstance((int) (img.getWidth() * f), (int) (img.getHeight() * f), java.awt.Image.SCALE_SMOOTH)));
+            int ok = JOptionPane.showConfirmDialog(this, new Object[]{pic, String.format(Locale.ROOT, "%.3f px/mm no quadro (%s). Usar?", t.pixelsPerMm(gray.cols(), gray.rows()), t.origin)},
+                    "Confirme a borda", JOptionPane.YES_NO_OPTION);
+            if (ok == JOptionPane.YES_OPTION) { liveScaleOverride = t; setStatus("Escala do ao vivo pelo recipiente: " + t.describe(gray.cols(), gray.rows())); }
+        } catch (RuntimeException e) {
+            error("Escala ao vivo", e);
+        } finally {
+            gray.release();
+        }
+    }
+
+    private static double parseOr(String text, double fallback) {
+        try { double v = Double.parseDouble(text.trim().replace(',', '.')); return v > 0 && Double.isFinite(v) ? v : fallback; } catch (RuntimeException e) { return fallback; }
     }
 
     /**
@@ -761,6 +856,7 @@ final class MainFrame extends JFrame {
 
     /** Escolha do realce com prévia, como "Recuperação de imagem escura" do Android. Aplicar exige ROI. */
     private void lowLightDialog() {
+        if (mode == Mode.LIVE) { liveLightDialog(); return; }
         PhotoSession s = session;
         if (s == null || mode != Mode.PHOTO) return;
         LowLightPreprocessor.Mode[] modes = LowLightPreprocessor.Mode.values();
@@ -819,6 +915,58 @@ final class MainFrame extends JFrame {
         int i = box.getSelectedIndex();
         lowLightMode = i == 0 ? null : modes[i - 1];
         analyze(false, s.output() != null && !s.needsAnalysis() ? s.output().applied : null);
+    }
+
+    /** 0.16.0: filtro de luz no ao vivo, com prévia no quadro atual da câmera. */
+    private void liveLightDialog() {
+        Mat frame = camera.snapshot();
+        if (frame == null) { info("Ainda nao ha quadro da camera."); return; }
+        Mat small = new Mat();
+        {
+            Mat g = Mats.gray(frame);
+            frame.release();
+            double f = Math.min(1, 900.0 / Math.max(g.cols(), g.rows()));
+            org.opencv.imgproc.Imgproc.resize(g, small, new org.opencv.core.Size(Math.max(1, g.cols() * f), Math.max(1, g.rows() * f)), 0, 0, org.opencv.imgproc.Imgproc.INTER_AREA);
+            g.release();
+        }
+        LiveFrameAnalysis.Light[] lights = LiveFrameAnalysis.Light.values();
+        String[] names = new String[lights.length];
+        for (int i = 0; i < lights.length; i++) names[i] = lights[i].label();
+        JComboBox<String> box = new JComboBox<>(names);
+        box.setSelectedIndex(liveLight.ordinal());
+        JCheckBox show = new JCheckBox("Mostrar a imagem filtrada no ao vivo", liveShowFiltered);
+        JLabel preview = new JLabel();
+        preview.setPreferredSize(new Dimension(640, 400));
+        preview.setHorizontalAlignment(JLabel.CENTER);
+        LowLightPreprocessor.Quality q = LowLightPreprocessor.assess(small);
+        Runnable render = () -> {
+            LiveFrameAnalysis.Light l = lights[box.getSelectedIndex()];
+            LowLightPreprocessor.Mode m = l == LiveFrameAnalysis.Light.AUTO ? (q.needsCorrection() ? LowLightPreprocessor.Mode.GAMMA_CLAHE : LowLightPreprocessor.Mode.ORIGINAL)
+                    : l.fixedMode() == null ? LowLightPreprocessor.Mode.ORIGINAL : l.fixedMode();
+            Mat out = LowLightPreprocessor.apply(small, m);
+            try {
+                BufferedImage img = Mats.toImage(out);
+                double f = Math.min(640.0 / img.getWidth(), 400.0 / img.getHeight());
+                preview.setIcon(new javax.swing.ImageIcon(img.getScaledInstance(Math.max(1, (int) (img.getWidth() * f)), Math.max(1, (int) (img.getHeight() * f)), java.awt.Image.SCALE_SMOOTH)));
+            } finally { out.release(); }
+        };
+        box.addActionListener(e -> render.run());
+        render.run();
+        JPanel p = new JPanel(new BorderLayout(6, 6));
+        p.add(new JLabel("<html><body style='width:620px'>Filtro de luz no ao vivo. Ele so propoe as pelotas; elipses e medidas usam os pixels originais do quadro, como na foto. "
+                + String.format(Locale.ROOT, "Quadro atual: nivel medio %.0f, contraste %.0f.", q.mean, q.standardDeviation) + "</body></html>"), BorderLayout.NORTH);
+        p.add(preview, BorderLayout.CENTER);
+        JPanel south = new JPanel(new BorderLayout(4, 4)); south.add(box, BorderLayout.NORTH); south.add(show, BorderLayout.SOUTH);
+        p.add(south, BorderLayout.SOUTH);
+        int r;
+        try { r = JOptionPane.showConfirmDialog(this, p, "Luz no ao vivo", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE); }
+        finally { small.release(); }
+        if (r != JOptionPane.OK_OPTION) return;
+        liveLight = lights[box.getSelectedIndex()];
+        liveShowFiltered = show.isSelected();
+        prefs.put("liveLight", liveLight.name());
+        prefs.putBoolean("liveShowFiltered", liveShowFiltered);
+        updateControls();
     }
 
     double prefsMinimum() { return prefs.getDouble("minimumMm", 5); }
@@ -1029,8 +1177,10 @@ final class MainFrame extends JFrame {
         analyzeButton.setText(session != null && session.region() != null ? "Segmentar ROI" : "Segmentar foto");
         detailButton.setEnabled(!busy && photo);
         detailButton.setText(session != null && session.output() != null && session.output().detailed != null ? "Detalhada ✓…" : "Detalhada…");
-        lightButton.setEnabled(!busy && photo);
-        lightButton.setText(lowLightMode == null ? "Luz / imagem escura…" : "Luz: " + LowLightInfo.label(lowLightMode) + "…");
+        lightButton.setEnabled(!busy && (photo || (mode == Mode.LIVE && running)));
+        if (mode == Mode.LIVE) lightButton.setText(liveLight == LiveFrameAnalysis.Light.OFF ? "Luz ao vivo…" : "Luz ao vivo: " + liveLight.label() + "…");
+        else lightButton.setText(lowLightMode == null ? "Luz / imagem escura…" : "Luz: " + LowLightInfo.label(lowLightMode) + "…");
+        liveScaleButton.setEnabled(!busy && running && mode == Mode.LIVE);
         cancelButton.setEnabled(busy);
         saveButton.setEnabled(!busy && photo && session.canSave());
         measureButton.setEnabled(!busy && photo);

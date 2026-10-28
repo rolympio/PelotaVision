@@ -267,6 +267,128 @@ def main_belt(a):
     Path(a.metrics).write_text(json.dumps(metrics, indent=1, ensure_ascii=False), encoding='utf-8')
 
 
+# ---------------------------------------------------------------- bancada real (0.16.0): cenas antigas + panela + bancada
+
+REAL_MIX = (('cenas', .30), ('panela', .55), ('bancada_1pelota', .15))  # probabilidade de sortear cada fonte por amostra
+PAN_JOBS = 24  # janelas (escala e posição sorteadas) por análise de panela
+
+
+def load_from_onnx(model, path):
+    """Pesos de um ONNX exportado por este script (Conv+BN dobradas) -> StarDistNet; BN vira identidade+viés e fica
+    congelada. Confere a saída numa entrada aleatória (erro máximo < 1e-3) antes de devolver."""
+    import onnx
+    from onnx import numpy_helper
+    g = onnx.load(str(path)).graph
+    init = {i.name: numpy_helper.to_array(i) for i in g.initializer}
+    nodes = [n for n in g.node if n.op_type in ('Conv', 'ConvTranspose')]
+    mods = [m for m in model.modules() if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d))]
+    bn_after = {}
+    for seq in model.modules():
+        if isinstance(seq, nn.Sequential):
+            for i in range(len(seq) - 1):
+                if isinstance(seq[i], nn.Conv2d) and isinstance(seq[i + 1], nn.BatchNorm2d):
+                    bn_after[id(seq[i])] = seq[i + 1]
+    assert len(nodes) == len(mods), (len(nodes), len(mods))
+    with torch.no_grad():
+        for m, n in zip(mods, nodes):
+            W = init[n.input[1]]
+            B = init[n.input[2]] if len(n.input) > 2 else np.zeros(W.shape[1 if isinstance(m, nn.ConvTranspose2d) else 0], np.float32)
+            assert tuple(m.weight.shape) == W.shape, (m, W.shape)
+            m.weight.copy_(torch.from_numpy(W.copy()))
+            bn = bn_after.get(id(m))
+            if bn is not None:
+                bn.running_mean.zero_(); bn.running_var.fill_(1.); bn.weight.fill_(math.sqrt(1 + bn.eps)); bn.bias.copy_(torch.from_numpy(B.copy()))
+            else:
+                m.bias.copy_(torch.from_numpy(B.copy()))
+    model.eval()
+    import onnxruntime as ort
+    x = np.random.default_rng(0).normal(0, 1, (1, 1, C.TILE, C.TILE)).astype(np.float32)
+    ref = ort.InferenceSession(str(path), providers=['CPUExecutionProvider']).run(None, {'input': x})[0]
+    with torch.no_grad():
+        got = model(torch.from_numpy(x)).numpy()
+    err = float(np.abs(ref - got).max())
+    assert err < 1e-3, f'pesos do ONNX não reproduzem a saída (erro {err})'
+    return err
+
+
+def prepare_real(scenes, rng, jobs_per_scene):
+    jobs = []
+    for s in scenes:
+        for _ in range(jobs_per_scene(s)):
+            jobs.append((s, float(rng.choice(RNET)), rng.random(2)))
+    from multiprocessing import Pool
+    with Pool(max(1, os.cpu_count() or 1)) as pool:
+        return pool.map(_belt_item, jobs, chunksize=4)
+
+
+def main_real(a):
+    """Cenas antigas (peso 1) + panela de webcam e bancada de 1 pelota (pseudo-rótulos com máscara de peso).
+    Mesma perda ponderada da correia; BN congelada quando parte de um ONNX."""
+    torch.manual_seed(SEED); rng = np.random.default_rng(SEED)
+    torch.set_num_threads(max(1, os.cpu_count() or 1))
+    torch.use_deterministic_algorithms(True, warn_only=True)
+    pan_dir = a.pan_data or str(Path(__file__).resolve().parents[1] / 'data_pan_20261027/pseudo')
+    old = [s for s in C.load_scenes(str(Path(__file__).resolve().parents[1] / 'data')) if s['group'] not in {g for g in a.exclude.split(',') if g}]
+    real = load_belt(pan_dir, 'treino')
+    t0 = time.time()
+    pools = {'cenas': prepare(old)}
+    for it in pools['cenas']:
+        it['weight'] = np.ones_like(it['mask'], dtype=np.uint8)
+    pan = [s for s in real if s['source'].startswith('webcam')]
+    bench = [s for s in real if not s['source'].startswith('webcam')]
+    pools['panela'] = prepare_real(pan, rng, lambda s: PAN_JOBS)
+    pools['bancada_1pelota'] = prepare_real(bench, rng, lambda s: 2)
+    print('alvos: ' + ', '.join(f'{k} {len(v)}' for k, v in pools.items()) + f' em {time.time() - t0:.0f}s', flush=True)
+    names, probs = zip(*REAL_MIX)
+
+    def one():
+        k = names[rng.choice(len(names), p=np.array(probs) / sum(probs))]
+        items = pools[k]
+        if k == 'cenas':
+            img, prob, dist, mask = sample(items, rng)
+            return img, prob, dist, mask, np.ones_like(prob, dtype=np.float32)
+        return sample_belt(items, rng)
+
+    model = StarDistNet()
+    init_err = None
+    if a.init_onnx:
+        init_err = load_from_onnx(model, a.init_onnx)
+    opt = torch.optim.Adam(model.parameters(), lr=3e-4 if not a.init_onnx else 1.5e-4)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, a.iterations, eta_min=2e-5)
+    history = []
+    t0 = time.time()
+    for it in range(1, a.iterations + 1):
+        model.train()
+        if a.init_onnx:
+            for m in model.modules():
+                if isinstance(m, nn.BatchNorm2d):
+                    m.eval()
+        xs, ps, ds, ms, ws = zip(*(one() for _ in range(a.batch)))
+        t = lambda v: torch.from_numpy(np.ascontiguousarray(np.stack(v))).float()
+        x, p, d, m, w = t(xs)[:, None], t(ps)[:, None], t(ds), t(ms)[:, None], t(ws)[:, None]
+        out = model(x, logits=True)
+        loss, lp, ld = loss_fn_weighted(out, p, d, m, w)
+        opt.zero_grad(); loss.backward(); opt.step(); sched.step()
+        history.append((lp, ld))
+        if it % 100 == 0 or it == 1:
+            h = np.array(history[-100:])
+            print(f'it {it:5d}  bce {h[:, 0].mean():.4f}  dist_mae_pond {h[:, 1].mean():.3f}  {time.time() - t0:.0f}s', flush=True)
+    out_path = Path(a.out); out_path.parent.mkdir(parents=True, exist_ok=True)
+    export(model, out_path)
+    metrics = dict(model_sha256=hashlib.sha256(out_path.read_bytes()).hexdigest(), conjunto='bancada_real',
+                   iterations=a.iterations, batch=a.batch, crop=CROP, seed=SEED, mix=dict(REAL_MIX), pan_jobs=PAN_JOBS,
+                   init_onnx=a.init_onnx, init_max_abs_diff=init_err, batchnorm='congelada (dobrada do ONNX)' if a.init_onnx else 'treinada',
+                   training_old_scenes=[s['group'] for s in old], training_pan=[s['group'] for s in pan],
+                   training_bench_photos=len(bench), training_objects_confident=int(sum(len(s['circles']) for s in real)),
+                   training_seconds=round(time.time() - t0), torch=torch.__version__,
+                   parameters=int(sum(p.numel() for p in model.parameters())),
+                   final_bce=float(np.mean([h[0] for h in history[-200:]])),
+                   final_dist_mae_weighted_px=float(np.mean([h[1] for h in history[-200:]])),
+                   loss='BCE ponderada (peso 0 ignora) + 0,2 x MAE das distâncias ponderado por prob x peso',
+                   label_origin='cenas: círculos provisórios; panela/bancada: pseudo-rótulos do app (make_pseudo.py), sem verdade-terreno humana')
+    Path(a.metrics).write_text(json.dumps(metrics, indent=1, ensure_ascii=False), encoding='utf-8')
+
+
 def export(model, path):
     model.eval()
     dummy = torch.zeros(1, 1, C.TILE, C.TILE)
@@ -276,7 +398,9 @@ def export(model, path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--conjunto', choices=('bancada', 'correia'), default='bancada')
+    ap.add_argument('--conjunto', choices=('bancada', 'correia', 'bancada_real'), default='bancada')
+    ap.add_argument('--init-onnx', default=None, help='bancada_real: parte dos pesos deste ONNX (BN dobrada e congelada)')
+    ap.add_argument('--pan-data', default=None, help='bancada_real: padrão ../data_pan_20261027/pseudo')
     ap.add_argument('--data', default=None, help='padrão: ../data (bancada) ou ../data_belt/pseudo (correia)')
     ap.add_argument('--exclude', default='')
     ap.add_argument('--iterations', type=int, default=1500)
@@ -288,6 +412,8 @@ def main():
         a.data = str(Path(__file__).resolve().parents[1] / ('data' if a.conjunto == 'bancada' else 'data_belt/pseudo'))
     if a.conjunto == 'correia':
         return main_belt(a)
+    if a.conjunto == 'bancada_real':
+        return main_real(a)
     torch.manual_seed(SEED); rng = np.random.default_rng(SEED)
     torch.set_num_threads(max(1, os.cpu_count() or 1))
     torch.use_deterministic_algorithms(True, warn_only=True)

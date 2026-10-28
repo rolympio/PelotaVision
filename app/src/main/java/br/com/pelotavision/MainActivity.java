@@ -108,6 +108,20 @@ public final class MainActivity extends ComponentActivity {
     private int originalWidth,originalHeight;
     private Granulometry.Settings scaleSettings;
     private Granulometry.Distribution distribution;
+    // 0.16.0: câmera escolhida e ao vivo com ROI, filtro de luz, escala, gráficos e mapa.
+    private java.util.List<CameraChoice.Entry> cameraEntries=new java.util.ArrayList<>();
+    private CameraChoice.Entry activeCamera;
+    private volatile boolean captureFromFrame;
+    private final java.util.concurrent.atomic.AtomicBoolean frameCaptureRequested=new java.util.concurrent.atomic.AtomicBoolean(false);
+    private boolean liveScaleMismatchNotified;
+    private volatile LiveFrameAnalysis.Light liveLight=LiveFrameAnalysis.Light.OFF;
+    private volatile boolean liveShowFiltered=true,liveCharts=true;
+    private volatile LiveFrameAnalysis.RoiFraction liveRoiFraction;
+    private volatile LiveFrameAnalysis.ScaleTransfer liveScale;
+    private final Object liveFrameLock=new Object();
+    private Mat lastLiveGray;
+    private Granulometry.Distribution liveDistribution;
+    private android.content.BroadcastReceiver usbReceiver;
     private ProcessCameraProvider provider;
     private Camera camera;
     private ImageCapture imageCapture;
@@ -153,6 +167,8 @@ public final class MainActivity extends ComponentActivity {
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(),false);
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         restoreParameters();buildInterface();applyParameters();
+        liveLight=LiveFrameAnalysis.Light.fromName(getPreferences(MODE_PRIVATE).getString("live_light","OFF"));
+        liveShowFiltered=getPreferences(MODE_PRIVATE).getBoolean("live_show_filtered",true);liveCharts=getPreferences(MODE_PRIVATE).getBoolean("live_charts",true);
         nativeReady=OpenCVLoader.initLocal();
         if(!nativeReady){hint.setText("O processamento não iniciou neste aparelho.");capture.setEnabled(false);open.setEnabled(false);return;}
         org.opencv.core.Core.setNumThreads(2);
@@ -213,9 +229,9 @@ public final class MainActivity extends ComponentActivity {
         overlay.setOnTouchListener((v,event)->{if(mode!=Mode.PHOTO||photoResult==null)return false;if(event.getAction()==MotionEvent.ACTION_UP){v.performClick();reviewCrackAt(event.getX(),event.getY());}return true;});
         LinearLayout scaleRow=row();root.addView(scaleRow);
         scaleLabel=text("Fotografe para calibrar em px/mm",11,Color.rgb(151,174,187));scaleRow.addView(scaleLabel,new LinearLayout.LayoutParams(0,-2,1));
-        regionButton=button("Área",false);regionButton.setTextSize(11);regionButton.setOnClickListener(v->showRegionEditor());scaleRow.addView(regionButton,new LinearLayout.LayoutParams(dp(66),dp(40)));
+        regionButton=button("Área",false);regionButton.setTextSize(11);regionButton.setOnClickListener(v->{if(mode==Mode.LIVE)showLiveRegionEditor();else showRegionEditor();});scaleRow.addView(regionButton,new LinearLayout.LayoutParams(dp(66),dp(40)));
         calibration=button("Escala / mm",false);calibration.setTextSize(11);calibration.setEnabled(false);
-        calibration.setOnClickListener(v->showCalibration());scaleRow.addView(calibration,new LinearLayout.LayoutParams(dp(108),dp(40)));
+        calibration.setOnClickListener(v->{if(mode==Mode.LIVE)showLiveScale();else showCalibration();});scaleRow.addView(calibration,new LinearLayout.LayoutParams(dp(108),dp(40)));
         roiActions=row();roiActions.setVisibility(View.GONE);root.addView(roiActions);
         segmentRoi=button("Segmentar foto",false);segmentRoi.setTag("segment_active_roi");segmentRoi.setTextSize(11);segmentRoi.setOnClickListener(v->showSegmentationOptions());roiActions.addView(segmentRoi,new LinearLayout.LayoutParams(0,dp(42),1));
         searchRoi=button("Buscar melhor ajuste",false);searchRoi.setTag("search_active_roi");searchRoi.setTextSize(11);searchRoi.setOnClickListener(v->startActiveAnalysis(true));roiActions.addView(searchRoi,new LinearLayout.LayoutParams(0,dp(42),1));
@@ -233,10 +249,10 @@ public final class MainActivity extends ComponentActivity {
         CheckBox numberBox=new CheckBox(this);numberBox.setText("Números");numberBox.setTextSize(11);numberBox.setTextColor(Color.WHITE);numberBox.setChecked(true);
         numberBox.setOnCheckedChangeListener((button,checked)-> {numbers=checked;if(mode==Mode.PHOTO&&photoResult!=null)overlay.display(photoResult,numbers);else if(mode==Mode.LIVE&&lastLiveResult!=null)overlay.display(lastLiveResult,numbers);});tools.addView(numberBox);
         Button mapBtn=button("Seg.",false);mapBtn.setTag("view_mode");mapBtn.setTextSize(11);mapBtn.setOnClickListener(v->toggleColorMap());mapBtn.setOnLongClickListener(v->{showMapOptions();return true;});mapButton=mapBtn;tools.addView(mapBtn,new LinearLayout.LayoutParams(dp(64),dp(40)));
-        torch=button("Luz",false);torch.setTextSize(11);torch.setOnClickListener(v->{if(mode==Mode.PHOTO)showLowLightDialog();else toggleTorch();});tools.addView(torch,new LinearLayout.LayoutParams(dp(58),dp(40)));
+        torch=button("Luz",false);torch.setTextSize(11);torch.setOnClickListener(v->{if(mode==Mode.PHOTO)showLowLightDialog();else showLiveLight();});tools.addView(torch,new LinearLayout.LayoutParams(dp(58),dp(40)));
         adjust=button("Ajustes",false);adjust.setTextSize(11);adjust.setOnClickListener(v->showAdjustments());tools.addView(adjust,new LinearLayout.LayoutParams(dp(77),dp(40)));
         cameraResolutionLabel=text("Câmera: verificando resolução…",11,Color.rgb(151,174,187));
-        cameraResolutionLabel.setOnClickListener(v->showCameraSettings());root.addView(cameraResolutionLabel);
+        cameraResolutionLabel.setOnClickListener(v->showCameraPicker());root.addView(cameraResolutionLabel);
         LinearLayout actions=row();actions.setPadding(0,dp(7),0,0);root.addView(actions);
         capture=button("Fotografar",true);capture.setEnabled(false);capture.setOnClickListener(v->capturePhoto());actions.addView(capture,new LinearLayout.LayoutParams(0,dp(49),1));
         save=button("Salvar foto + dados",true);save.setOnClickListener(v->savePhoto());save.setVisibility(View.GONE);actions.addView(save,new LinearLayout.LayoutParams(0,dp(49),1));
@@ -252,36 +268,263 @@ public final class MainActivity extends ComponentActivity {
         future.addListener(()-> {
             binding=false;if(isDestroyed()||isFinishing())return;
             try {
-                provider=future.get();provider.unbindAll();
+                provider=future.get();provider.unbindAll();camera=null;
+                // 0.16.0: câmera escolhida pelo usuário (traseira, frontal ou externa USB/OTG), lembrada entre sessões.
+                cameraEntries=CameraChoice.list(provider);
+                activeCamera=CameraChoice.pick(cameraEntries,getPreferences(MODE_PRIVATE).getString("camera_id",null));
+                if(activeCamera==null)throw new IllegalStateException("Nenhuma câmera disponível.");
+                CameraSelector selector=CameraChoice.selector(activeCamera.id);
+                // PreviewView espelha a frontal; a análise não. Desfaz o espelho para as marcações coincidirem.
+                preview.setScaleX(activeCamera.facing==CameraChoice.FACING_FRONT?-1f:1f);
                 Preview usePreview=new Preview.Builder().setTargetRotation(Surface.ROTATION_0).build();usePreview.setSurfaceProvider(preview.getSurfaceProvider());
-                analysis=new ImageAnalysis.Builder().setTargetResolution(new Size(640,480)).setTargetRotation(Surface.ROTATION_0)
+                // Externa: quadro de análise maior, porque pode virar a própria foto (ver captureFromFrame).
+                analysis=new ImageAnalysis.Builder().setTargetResolution(activeCamera.external()?new Size(1280,720):new Size(640,480)).setTargetRotation(Surface.ROTATION_0)
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build();
-                analysis.setAnalyzer(worker,image-> {
-                    Mat gray=null;
-                    try {
-                        long now=SystemClock.elapsedRealtime();if(mode!=Mode.LIVE||now-lastAnalysis<220)return;
-                        lastAnalysis=now;long revision=epoch;PelletDetector.Parameters cfg=parameters;
-                        gray=ImageCodec.luma(image);PelletDetector.Result result=detectPellets(gray,cfg,640,8);
-                        runOnUiThread(()-> {
-                            if(isDestroyed()||mode!=Mode.LIVE||revision!=epoch)return;
-                            lastLiveResult=result;lastResult=SystemClock.elapsedRealtime();overlay.display(result,numbers);
-                            showCount(result,false);
-                        });
-                    } catch(Exception e) {runOnUiThread(()-> {if(!isDestroyed()&&mode==Mode.LIVE)hint.setText("Falha na análise. Tente fotografar ou abrir uma imagem.");});}
-                    finally {if(gray!=null)gray.release();image.close();}
-                });
-                requestedPhotoSize=maximumJpegResolution();
+                analysis.setAnalyzer(worker,this::analyzeLiveFrame);
+                requestedPhotoSize=activeCamera.maxJpeg!=null?activeCamera.maxJpeg:maximumJpegResolution();
                 imageCapture=new ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
                         .setJpegQuality(PHOTO_JPEG_QUALITY)
                         .setTargetResolution(requestedPhotoSize).setTargetRotation(Surface.ROTATION_0).build();
-                UseCaseGroup.Builder group=new UseCaseGroup.Builder().addUseCase(usePreview).addUseCase(analysis).addUseCase(imageCapture);
-                if(preview.getViewPort()!=null)group.setViewPort(preview.getViewPort());
-                camera=provider.bindToLifecycle(this,CameraSelector.DEFAULT_BACK_CAMERA,group.build());
+                captureFromFrame=false;
+                try {
+                    camera=provider.bindToLifecycle(this,selector,useCases(usePreview,analysis,imageCapture));
+                } catch(IllegalArgumentException combination) {
+                    // Câmeras EXTERNAL/LEGACY podem não aceitar prévia + análise + foto ao mesmo tempo:
+                    // a foto passa a ser o quadro de análise (resolução menor, registrada no rótulo).
+                    provider.unbindAll();imageCapture=null;captureFromFrame=true;
+                    camera=provider.bindToLifecycle(this,selector,useCases(usePreview,analysis,null));
+                }
                 capture.setEnabled(true);torch.setEnabled(camera.getCameraInfo().hasFlashUnit());
-                cameraResolutionLabel.setText("Foto: máxima solicitada "+requestedPhotoSize.getWidth()+"×"+requestedPhotoSize.getHeight()+" · JPEG 95% · toque para detalhes");
-            } catch(Exception e) {capture.setEnabled(false);hint.setText("Câmera indisponível. Você pode abrir uma foto.");cameraResolutionLabel.setText("Câmera: configuração não suportada neste dispositivo");}
+                cameraResolutionLabel.setText(cameraLabel());
+            } catch(Exception e) {capture.setEnabled(false);hint.setText("Câmera indisponível. Você pode abrir uma foto.");cameraResolutionLabel.setText("Câmera: configuração não suportada neste dispositivo · toque para escolher outra");}
         },ContextCompat.getMainExecutor(this));
     }
+    private UseCaseGroup useCases(Preview p,ImageAnalysis a,ImageCapture c){
+        UseCaseGroup.Builder group=new UseCaseGroup.Builder().addUseCase(p).addUseCase(a);if(c!=null)group.addUseCase(c);
+        if(preview.getViewPort()!=null)group.setViewPort(preview.getViewPort());return group.build();
+    }
+    private String cameraLabel(){
+        String name=activeCamera==null?"Câmera":activeCamera.label();
+        return name+(captureFromFrame?" · foto = quadro ao vivo":" · foto máx. "+requestedPhotoSize.getWidth()+"×"+requestedPhotoSize.getHeight()+" · JPEG 95%")+" · toque para trocar";
+    }
+    /** Troca de câmera: desliga a atual e religa com a escolhida (mesmos casos de uso). */
+    private void switchCamera(String id){
+        getPreferences(MODE_PRIVATE).edit().putString("camera_id",id).apply();
+        if(provider!=null)provider.unbindAll();camera=null;liveScaleMismatchNotified=false;
+        if(mode!=Mode.LIVE)returnToCamera();
+        bindCamera();
+    }
+    /** O CameraX lê a lista de câmeras ao iniciar; para ver uma USB recém-conectada é preciso reiniciá-lo. */
+    @android.annotation.SuppressLint({"VisibleForTests","RestrictedApi"})
+    private void refreshCameraList(){
+        if(provider==null){bindCamera();return;}
+        provider.unbindAll();camera=null;
+        ListenableFuture<Void> done;
+        try{done=provider.shutdownAsync();}catch(RuntimeException e){toast("Feche e reabra o app para ver a nova câmera.");bindCamera();return;}
+        provider=null;done.addListener(this::bindCamera,ContextCompat.getMainExecutor(this));
+    }
+    // ---------------------------------------------------------------- 0.16.0: ao vivo com tudo da foto
+
+    /** Analisador do ao vivo: mesmo pipeline do Windows (LiveFrameAnalysis): ROI, filtro de luz, escala, gráficos e mapa. */
+    private void analyzeLiveFrame(androidx.camera.core.ImageProxy image) {
+        Mat gray=null;
+        try {
+            if(frameCaptureRequested.getAndSet(false)){saveFrameAsPhoto(image);return;}
+            long now=SystemClock.elapsedRealtime();if(mode!=Mode.LIVE||now-lastAnalysis<220)return;
+            lastAnalysis=now;long revision=epoch;
+            DetectionTuner.Option option=new DetectionTuner.Option(profile,sensitivity,method(),beltScene);
+            gray=ImageCodec.luma(image);
+            synchronized(liveFrameLock){if(lastLiveGray==null)lastLiveGray=new Mat();gray.copyTo(lastLiveGray);}
+            LiveFrameAnalysis.Request request=new LiveFrameAnalysis.Request(option,liveRoiFraction,liveLight,liveScale,rrBasis(),liveShowFiltered);
+            Bitmap filtered=null;
+            LiveFrameAnalysis.Output out=LiveFrameAnalysis.run(gray,request);
+            try{if(out.filtered!=null){filtered=Bitmap.createBitmap(out.filtered.cols(),out.filtered.rows(),Bitmap.Config.ARGB_8888);org.opencv.android.Utils.matToBitmap(out.filtered,filtered);}}
+            finally{out.close();}
+            final Bitmap shown=filtered;
+            runOnUiThread(()-> {if(!isDestroyed()&&mode==Mode.LIVE&&revision==epoch)showLiveOutput(out,shown);});
+        } catch(Exception e) {runOnUiThread(()-> {if(!isDestroyed()&&mode==Mode.LIVE)hint.setText("Falha na análise. Tente fotografar ou abrir uma imagem.");});}
+        finally {if(gray!=null)gray.release();image.close();}
+    }
+    private void showLiveOutput(LiveFrameAnalysis.Output out,Bitmap filtered){
+        lastLiveResult=out.result;lastResult=SystemClock.elapsedRealtime();
+        overlay.display(out.result,numbers);overlay.region(out.roi);
+        showCount(out.result,false);
+        // Filtro de luz visível: o quadro filtrado cobre a prévia (as marcações continuam nos pixels originais).
+        if(filtered!=null){frozen.setImageBitmap(filtered);frozen.setVisibility(View.VISIBLE);}
+        else if(frozen.getVisibility()==View.VISIBLE){frozen.setImageDrawable(null);frozen.setVisibility(View.GONE);}
+        liveDistribution=out.distribution;
+        if(out.distribution!=null&&out.distribution.included>0){
+            histogram.display(out.distribution,null,visuals);if(rosinRammler!=null)rosinRammler.display(out.fit);
+            if(liveCharts&&chartSlot.getVisibility()!=View.VISIBLE)setChartsVisibility(View.VISIBLE);
+            colorMap.display(out.result,out.distribution);colorMap.visuals(visuals);colorMap.viewport(null);
+            Granulometry.Distribution d=out.distribution;String u=d.settings.unit();
+            detail.setText(String.format(Locale.getDefault(),"D10 %s · D50 %s · D90 %s %s · %d ms",HistogramView.number(d.d10),HistogramView.number(d.d50),HistogramView.number(d.d90),u,out.result.durationMs));
+        }
+        if(!liveCharts&&chartSlot.getVisibility()==View.VISIBLE)setChartsVisibility(View.GONE);
+        String light=out.appliedLight==LowLightPreprocessor.Mode.ORIGINAL?"":" · luz: "+LowLightInfo.label(out.appliedLight);
+        scaleLabel.setText((liveRoiFraction==null?"":"ROI · ")+out.scaleNote+light);
+        if(liveScale!=null&&!out.physical()&&!liveScale.settings.pixelsOnly()&&!liveScaleMismatchNotified){liveScaleMismatchNotified=true;toast("A escala não vale para este enquadramento. Recalibre em Escala / mm.");}
+        applyViewMode();
+    }
+    /** Foto a partir do quadro de análise, para câmeras que não aceitam foto simultânea (EXTERNAL/LEGACY). */
+    private void saveFrameAsPhoto(androidx.camera.core.ImageProxy image){
+        File output=new File(getCacheDir(),"captura_"+System.currentTimeMillis()+".jpg");
+        try{
+            Bitmap b=image.toBitmap();
+            android.graphics.Rect crop=image.getCropRect();
+            if(crop!=null&&(crop.width()!=b.getWidth()||crop.height()!=b.getHeight())){Bitmap c=Bitmap.createBitmap(b,crop.left,crop.top,crop.width(),crop.height());b.recycle();b=c;}
+            int rotation=image.getImageInfo().getRotationDegrees();
+            if(rotation!=0){android.graphics.Matrix m=new android.graphics.Matrix();m.postRotate(rotation);Bitmap r=Bitmap.createBitmap(b,0,0,b.getWidth(),b.getHeight(),m,true);b.recycle();b=r;}
+            try(FileOutputStream o=new FileOutputStream(output)){b.compress(Bitmap.CompressFormat.JPEG,PHOTO_JPEG_QUALITY,o);}
+            effectivePhotoSize=new Size(b.getWidth(),b.getHeight());b.recycle();
+            runOnUiThread(()->cameraResolutionLabel.setText("Foto do quadro ao vivo: "+effectivePhotoSize.getWidth()+"×"+effectivePhotoSize.getHeight()+" · câmera sem foto simultânea"));
+            processPhoto(output,"image/jpeg",parameters);
+        }catch(Exception e){output.delete();runOnUiThread(()->{if(!isDestroyed()){returnToCamera();toast("Não foi possível fotografar pelo quadro: "+e.getMessage());}});}
+    }
+    /** Cópia do último quadro analisado (cinza, para ROI e calibração no ao vivo); null se ainda não houve quadro. */
+    private Mat liveSnapshot(){synchronized(liveFrameLock){return lastLiveGray==null||lastLiveGray.empty()?null:lastLiveGray.clone();}}
+    private Bitmap grayBitmap(Mat gray){Bitmap b=Bitmap.createBitmap(gray.cols(),gray.rows(),Bitmap.Config.ARGB_8888);org.opencv.android.Utils.matToBitmap(gray,b);return b;}
+    /** Ao voltar da foto: ROI e escala definidas nela passam a valer no ao vivo (se a foto não tinha, mantém as do ao vivo). */
+    private void carryPhotoSettingsToLive(){
+        try{
+            if(interestRegion!=null&&photoBitmap!=null)liveRoiFraction=LiveFrameAnalysis.toFraction(interestRegion,photoBitmap.getWidth(),photoBitmap.getHeight());
+            if(scaleSettings!=null&&!scaleSettings.pixelsOnly()&&originalWidth>0&&originalHeight>0){
+                liveScale=new LiveFrameAnalysis.ScaleTransfer(scaleSettings,originalWidth,originalHeight,"da última foto");liveScaleMismatchNotified=false;
+            }
+        }catch(RuntimeException ignored){}
+    }
+    private void showLiveRegionEditor(){
+        Mat gray=liveSnapshot();if(gray==null){toast("Aguarde o primeiro quadro da câmera.");return;}
+        Bitmap frame;try{frame=grayBitmap(gray);}finally{gray.release();}
+        InterestRegion initial=LiveFrameAnalysis.roiInFrame(liveRoiFraction,frame.getWidth(),frame.getHeight());
+        android.app.Dialog dialog=new android.app.Dialog(this);dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(12),dp(12),dp(12),dp(12));root.setBackgroundColor(Color.rgb(16,26,35));
+        root.addView(text("Área de interesse · ao vivo",22,Color.WHITE));
+        root.addView(text("Contagem, gráficos e mapa ao vivo passam a usar só esta área. Ela é guardada em proporção do quadro e vale também ao voltar de uma foto.",13,Color.LTGRAY));
+        RegionEditorView editor=new RegionEditorView(this,frame,initial);
+        LinearLayout shapes=row();Button rectangle=button("Retângulo",false),circle=button("Círculo",false),reset=button("Restaurar",false);
+        shapes.addView(rectangle,new LinearLayout.LayoutParams(0,dp(44),1));shapes.addView(circle,new LinearLayout.LayoutParams(0,dp(44),1));shapes.addView(reset,new LinearLayout.LayoutParams(0,dp(44),1));root.addView(shapes);
+        rectangle.setOnClickListener(v->editor.shape(InterestRegion.Shape.RECTANGLE));circle.setOnClickListener(v->editor.shape(InterestRegion.Shape.CIRCLE));reset.setOnClickListener(v->editor.reset());
+        root.addView(editor,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout actions=row();Button cancel=button("Cancelar",false),whole=button("Quadro inteiro",false),apply=button("Aplicar",true);
+        actions.addView(cancel,new LinearLayout.LayoutParams(0,dp(48),1));actions.addView(whole,new LinearLayout.LayoutParams(0,dp(48),1));actions.addView(apply,new LinearLayout.LayoutParams(0,dp(48),1));root.addView(actions);
+        cancel.setOnClickListener(v->dialog.dismiss());
+        whole.setOnClickListener(v->{liveRoiFraction=null;overlay.region(null);updateControls();dialog.dismiss();});
+        apply.setOnClickListener(v->{liveRoiFraction=LiveFrameAnalysis.toFraction(editor.region(),frame.getWidth(),frame.getHeight());updateControls();dialog.dismiss();});
+        dialog.setContentView(root);dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);
+    }
+    /** "Luz" no ao vivo: lanterna e o mesmo filtro de iluminação da foto, com prévia no quadro atual. */
+    private void showLiveLight(){
+        final LiveFrameAnalysis.Light[] lights=LiveFrameAnalysis.Light.values();
+        String[] names=new String[lights.length];for(int i=0;i<lights.length;i++)names[i]=lights[i].label();
+        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(12),dp(8),dp(12),dp(8));
+        body.addView(text("O filtro só PROPÕE as pelotas; as elipses e as medidas usam os pixels originais do quadro, como na foto.",13,Color.LTGRAY));
+        ImageView previewImage=new ImageView(this);previewImage.setAdjustViewBounds(true);body.addView(previewImage,new LinearLayout.LayoutParams(-1,dp(240)));
+        android.widget.Spinner spinner=new android.widget.Spinner(this);
+        spinner.setAdapter(new android.widget.ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names));spinner.setSelection(liveLight.ordinal());body.addView(spinner);
+        CheckBox showFiltered=new CheckBox(this);showFiltered.setText("Mostrar a imagem filtrada na tela");showFiltered.setTextColor(Color.WHITE);showFiltered.setChecked(liveShowFiltered);body.addView(showFiltered);
+        CheckBox charts=new CheckBox(this);charts.setText("Histograma e Rosin–Rammler no ao vivo");charts.setTextColor(Color.WHITE);charts.setChecked(liveCharts);body.addView(charts);
+        TextView quality=text("",12,Color.rgb(151,174,187));body.addView(quality);
+        Mat snap=liveSnapshot();
+        final Runnable render=()->{
+            if(snap==null){quality.setText("Sem quadro da câmera ainda.");return;}
+            LiveFrameAnalysis.Light l=lights[spinner.getSelectedItemPosition()];
+            LowLightPreprocessor.Quality q=LowLightPreprocessor.assess(snap);
+            LowLightPreprocessor.Mode m=l==LiveFrameAnalysis.Light.AUTO?(q.needsCorrection()?LowLightPreprocessor.Mode.GAMMA_CLAHE:LowLightPreprocessor.Mode.ORIGINAL):l.fixedMode()==null?LowLightPreprocessor.Mode.ORIGINAL:l.fixedMode();
+            Mat out=LowLightPreprocessor.apply(snap,m);
+            try{previewImage.setImageBitmap(grayBitmap(out));}finally{out.release();}
+            quality.setText(String.format(Locale.getDefault(),"Nível médio %.0f · contraste %.0f · %s",q.mean,q.standardDeviation,q.needsCorrection()?"escuro ou pouco contraste":"iluminação adequada"));
+        };
+        spinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){try{render.run();}catch(RuntimeException|LinkageError ignored){}}
+            public void onNothingSelected(android.widget.AdapterView<?> p){}
+        });
+        AlertDialog.Builder b=new AlertDialog.Builder(this).setTitle("Luz e filtro · ao vivo").setView(body)
+            .setNegativeButton("Cancelar",null)
+            .setPositiveButton("Aplicar",(d,w)->{liveLight=lights[spinner.getSelectedItemPosition()];liveShowFiltered=showFiltered.isChecked();liveCharts=charts.isChecked();
+                getPreferences(MODE_PRIVATE).edit().putString("live_light",liveLight.name()).putBoolean("live_show_filtered",liveShowFiltered).putBoolean("live_charts",liveCharts).apply();updateControls();});
+        if(camera!=null&&camera.getCameraInfo().hasFlashUnit())b.setNeutralButton(torchOn?"Desligar lanterna":"Ligar lanterna",(d,w)->toggleTorch());
+        AlertDialog dialog=b.create();dialog.setOnDismissListener(d->{if(snap!=null)snap.release();});dialog.show();
+    }
+    /** "Escala / mm" no ao vivo: usar a da última foto, calibrar pelo recipiente neste quadro, px/mm manual ou remover. */
+    private void showLiveScale(){
+        String now=liveScale==null?"Sem escala física (histograma em px).":"Atual: "+liveScale.describe(lastLiveResult==null?640:lastLiveResult.width,lastLiveResult==null?480:lastLiveResult.height);
+        String[] options={"Calibrar pelo recipiente neste quadro","Informar px/mm deste quadro","Remover escala (voltar a px)"};
+        TextView title=text("Escala no ao vivo\n"+now,15,Color.WHITE);title.setPadding(dp(20),dp(16),dp(20),dp(8));
+        new AlertDialog.Builder(this).setCustomTitle(title)
+            .setItems(options,(d,which)->{
+                if(which==0)liveContainerCalibration();
+                else if(which==1)liveManualScale();
+                else{liveScale=null;toast("Ao vivo em pixels.");}
+            }).setNegativeButton("Fechar",null).show();
+    }
+    private void liveContainerCalibration(){
+        Mat gray=liveSnapshot();if(gray==null){toast("Aguarde o primeiro quadro da câmera.");return;}
+        EditText mm=new EditText(this);mm.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);mm.setHint("Diâmetro interno (mm)");
+        String saved=getPreferences(MODE_PRIVATE).getString("container_mm","");mm.setText(saved);
+        new AlertDialog.Builder(this).setTitle("Recipiente no quadro ao vivo").setMessage("A borda interna é detectada automaticamente neste quadro. Use a mesma câmera, altura e zoom das medições.").setView(mm)
+            .setNegativeButton("Cancelar",(d,w)->gray.release())
+            .setPositiveButton("Detectar",(d,w)->{
+                try{
+                    double v=parsePositive(mm.getText().toString());getPreferences(MODE_PRIVATE).edit().putString("container_mm",mm.getText().toString()).apply();
+                    LiveFrameAnalysis.ScaleTransfer t=LiveFrameAnalysis.containerOnFrame(gray,v,ContainerCalibration.Plane.RIM,binWidthForLive(),true,false);
+                    if(t==null){toast("Borda não encontrada com segurança. Enquadre o recipiente inteiro ou use px/mm.");return;}
+                    Bitmap shown=grayBitmap(gray);android.graphics.Canvas c=new android.graphics.Canvas(shown);android.graphics.Paint p=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                    p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(Math.max(2,shown.getWidth()/320f));p.setColor(Color.rgb(82,216,190));
+                    double ppm=t.pixelsPerMm(shown.getWidth(),shown.getHeight());
+                    if(t.circle!=null)c.drawCircle((float)t.circle.cx,(float)t.circle.cy,(float)t.circle.r,p);
+                    ImageView iv=new ImageView(this);iv.setAdjustViewBounds(true);
+                    iv.setImageBitmap(shown);
+                    new AlertDialog.Builder(this).setTitle("Confirme a borda").setView(iv)
+                        .setMessage(String.format(Locale.getDefault(),"%.3f px/mm neste quadro (%s). A escala vale enquanto a câmera não mudar de posição ou zoom.",ppm,t.origin))
+                        .setNegativeButton("Descartar",null).setPositiveButton("Usar",(d2,w2)->{liveScale=t;liveScaleMismatchNotified=false;toast("Escala aplicada ao ao vivo.");}).show();
+                }catch(RuntimeException e){toast(e.getMessage()==null?"Não foi possível calibrar.":e.getMessage());}
+                finally{gray.release();}
+            }).show();
+    }
+    private void liveManualScale(){
+        int w=lastLiveResult==null?0:lastLiveResult.width,h=lastLiveResult==null?0:lastLiveResult.height;
+        if(w<=0){toast("Aguarde o primeiro quadro da câmera.");return;}
+        EditText ppm=new EditText(this);ppm.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);ppm.setHint("px/mm no quadro "+w+"×"+h);
+        new AlertDialog.Builder(this).setTitle("px/mm do quadro ao vivo").setView(ppm).setNegativeButton("Cancelar",null)
+            .setPositiveButton("Usar",(d,which)->{try{double v=parsePositive(ppm.getText().toString());
+                liveScale=new LiveFrameAnalysis.ScaleTransfer(new Granulometry.Settings(v,binWidthForLive(),true,false),w,h,"informada no ao vivo");liveScaleMismatchNotified=false;}
+                catch(RuntimeException e){toast(e.getMessage());}}).show();
+    }
+    /** Classe do histograma do ao vivo: a da última escala usada, senão 1 mm. */
+    private double binWidthForLive(){return liveScale!=null&&!liveScale.settings.pixelsOnly()?liveScale.settings.binWidthMm:1.0;}
+
+    /** Diálogo de câmeras: lista, troca, atualizar (USB recém-conectada) e diagnóstico USB/OTG. */
+    private void showCameraPicker(){
+        java.util.List<CameraChoice.Entry> list=new java.util.ArrayList<>(cameraEntries);
+        String[] names=new String[list.size()];int checked=-1;
+        for(int i=0;i<list.size();i++){names[i]=list.get(i).label();if(activeCamera!=null&&list.get(i).id.equals(activeCamera.id))checked=i;}
+        AlertDialog.Builder b=new AlertDialog.Builder(this).setTitle("Câmera");
+        if(names.length==0)b.setMessage("Nenhuma câmera disponível para o app.");
+        else b.setSingleChoiceItems(names,checked,(d,which)->{d.dismiss();CameraChoice.Entry e=list.get(which);if(activeCamera==null||!e.id.equals(activeCamera.id))switchCamera(e.id);});
+        b.setNeutralButton("Diagnóstico USB",(d,w)->new AlertDialog.Builder(this).setTitle("Câmera USB (OTG)").setMessage(CameraChoice.diagnostics(this,cameraEntries))
+                .setPositiveButton("Fechar",null).setNeutralButton("Atualizar lista",(d2,w2)->refreshCameraList()).show());
+        b.setNegativeButton("Detalhes da foto",(d,w)->showCameraSettings());
+        b.setPositiveButton("Atualizar lista",(d,w)->refreshCameraList());
+        b.show();
+    }
+    /** Conectar/desconectar câmera USB: atualiza a lista; se a ativa saiu, volta para a traseira. */
+    private void registerUsbReceiver(){
+        if(usbReceiver!=null)return;
+        usbReceiver=new android.content.BroadcastReceiver(){@Override public void onReceive(android.content.Context c,Intent i){
+            boolean attached=android.hardware.usb.UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(i.getAction());
+            handler.postDelayed(()->{
+                if(isDestroyed())return;
+                java.util.List<String> usb=CameraChoice.usbVideoDevices(MainActivity.this);
+                if(attached&&!usb.isEmpty())toast("Câmera USB conectada: "+usb.get(0)+". Escolha em Câmera (rótulo abaixo da imagem).");
+                if(attached||activeCamera!=null&&activeCamera.external())refreshCameraList();
+            },1500);
+        }};
+        android.content.IntentFilter f=new android.content.IntentFilter();
+        f.addAction(android.hardware.usb.UsbManager.ACTION_USB_DEVICE_ATTACHED);f.addAction(android.hardware.usb.UsbManager.ACTION_USB_DEVICE_DETACHED);
+        ContextCompat.registerReceiver(this,usbReceiver,f,ContextCompat.RECEIVER_NOT_EXPORTED);
+    }
+    private void unregisterUsbReceiver(){if(usbReceiver!=null){try{unregisterReceiver(usbReceiver);}catch(RuntimeException ignored){}usbReceiver=null;}}
     /** Enumerates actual JPEG stream sizes; CameraX can negotiate a smaller size when combined with preview/analysis. */
     private Size maximumJpegResolution() {
         Size fallback=new Size(1920,1440);
@@ -318,7 +561,9 @@ public final class MainActivity extends ComponentActivity {
         hint.setText(result.candidateLimit?"Muitos candidatos. Aproxime a câmera ou ajuste o tamanho.":photo?"Confira as elipses antes de usar a contagem.":"Mantenha a câmera parada. Toque na imagem para focar.");
     }
     private void capturePhoto() {
-        if(mode!=Mode.LIVE||imageCapture==null)return;
+        if(mode!=Mode.LIVE)return;
+        if(captureFromFrame){setBusy(Mode.PROCESSING,"Fotografando pelo quadro…");epoch++;frameCaptureRequested.set(true);return;}
+        if(imageCapture==null)return;
         setBusy(Mode.PROCESSING,"Fotografando…");epoch++;
         File output=new File(getCacheDir(),"captura_"+System.currentTimeMillis()+".jpg");
         imageCapture.takePicture(new ImageCapture.OutputFileOptions.Builder(output).build(),worker,new ImageCapture.OnImageSavedCallback() {
@@ -543,11 +788,12 @@ public final class MainActivity extends ComponentActivity {
         try{startActivity(intent);}catch(android.content.ActivityNotFoundException e){toast("Abra o arquivo _resultado.png na Galeria / PelotaVision.");}
     }
     private void returnToCamera() {
-        epoch++;mode=Mode.LIVE;lastResult=0;lastLiveResult=null;releasePreviousPhoto();hideColorMap(true);
+        epoch++;mode=Mode.LIVE;lastResult=0;lastLiveResult=null;liveDistribution=null;releasePreviousPhoto();hideColorMap(true);
         frozen.setVisibility(View.GONE);overlay.clear();badge.setText("AO VIVO");count.setText("—");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");detail.setText("Aguardando análise");
         hint.setText("Mantenha a câmera parada. Toque na imagem para focar.");updateControls();
     }
     private void releasePreviousPhoto() {
+        carryPhotoSettingsToLive();
         frozen.setImageDrawable(null);
         if(displayBitmap!=null&&displayBitmap!=photoBitmap&&displayBitmap!=photoFiltered&&!displayBitmap.isRecycled())displayBitmap.recycle();displayBitmap=displaySource=null;
         if(photoFiltered!=null){if(!photoFiltered.isRecycled())photoFiltered.recycle();photoFiltered=null;}displayWindow=photoAnalysisWindow=suggestionWindow=null;roiNeedsAnalysis=false;photoDetailReport=null;detailMode=false;
@@ -576,9 +822,9 @@ public final class MainActivity extends ComponentActivity {
         back.setVisibility(photo?View.VISIBLE:View.GONE);back.setEnabled(!busy);
         open.setVisibility(photo?View.GONE:View.VISIBLE);open.setEnabled(!busy&&nativeReady);
         profileLabel.setEnabled(!busy&&mode==Mode.PHOTO);
-        adjust.setEnabled(!busy);torch.setEnabled(!busy&&(photo||(camera!=null&&camera.getCameraInfo().hasFlashUnit())));torch.setText(photo?"Luz/ROI":torchOn?"Luz ✓":"Luz");
-        calibration.setEnabled(!busy&&photoResult!=null&&mode==Mode.PHOTO);
-        if(regionButton!=null){regionButton.setEnabled(!busy&&mode==Mode.PHOTO&&photoBitmap!=null);regionButton.setText(interestRegion==null?"Área":"Área ✓");}
+        adjust.setEnabled(!busy);torch.setEnabled(!busy&&(photo||(camera!=null&&camera.getCameraInfo().hasFlashUnit())));torch.setText(photo?"Luz/ROI":torchOn||liveLight!=LiveFrameAnalysis.Light.OFF?"Luz ✓":"Luz");torch.setEnabled(!busy&&(photo||camera!=null));
+        calibration.setEnabled(!busy&&(photoResult!=null&&mode==Mode.PHOTO||mode==Mode.LIVE&&camera!=null));
+        if(regionButton!=null){regionButton.setEnabled(!busy&&(mode==Mode.PHOTO&&photoBitmap!=null||mode==Mode.LIVE&&camera!=null));regionButton.setText((mode==Mode.LIVE?liveRoiFraction:interestRegion)==null?"Área":"Área ✓");}
         if(roiActions!=null){roiActions.setVisibility(photo?View.VISIBLE:View.GONE);segmentRoi.setEnabled(!busy&&mode==Mode.PHOTO&&photoBitmap!=null);searchRoi.setEnabled(segmentRoi.isEnabled());segmentRoi.setText(interestRegion==null?"Segmentar foto":"Segmentar ROI");searchRoi.setText(interestRegion==null?"Buscar melhor ajuste":"Buscar ajuste na ROI");}
         if(mode==Mode.PHOTO)badge.setText(interestRegion==null?"FOTO":"ROI");
     }
@@ -1090,10 +1336,12 @@ public final class MainActivity extends ComponentActivity {
                     .setNegativeButton("Abrir fotos",null).setPositiveButton("Configurações",(dialog,which)->startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName())))).show();
         }
     }
-    @Override protected void onResume(){super.onResume();if(nativeReady&&camera==null&&preview!=null&&ContextCompat.checkSelfPermission(this,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)preview.post(this::bindCamera);}
+    @Override protected void onPause(){unregisterUsbReceiver();super.onPause();}
+    @Override protected void onResume(){super.onResume();registerUsbReceiver();if(nativeReady&&camera==null&&preview!=null&&ContextCompat.checkSelfPermission(this,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)preview.post(this::bindCamera);}
     @Override protected void onDestroy() {
         epoch++;if(tuningCancel!=null)tuningCancel.set(true);closeTuneProgress();handler.removeCallbacksAndMessages(null);
         if(analysis!=null)analysis.clearAnalyzer();if(provider!=null)provider.unbindAll();
+        synchronized(liveFrameLock){if(lastLiveGray!=null){lastLiveGray.release();lastLiveGray=null;}}
         worker.shutdown();
         // In-flight workers hold their own bitmap. Avoid deleting their source during a save/reanalysis.
         if(mode!=Mode.SAVING&&mode!=Mode.PROCESSING)releasePreviousPhoto();
@@ -1107,7 +1355,8 @@ public final class MainActivity extends ComponentActivity {
     
     /** Botão de visualização: Segmentação → Mapa → Original → Segmentação. Toque longo: opções do mapa. */
     private void toggleColorMap() {
-        if(mode!=Mode.PHOTO||photoResult==null||distribution==null){toast("Analise uma foto para alternar a visualização. Toque longo: opções do mapa.");return;}
+        boolean live=mode==Mode.LIVE&&liveDistribution!=null&&lastLiveResult!=null;
+        if(!live&&(mode!=Mode.PHOTO||photoResult==null||distribution==null)){toast("Aguarde a contagem ao vivo ou analise uma foto. Toque longo: opções do mapa.");return;}
         setViewMode(viewMode==1?2:viewMode==2?0:1);
         toast(viewMode==2?"Mapa granulométrico · toque longo no botão para opacidade e escala":viewMode==0?"Visualização original (sem marcações)":"Visualização de segmentação");
     }
@@ -1115,7 +1364,7 @@ public final class MainActivity extends ComponentActivity {
     private void applyViewMode(){
         if(mapButton!=null)mapButton.setText(viewMode==2?"Mapa":viewMode==0?"Orig.":"Seg.");
         if(colorMap==null||overlay==null)return;
-        boolean photo=mode==Mode.PHOTO&&photoResult!=null&&distribution!=null;
+        boolean photo=mode==Mode.PHOTO&&photoResult!=null&&distribution!=null||mode==Mode.LIVE&&liveDistribution!=null&&lastLiveResult!=null;
         colorMap.setVisibility(photo&&viewMode==2?View.VISIBLE:View.GONE);
         overlay.setVisibility(!photo||viewMode==1?View.VISIBLE:View.INVISIBLE);
     }

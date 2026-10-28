@@ -1,0 +1,21 @@
+{
+ "fixado_em": "2026-10-28, antes de qualquer treino com as fotos de webcam de 27/10",
+ "referencia_mnv3_embarcada": {
+  "id": "mobilenetv3_small_cracks_20261027_v2",
+  "webcam_externo_auc": 0.872,
+  "webcam_externo_recall_limiar_0.5": 0.7097,
+  "webcam_externo_trincadas_sem_indicacao_politica_app": 8,
+  "holdout_antigo_auc": 0.975,
+  "holdout_antigo_fn_limiar_0.5": 0
+ },
+ "protocolo": "ponto de partida = ONNX embarcado v2 (BN congelada); webcam: análise inteira fora (6 análises com rótulo); mesmas épocas/LR em todas as dobras e no final; limiar 0,5 e política 0,4/0,6 do app; holdout antigo avaliado uma vez",
+ "hiperparametros": {"epocas": 6, "lr": 0.0002, "batch": 32, "peso_sintetico": 0.5},
+ "criterio_para_substituir_o_asset": {
+  "webcam_loco_auc_min": 0.872,
+  "webcam_loco_recall_min": 0.7097,
+  "webcam_loco_sem_indicacao_trincadas_max": 8,
+  "holdout_antigo_auc_min": 0.94,
+  "holdout_antigo_fn_max": 1
+ },
+ "nota": "Bancada (rajadas) não entra no critério: o ponto de partida v2 já viu todas as rajadas, então a validação por rajada seria otimista. Ela é reportada só como verificação de que o modelo não esqueceu a bancada."
+}

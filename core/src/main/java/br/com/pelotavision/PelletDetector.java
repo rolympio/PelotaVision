@@ -104,41 +104,28 @@ public final class PelletDetector {
         final int x, y; final double radius; final float score;
         Seed(int x, int y, double radius, float score) {this.x=x; this.y=y; this.radius=radius; this.score=score;}
     }
-    public Result detect(Mat gray, Parameters config, int maximumSide, int scales) {
-        if (gray.empty() || gray.type()!=CvType.CV_8UC1)
-            throw new IllegalArgumentException("An 8-bit gray image is required");
-        if (maximumSide<128 || scales<2) throw new IllegalArgumentException("Invalid work resolution");
-        long start=System.nanoTime();
-        int originalW=gray.cols(), originalH=gray.rows();
-        double scale=Math.min(1., maximumSide/(double)Math.max(originalW,originalH));
-        int w=Math.max(1,(int)Math.round(originalW*scale)), h=Math.max(1,(int)Math.round(originalH*scale));
-        double sx=w/(double)originalW, sy=h/(double)originalH, isotropic=Math.sqrt(sx*sy);
-        double rmin=originalW*config.minRadiusFraction*isotropic;
-        double rmax=originalW*config.maxRadiusFraction*isotropic;
-        int pad=Math.max(1,(int)Math.round(rmax*1.2));
-        List<Mat> nativeMats=new ArrayList<>();
-        try {
-            Mat small=own(nativeMats), normalized=own(nativeMats), extended=own(nativeMats);
-            Mat blurred=own(nativeMats), response=own(nativeMats), smooth=own(nativeMats), binary=own(nativeMats);
-            Imgproc.resize(gray,small,new Size(w,h),0,0,Imgproc.INTER_AREA);
-            byte[] raw=new byte[w*h]; small.get(0,0,raw);
-            int[] histogram=new int[256]; for(byte value:raw) histogram[value&255]++;
-            int total=0, dark=0; for(;dark<255;dark++){total+=histogram[dark];if(total>=raw.length/10)break;}
-            small.convertTo(normalized,CvType.CV_32F,1./255);
-            Core.copyMakeBorder(normalized,extended,pad,pad,pad,pad,Core.BORDER_CONSTANT,new Scalar(dark/255.));
-            int ew=extended.cols(), eh=extended.rows();
-            float[] values=new float[ew*eh], best=new float[w*h], radii=new float[w*h];
-            double sigmaMin=Math.max(1.,rmin/Math.sqrt(2)), sigmaMax=Math.max(sigmaMin+.1,rmax/Math.sqrt(2));
-            for(int si=0;si<scales;si++) {
-                double sigma=sigmaMin+(sigmaMax-sigmaMin)*si/(scales-1.);
-                Imgproc.GaussianBlur(extended,blurred,new Size(0,0),sigma,sigma,Core.BORDER_REFLECT_101);
-                Imgproc.Laplacian(blurred,response,CvType.CV_32F,1,-sigma*sigma,0,Core.BORDER_REFLECT_101);
-                response.get(0,0,values);
-                for(int y=0;y<h;y++) for(int x=0;x<w;x++) {
-                    int p=y*w+x;float v=values[(y+pad)*ew+x+pad];
-                    if(v>best[p]) {best[p]=v;radii[p]=(float)(sigma*Math.sqrt(2));}
-                }
-            }
+    /**
+     * 0.16.0: parte do LoG que NÃO depende do limiar (espaço de escala, máscara de Otsu, imagem suavizada).
+     * A sensibilidade só muda o limiar, então a busca de ajuste reaproveita isto entre sensibilidades do mesmo
+     * perfil. {@code prepare(...).detect(cfg)} dá exatamente o mesmo resultado de {@link #detect(Mat, Parameters, int, int)}.
+     */
+    public static final class Prepared {
+        final int originalW, originalH, w, h;
+        final double sx, sy, rmin, minFraction, maxFraction;
+        final float[] best, radii;
+        final byte[] light;
+        final boolean[] mask;
+        final long prepareNanos;
+        private Prepared(int ow, int oh, int w, int h, double sx, double sy, double rmin, double minF, double maxF,
+                         float[] best, float[] radii, byte[] light, boolean[] mask, long nanos) {
+            originalW=ow;originalH=oh;this.w=w;this.h=h;this.sx=sx;this.sy=sy;this.rmin=rmin;minFraction=minF;maxFraction=maxF;
+            this.best=best;this.radii=radii;this.light=light;this.mask=mask;prepareNanos=nanos;
+        }
+        /** Picos, supressão e watershed com o limiar de {@code config} (mesmo perfil de raio da preparação). */
+        public Result detect(Parameters config) {
+            if (config.minRadiusFraction != minFraction || config.maxRadiusFraction != maxFraction)
+                throw new IllegalArgumentException("Perfil de raio diferente do preparado");
+            long start=System.nanoTime();
             List<Seed> possible=new ArrayList<>();
             for(int y=0;y<h;y++) for(int x=0;x<w;x++) {
                 int p=y*w+x;float v=best[p]; if(v<config.threshold)continue;
@@ -162,11 +149,6 @@ public final class PelletDetector {
                     seeds.add(candidate);
                 }
             }
-            Imgproc.GaussianBlur(small,smooth,new Size(0,0),1.5);
-            double otsu=Imgproc.threshold(smooth,binary,0,255,Imgproc.THRESH_BINARY|Imgproc.THRESH_OTSU);
-            byte[] light=new byte[w*h];smooth.get(0,0,light);
-            boolean[] mask=new boolean[w*h];for(int p=0;p<mask.length;p++)mask[p]=(light[p]&255)>otsu*.72;
-            fillHoles(mask,w,h);
             int[] labels=watershed(light,mask,seeds,w,h);
             int n=seeds.size();
             int[] kept=new int[w*h], area=new int[n+1], perimeter=new int[n+1];
@@ -202,7 +184,53 @@ public final class PelletDetector {
                 circles.add(new Detection(cx/sx,cy/sy,radius,sourceArea,roundness,partial[label],review));
             }
             circles.sort(Comparator.comparingDouble((Detection d)->d.y).thenComparingDouble(d->d.x));
-            return new Result(circles,originalW,originalH,seeds.size(),(System.nanoTime()-start)/1_000_000,limit);
+            return new Result(circles,originalW,originalH,seeds.size(),(prepareNanos+System.nanoTime()-start)/1_000_000,limit);
+        }
+    }
+    public Result detect(Mat gray, Parameters config, int maximumSide, int scales) {
+        return prepare(gray, config, maximumSide, scales).detect(config);
+    }
+    public static Prepared prepare(Mat gray, Parameters config, int maximumSide, int scales) {
+        if (gray.empty() || gray.type()!=CvType.CV_8UC1)
+            throw new IllegalArgumentException("An 8-bit gray image is required");
+        if (maximumSide<128 || scales<2) throw new IllegalArgumentException("Invalid work resolution");
+        long start=System.nanoTime();
+        int originalW=gray.cols(), originalH=gray.rows();
+        double scale=Math.min(1., maximumSide/(double)Math.max(originalW,originalH));
+        int w=Math.max(1,(int)Math.round(originalW*scale)), h=Math.max(1,(int)Math.round(originalH*scale));
+        double sx=w/(double)originalW, sy=h/(double)originalH, isotropic=Math.sqrt(sx*sy);
+        double rmin=originalW*config.minRadiusFraction*isotropic;
+        double rmax=originalW*config.maxRadiusFraction*isotropic;
+        int pad=Math.max(1,(int)Math.round(rmax*1.2));
+        List<Mat> nativeMats=new ArrayList<>();
+        try {
+            Mat small=own(nativeMats), normalized=own(nativeMats), extended=own(nativeMats);
+            Mat blurred=own(nativeMats), response=own(nativeMats), smooth=own(nativeMats), binary=own(nativeMats);
+            Imgproc.resize(gray,small,new Size(w,h),0,0,Imgproc.INTER_AREA);
+            byte[] raw=new byte[w*h]; small.get(0,0,raw);
+            int[] histogram=new int[256]; for(byte value:raw) histogram[value&255]++;
+            int total=0, dark=0; for(;dark<255;dark++){total+=histogram[dark];if(total>=raw.length/10)break;}
+            small.convertTo(normalized,CvType.CV_32F,1./255);
+            Core.copyMakeBorder(normalized,extended,pad,pad,pad,pad,Core.BORDER_CONSTANT,new Scalar(dark/255.));
+            int ew=extended.cols(), eh=extended.rows();
+            float[] values=new float[ew*eh], best=new float[w*h], radii=new float[w*h];
+            double sigmaMin=Math.max(1.,rmin/Math.sqrt(2)), sigmaMax=Math.max(sigmaMin+.1,rmax/Math.sqrt(2));
+            for(int si=0;si<scales;si++) {
+                double sigma=sigmaMin+(sigmaMax-sigmaMin)*si/(scales-1.);
+                Imgproc.GaussianBlur(extended,blurred,new Size(0,0),sigma,sigma,Core.BORDER_REFLECT_101);
+                Imgproc.Laplacian(blurred,response,CvType.CV_32F,1,-sigma*sigma,0,Core.BORDER_REFLECT_101);
+                response.get(0,0,values);
+                for(int y=0;y<h;y++) for(int x=0;x<w;x++) {
+                    int p=y*w+x;float v=values[(y+pad)*ew+x+pad];
+                    if(v>best[p]) {best[p]=v;radii[p]=(float)(sigma*Math.sqrt(2));}
+                }
+            }
+            Imgproc.GaussianBlur(small,smooth,new Size(0,0),1.5);
+            double otsu=Imgproc.threshold(smooth,binary,0,255,Imgproc.THRESH_BINARY|Imgproc.THRESH_OTSU);
+            byte[] light=new byte[w*h];smooth.get(0,0,light);
+            boolean[] mask=new boolean[w*h];for(int p=0;p<mask.length;p++)mask[p]=(light[p]&255)>otsu*.72;
+            fillHoles(mask,w,h);
+            return new Prepared(originalW,originalH,w,h,sx,sy,rmin,config.minRadiusFraction,config.maxRadiusFraction,best,radii,light,mask,System.nanoTime()-start);
         } finally {for(Mat mat:nativeMats)mat.release();}
     }
     private static Mat own(List<Mat> mats){Mat m=new Mat();mats.add(m);return m;}

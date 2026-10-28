@@ -89,11 +89,17 @@ public final class LiveTuner {
         public final boolean cancelled;
         public final long durationMs;
         Run(Candidate best, List<Candidate> evaluated, int generations, boolean cancelled, long ms) {
+            this(best, evaluated, generations, cancelled, ms, "genetic_v1");
+        }
+        /** 0.16.0: estratégia usada ("genetic_v1" ou "two_stage_parallel_v1"). */
+        public final String strategy;
+        Run(Candidate best, List<Candidate> evaluated, int generations, boolean cancelled, long ms, String strategy) {
+            this.strategy = strategy;
             this.best = best; this.evaluated = Collections.unmodifiableList(evaluated); this.generations = generations; this.cancelled = cancelled; durationMs = ms;
         }
     }
 
-    private static int[] methods(DetectionTuner.Option start) {
+    static int[] methods(DetectionTuner.Option start) {
         boolean neural = start.neural() && NeuralPelletDetector.available(start.belt);
         return neural ? new int[]{DetectionTuner.GRADIENT, DetectionTuner.LOG, DetectionTuner.NEURAL} : new int[]{DetectionTuner.GRADIENT, DetectionTuner.LOG};
     }

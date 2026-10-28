@@ -28,6 +28,8 @@ final class LiveStabilizer {
     private volatile String progress;
     /** "Otimizar quando parado": desligado, o ao vivo mostra o quadro cru (comportamento da 0.5.4). */
     volatile boolean enabled = true;
+    /** 0.16.0: busca genética da 0.5.5 (true) ou busca rápida em duas etapas, paralela (false, padrão). */
+    volatile boolean genetic = false;
 
     /** Miniatura 96 px de largura, desfocada, em tons de cinza (entrada do detector de movimento). */
     static byte[] thumbnail(Mat bgr) {
@@ -80,14 +82,25 @@ final class LiveStabilizer {
         tuning = true;
         progress = "Cena parada: iniciando a busca do melhor ajuste…";
         try {
-            LiveTuner.Run run = LiveTuner.evolve(start, ctx, option -> {
-                List<PelletDetector.Result> out = new ArrayList<>();
-                for (Mat g : grays) out.add(DesktopAnalysis.live(g, option, roi));
-                return out;
-            }, c::get, (gen, total, best, evaluated) -> {
-                progress = String.format(Locale.ROOT, "OTIMIZANDO (algoritmo genetico) geracao %d/%d · %d ajustes avaliados · melhor: %s", gen, total, evaluated, best.summary());
-                if (onProgress != null) onProgress.run();
-            }, 20261027L + grays.get(0).cols());
+            LiveTuner.Run run;
+            if (genetic) {
+                run = LiveTuner.evolve(start, ctx, option -> {
+                    List<PelletDetector.Result> out = new ArrayList<>();
+                    for (Mat g : grays) out.add(DesktopAnalysis.live(g, option, roi));
+                    return out;
+                }, c::get, (gen, total, best, evaluated) -> {
+                    progress = String.format(Locale.ROOT, "OTIMIZANDO (algoritmo genetico) geracao %d/%d · %d ajustes avaliados · melhor: %s", gen, total, evaluated, best.summary());
+                    if (onProgress != null) onProgress.run();
+                }, 20261027L + grays.get(0).cols());
+            } else {
+                // 0.16.0: triagem método × perfil e refino da sensibilidade, em paralelo; LoG reaproveita o espaço de escala.
+                try (LiveSearch.Frames frames = new LiveSearch.Frames(grays, roi)) {
+                    run = LiveSearch.search(start, ctx, frames::run, c::get, (stage, total, best, evaluated) -> {
+                        progress = String.format(Locale.ROOT, "OTIMIZANDO (busca rapida) etapa %d · %d ajustes avaliados · melhor: %s", stage, evaluated, best.summary());
+                        if (onProgress != null) onProgress.run();
+                    }, LiveSearch.defaultThreads(), 0);
+                }
+            }
             if (c.get() || run.best == null) return null;
             synchronized (this) {
                 lastRun = run;
@@ -136,7 +149,7 @@ final class LiveStabilizer {
         }
         b.append(" · fantasmas descartados ").append(consensus.ghostsDiscarded()).append(" · instaveis agora ").append(consensus.unstableNow());
         LiveTuner.Run r = lastRun;
-        if (r != null && tunedThisStill) b.append(" · ajuste GA: ").append(r.best.option.label());
+        if (r != null && tunedThisStill) b.append(LiveSearch.STRATEGY.equals(r.strategy) ? " · ajuste (busca rapida): " : " · ajuste GA: ").append(r.best.option.label());
         else if (shown.circles.isEmpty()) b.append(" · confirmando (3 quadros)…");
         return b.toString();
     }

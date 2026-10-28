@@ -1,0 +1,169 @@
+{
+ "prefix": "webcam_pan_20261027:",
+ "n": 133,
+ "cracked": 31,
+ "groups": [
+  "webcam_pan_20261027:2026-10-27_15-16-51_Teste2",
+  "webcam_pan_20261027:2026-10-27_15-20-57_Teste2",
+  "webcam_pan_20261027:2026-10-27_15-26-52_Teste2",
+  "webcam_pan_20261027:2026-10-27_15-31-57_Teste2",
+  "webcam_pan_20261027:2026-10-27_16-02-17_Teste2",
+  "webcam_pan_20261027:2026-10-27_16-09-29_Teste2"
+ ],
+ "opencv": "4.12.0",
+ "models": {
+  "mobilenetv3_small_cracks_20261027_v2": {
+   "onnx": "app/src/main/assets/crack_mobilenetv3.onnx",
+   "auc": 0.8716002530044276,
+   "confusion_[[TN,FP],[FN,TP]]": [
+    [
+     97,
+     5
+    ],
+    [
+     9,
+     22
+    ]
+   ],
+   "precision": 0.8148148148148148,
+   "recall": 0.7096774193548387,
+   "f1": 0.7586206896551724,
+   "false_positives": 5,
+   "false_negatives": 9,
+   "app_policy_0.4_0.6": {
+    "possible_cracked": 21,
+    "possible_intact": 1,
+    "inconclusive": 23,
+    "no_indication_cracked": 8
+   },
+   "auc_ci95": [
+    0.7899617261475835,
+    0.9440210355987055
+   ],
+   "delta_auc_vs_rf_ci95": null,
+   "resampling": "pelotas (não fotos): IC otimista com 1 foto",
+   "by_group": {
+    "webcam_pan_20261027:2026-10-27_15-16-51_Teste2": {
+     "n": 20,
+     "cracked": 2,
+     "auc": 1.0,
+     "confusion_[[TN,FP],[FN,TP]]": [
+      [
+       17,
+       1
+      ],
+      [
+       0,
+       2
+      ]
+     ],
+     "precision": 0.6666666666666666,
+     "recall": 1.0,
+     "f1": 0.8,
+     "false_positives": 1,
+     "false_negatives": 0
+    },
+    "webcam_pan_20261027:2026-10-27_15-20-57_Teste2": {
+     "n": 29,
+     "cracked": 5,
+     "auc": 0.9666666666666667,
+     "confusion_[[TN,FP],[FN,TP]]": [
+      [
+       23,
+       1
+      ],
+      [
+       1,
+       4
+      ]
+     ],
+     "precision": 0.8,
+     "recall": 0.8,
+     "f1": 0.8000000000000002,
+     "false_positives": 1,
+     "false_negatives": 1
+    },
+    "webcam_pan_20261027:2026-10-27_15-26-52_Teste2": {
+     "n": 21,
+     "cracked": 4,
+     "auc": 0.8088235294117647,
+     "confusion_[[TN,FP],[FN,TP]]": [
+      [
+       15,
+       2
+      ],
+      [
+       2,
+       2
+      ]
+     ],
+     "precision": 0.5,
+     "recall": 0.5,
+     "f1": 0.5,
+     "false_positives": 2,
+     "false_negatives": 2
+    },
+    "webcam_pan_20261027:2026-10-27_15-31-57_Teste2": {
+     "n": 18,
+     "cracked": 2,
+     "auc": 0.8125,
+     "confusion_[[TN,FP],[FN,TP]]": [
+      [
+       16,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "precision": 1.0,
+     "recall": 0.5,
+     "f1": 0.6666666666666666,
+     "false_positives": 0,
+     "false_negatives": 1
+    },
+    "webcam_pan_20261027:2026-10-27_16-02-17_Teste2": {
+     "n": 29,
+     "cracked": 8,
+     "auc": 0.9464285714285714,
+     "confusion_[[TN,FP],[FN,TP]]": [
+      [
+       20,
+       1
+      ],
+      [
+       1,
+       7
+      ]
+     ],
+     "precision": 0.875,
+     "recall": 0.875,
+     "f1": 0.875,
+     "false_positives": 1,
+     "false_negatives": 1
+    },
+    "webcam_pan_20261027:2026-10-27_16-09-29_Teste2": {
+     "n": 16,
+     "cracked": 10,
+     "auc": 0.8,
+     "confusion_[[TN,FP],[FN,TP]]": [
+      [
+       6,
+       0
+      ],
+      [
+       4,
+       6
+      ]
+     ],
+     "precision": 1.0,
+     "recall": 0.6,
+     "f1": 0.7499999999999999,
+     "false_positives": 0,
+     "false_negatives": 4
+    }
+   }
+  }
+ }
+}
