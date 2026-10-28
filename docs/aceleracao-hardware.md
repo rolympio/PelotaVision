@@ -1,4 +1,4 @@
-# Aceleração por hardware (Android 0.16.0 · Windows 0.5.6)
+# Aceleração por hardware (Android 0.16.0 · Windows 0.6.0)
 
 Opção **desligada por padrão** que executa as redes neurais do PelotaVision num motor capaz de usar a GPU:
 

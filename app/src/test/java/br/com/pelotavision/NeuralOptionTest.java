@@ -59,9 +59,11 @@ public class NeuralOptionTest {
         assertFalse(bench.parameters.belt);
         assertEquals(600, bench.parameters.maxObjects);
         assertEquals(1024, bench.parameters.workSide(1024));
+        assertEquals(4096, bench.parameters.workSide(4096));
         assertTrue(belt.parameters.belt);
         assertEquals(5000, belt.parameters.maxObjects);
         assertEquals(1600, belt.parameters.workSide(1024));
+        assertEquals(1600, belt.parameters.workSide(4096));
         assertEquals(.004, belt.parameters.minRadiusFraction, 0);
         assertEquals(.016, belt.parameters.maxRadiusFraction, 0);
         assertEquals(.012, bench.parameters.minRadiusFraction, 0);

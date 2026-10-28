@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.Assert.*;
 
 /**
- * Aceleração por hardware (0.16.0 / Windows 0.5.6): ONNX Runtime contra o OpenCV DNN de referência.
+ * Aceleração por hardware (0.16.0 / Windows 0.6.0): ONNX Runtime contra o OpenCV DNN de referência.
  * O runner do CI não tem GPU NVIDIA: aqui o ONNX Runtime roda na CPU, o que testa a troca de motor, a
  * paridade, o retorno ao OpenCV e os tempos; a CUDA só é exercitada numa máquina com GPU.
  * Instâncias avulsas (load), para não mexer nos modelos instalados que os outros testes usam.

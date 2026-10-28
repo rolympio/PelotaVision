@@ -30,8 +30,8 @@ public final class PelletDetector {
             minRadiusFraction = min; maxRadiusFraction = max; this.threshold = threshold;
             this.belt = belt; maxObjects = belt ? BELT_MAX_OBJECTS : BENCH_MAX_OBJECTS;
         }
-        /** Lado máximo de trabalho: bancada usa o valor pedido; correia usa até 1600 px para não perder pelotas de ~10 px. */
-        public int workSide(int requested) { return belt ? Math.max(requested, 1600) : requested; }
+        /** Bancada respeita o pedido; correia limita o lado de trabalho a 1600 px, sem ampliar fotos menores. */
+        public int workSide(int requested) { return belt ? 1600 : requested; }
         public static Parameters automatic() { return new Parameters(.012, .15, .045); }
         public static Parameters medium() { return new Parameters(.021, .060, .045); }
     }

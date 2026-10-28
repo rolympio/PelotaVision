@@ -1,4 +1,4 @@
-PelotaVision Windows 0.5.6 - prototipo
+PelotaVision Windows 0.6.0 - prototipo
 ======================================
 
 Nucleo de analise: o MESMO codigo do PelotaVision Android 0.16.0 (deteccao por bordas,
