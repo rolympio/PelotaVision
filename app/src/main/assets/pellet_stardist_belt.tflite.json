@@ -29,8 +29,8 @@
   "tiles": 12,
   "max_abs_diff_prob": 2.294778823852539e-06,
   "max_abs_diff_dist_px": 0.0001049041748046875,
-  "ms_per_tile_onnxruntime_cpu": 67.75,
-  "ms_per_tile_tflite_cpu": 63.28,
+  "ms_per_tile_onnxruntime_cpu": 263.82,
+  "ms_per_tile_tflite_cpu": 253.19,
   "detection": [
    {
     "image": "verification/belt-0.9.0/input_correia.jpg",

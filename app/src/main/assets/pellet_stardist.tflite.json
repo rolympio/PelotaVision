@@ -1,8 +1,8 @@
 {
  "source_onnx": "pellet_stardist.onnx",
- "onnx_sha256": "53c78a9ec69dafc90e45c281408c1050a5cc1763bf514750e5be1808c5c543dc",
+ "onnx_sha256": "3ba9a0f95442e9d4df89fd18518d652eef913d5ccbe39dbbf883b01292188c3f",
  "tflite": "pellet_stardist.tflite",
- "tflite_sha256": "514d12552762b98f25495cd8b4188db82dfd953045dfb54221de6d5e68157989",
+ "tflite_sha256": "6f2427f4f79bf307e25b1a634e3e1750e63fd8e283b36d644dbf8e4f5404bbb6",
  "input_shape": [
   1,
   384,
@@ -27,41 +27,41 @@
  "accepted": true,
  "parity_float32": {
   "tiles": 4,
-  "max_abs_diff_prob": 1.430511474609375e-06,
-  "max_abs_diff_dist_px": 4.1961669921875e-05,
-  "ms_per_tile_onnxruntime_cpu": 69.44,
-  "ms_per_tile_tflite_cpu": 64.02,
+  "max_abs_diff_prob": 1.2218952178955078e-06,
+  "max_abs_diff_dist_px": 5.91278076171875e-05,
+  "ms_per_tile_onnxruntime_cpu": 293.59,
+  "ms_per_tile_tflite_cpu": 298.94,
   "detection": [
    {
     "image": "verification/fixtures/1000411645.jpg",
-    "onnx": 174,
-    "tflite": 174,
-    "matched": 174,
-    "max_center_shift_rel_radius": 0.0,
+    "onnx": 159,
+    "tflite": 159,
+    "matched": 159,
+    "max_center_shift_rel_radius": 1e-05,
     "max_radius_rel_diff": 0.0
    },
    {
     "image": "verification/fixtures/1000411646.jpg",
-    "onnx": 48,
-    "tflite": 48,
-    "matched": 48,
+    "onnx": 38,
+    "tflite": 38,
+    "matched": 38,
     "max_center_shift_rel_radius": 0.0,
     "max_radius_rel_diff": 0.0
    },
    {
     "image": "verification/fixtures/1000411647.jpg",
-    "onnx": 276,
-    "tflite": 276,
-    "matched": 276,
-    "max_center_shift_rel_radius": 1e-05,
+    "onnx": 253,
+    "tflite": 253,
+    "matched": 253,
+    "max_center_shift_rel_radius": 0.0,
     "max_radius_rel_diff": 0.0
    },
    {
     "image": "verification/fixtures/crack_example.png",
-    "onnx": 205,
-    "tflite": 205,
-    "matched": 205,
-    "max_center_shift_rel_radius": 0.0,
+    "onnx": 177,
+    "tflite": 177,
+    "matched": 177,
+    "max_center_shift_rel_radius": 1e-05,
     "max_radius_rel_diff": 0.0
    }
   ]

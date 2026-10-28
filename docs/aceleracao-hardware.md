@@ -38,13 +38,13 @@ A sonda também mede o tempo de uma execução nos dois motores; o estado mostra
 
 O Android usa um segundo formato do **mesmo** modelo: `tools/litert/convert_tflite.py` converte cada ONNX embarcado com o onnx2tf no CI (`.github/workflows/litert-convert.yml`) e só grava o `.tflite` se a detecção completa der as mesmas pelotas que o ONNX. O `.tflite.json` ao lado guarda o SHA-256 do ONNX de origem; o app recusa um `.tflite` convertido de outro ONNX. **Retreinou um modelo? O workflow roda sozinho quando um `.onnx` de `app/src/main/assets` muda.**
 
-Resultado da conversão (CPU do runner, `verification/litert-0.16.0/litert_conversion.json`):
+Resultado da conversão (reconvertida em 28/10 a partir dos modelos novos da 0.16.0, `verification/litert-0.16.0/litert_conversion.json`):
 
 | Modelo | Fotos | Pelotas ONNX = TFLite | Maior diferença |
 |---|---|---|---|
-| StarDist bancada | 4 | 174, 48, 276, 205 (todas casadas) | 1e-5 do raio |
+| StarDist bancada (modelo real v2) | 4 | 159, 38, 253, 177 (todas casadas) | 1e-5 do raio |
 | StarDist correia | 3 | 2921, 3495, 3316 (todas casadas) | 6e-5 do raio |
-| MobileNetV3 | 132 recortes | nenhuma pelota mudou de classe (0,4/0,6) | 9e-6 no escore |
+| MobileNetV3 (v3) | 130 recortes | nenhuma pelota mudou de classe (0,4/0,6) | 8e-6 no escore |
 
 ## Limitações
 
