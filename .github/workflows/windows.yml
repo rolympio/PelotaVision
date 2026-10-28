@@ -98,6 +98,12 @@ jobs:
           f=desktop/build/parity/belt.txt
           if [ -f "$f" ]; then while IFS= read -r line; do echo "::notice title=Correia::$line"; done < "$f"; else echo "::warning::Sem resumo da correia"; fi
 
+      - name: Aceleracao por hardware - ONNX Runtime x OpenCV DNN
+        if: always()
+        run: |
+          f=desktop/build/parity/accel.txt
+          if [ -f "$f" ]; then while IFS= read -r line; do echo "::notice title=Aceleracao::$line"; done < "$f"; else echo "::warning::Sem resumo da aceleracao"; fi
+
       - name: Paridade com registros historicos
         if: always()
         run: |
@@ -116,6 +122,23 @@ jobs:
           IN=pkg/input; rm -rf pkg; mkdir -p "$IN/modelos" pkg/dist
           cp desktop/build/libs/pelotavision-desktop.jar "$IN/"
           cp desktop/build/runtime-libs/*.jar "$IN/"
+          # ONNX Runtime GPU: o jar traz Windows e Linux (~400 MB); no pacote Windows ficam so as DLLs win-x64.
+          for j in "$IN"/onnxruntime*.jar; do
+            [ -f "$j" ] || continue
+            before=$(du -h "$j" | cut -f1)
+            python - "$j" <<'PY'
+          import sys, zipfile, os, shutil
+          src = sys.argv[1]; tmp = src + '.tmp'
+          with zipfile.ZipFile(src) as zi, zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as zo:
+              for it in zi.infolist():
+                  n = it.filename
+                  if n.startswith('ai/onnxruntime/native/') and not n.startswith('ai/onnxruntime/native/win-x64/') and n != 'ai/onnxruntime/native/':
+                      continue
+                  zo.writestr(it, zi.read(n))
+          shutil.move(tmp, src)
+          PY
+            echo "::notice title=ONNX Runtime no pacote::$(basename "$j") $before -> $(du -h "$j" | cut -f1) (so win-x64)"
+          done
           cp desktop/opencv-java/x64/opencv_java4120.dll "$IN/"
           # Runtime do Visual C++ ao lado da DLL do OpenCV (maquinas corporativas podem nao ter).
           for d in vcruntime140.dll vcruntime140_1.dll msvcp140.dll; do [ -f "$JH/bin/$d" ] && cp "$JH/bin/$d" "$IN/" || echo "sem $d no JDK"; done
@@ -144,6 +167,13 @@ jobs:
           cat pkg/autoteste/autoteste.txt
           grep -q '^exit=0$' pkg/autoteste/autoteste.txt
           echo "::notice title=Autoteste do pacote::$(tr '\n' ' ' < pkg/autoteste/autoteste.txt)"
+          # Mesmo autoteste com a aceleracao ligada: prova que o ONNX Runtime carrega de dentro do pacote
+          # (sem GPU no runner: CPU) e que a analise completa roda no motor novo.
+          rm -rf pkg/autoteste-gpu
+          ./pkg/dist/PelotaVision/PelotaVision.exe --autoteste "verification/fixtures/1000411645.jpg" "pkg/autoteste-gpu" --aceleracao
+          grep -q '^exit=0$' pkg/autoteste-gpu/autoteste.txt
+          grep '^accel' pkg/autoteste-gpu/autoteste.txt | while IFS= read -r l; do echo "::notice title=Autoteste com aceleracao::$l"; done
+          grep -q 'ONNX Runtime ·' pkg/autoteste-gpu/autoteste.txt || { echo "::error title=Aceleracao::ONNX Runtime nao foi usado no pacote"; exit 1; }
 
       - name: Compactar
         run: |

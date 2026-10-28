@@ -174,7 +174,12 @@ public final class MainActivity extends ComponentActivity {
         org.opencv.core.Core.setNumThreads(2);
         try(InputStream model=getAssets().open("crack_forest.pvrf")){crackModel=new CrackModel(model);}
         catch(Exception e){toast("Modelo de trincas indisponível: usando triagem heurística.");}
-        installNeuralModel();restoreVisuals();
+        // 0.16.0: aceleração por hardware (LiteRT: GPU, depois CPU), desligada por padrão. Ligada, a GPU e a sonda de
+        // paridade rodam fora da thread da interface; desligada, nada muda em relação à 0.15.5.
+        HardwareAcceleration.setProvider(new LiteRtProvider(this));
+        HardwareAcceleration.setEnabled(getPreferences(MODE_PRIVATE).getBoolean("hw_accel",false));
+        if(HardwareAcceleration.enabled())worker.execute(this::installNeuralModel);else installNeuralModel();
+        restoreVisuals();
         crackLabel.setText(crackModel==null?"Trincas: heurística de reserva":"Trincas: modelo experimental · fotografe");
         handler.post(heartbeat);
         getOnBackPressedDispatcher().addCallback(this,new androidx.activity.OnBackPressedCallback(true){
@@ -685,6 +690,21 @@ public final class MainActivity extends ComponentActivity {
         DetailedAnalysis.Report r=photoDetailReport;if(r==null)return;
         String message=r.summary()+"\nAjuste: "+r.optionId+"\nSem tratamento: "+r.baselineCount+" marcações; combinação escolhida: "+r.selectedCount+".\nBlocos escolhidos: original "+r.treatments[0]+", contraste "+r.treatments[1]+", ruído leve "+r.treatments[2]+", SR "+r.treatments[3]+".\n\nComparação heurística, sem contagem verdadeira de referência. Os contornos e as trincas usam a foto original; SR não é uma medição independente.";
         new AlertDialog.Builder(this).setTitle("Segmentação detalhada").setMessage(message).setPositiveButton("Fechar",null).setNeutralButton("Segmentar novamente",(d,w)->showSegmentationOptions()).show();
+    }
+    /** Liga/desliga a aceleração e recarrega as redes na fila de análise (nunca no meio de uma análise). */
+    private void setAcceleration(boolean on,TextView note){
+        getPreferences(MODE_PRIVATE).edit().putBoolean("hw_accel",on).apply();
+        HardwareAcceleration.setEnabled(on);
+        note.setText(on?"Carregando as redes no LiteRT e conferindo a paridade…":"Voltando ao OpenCV DNN…");
+        worker.execute(()->{
+            installNeuralModel();
+            MobileNetCrackModel net=crackNetwork;crackNetwork=null;if(net!=null)net.close(); // recarrega no próximo uso
+            final String st=HardwareAcceleration.status();
+            runOnUiThread(()->note.setText(accelerationText(st)));
+        });
+    }
+    private static String accelerationText(String status){
+        return status+"\n\nSó as redes neurais (StarDist e MobileNetV3) mudam de motor, e só se derem o mesmo resultado do OpenCV DNN numa sonda de paridade. Bordas, LoG e super-resolução continuam na CPU.";
     }
     /** Copia os ONNX dos assets (sempre substituídos) e instala: bancada e, em slot separado, correia. Ausência ou falha só desativa o modelo afetado. */
     private void installNeuralModel(){
@@ -1303,6 +1323,10 @@ public final class MainActivity extends ComponentActivity {
         TextView sensitivityLabel=text("Sensibilidade: "+sensitivity+"%",14,Color.WHITE);content.addView(sensitivityLabel);SeekBar slider=new SeekBar(this);slider.setMax(100);slider.setProgress(sensitivity);content.addView(slider);
         slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int p,boolean user){sensitivityLabel.setText("Sensibilidade: "+p+"%");}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});
         content.addView(text("Aplicar usa o ajuste manual nesta foto. A busca automática fica para a próxima foto. Maior sensibilidade pode criar falsas marcações. Alterar contornos pode exigir nova calibração e descarta revisões de trincas.",12,Color.LTGRAY));
+        content.addView(text("Aceleração por hardware",14,Color.WHITE));
+        CheckBox accel=new CheckBox(this);accel.setText("Rodar as redes neurais na GPU (LiteRT) · experimental");accel.setTextColor(Color.WHITE);accel.setTextSize(12);accel.setChecked(HardwareAcceleration.enabled());accel.setTag("hw_accel");content.addView(accel);
+        TextView accelNote=text(accelerationText(HardwareAcceleration.status()),12,Color.LTGRAY);accelNote.setTag("hw_accel_status");content.addView(accelNote);
+        accel.setOnCheckedChangeListener((b,on)->setAcceleration(on,accelNote));
         TextView error=text("",13,Color.rgb(255,146,146));error.setTag("adjustment_error");content.addView(error);
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Ajustes de detecção").setView(scroll).setNegativeButton("Cancelar",null).setNeutralButton(mode==Mode.PHOTO?"Ver sugestão":"Como funciona",null).setPositiveButton("Aplicar manual",null).create();
         dialog.setOnShowListener(d->{
@@ -1416,7 +1440,7 @@ public final class MainActivity extends ComponentActivity {
         if(requested.needsNetwork()){
             net=crackNetwork;
             if(net==null){try{net=MobileNetCrackModel.load(copyAsset(MobileNetCrackModel.MODEL),readAsset(MobileNetCrackModel.METADATA));}catch(Exception e){MobileNetCrackModel.lastError=e.getMessage();net=null;}crackNetwork=net;}
-        }else crackNetwork=null; // não manter a rede carregada sem uso
+        }else if(crackNetwork!=null){crackNetwork.close();crackNetwork=null;} // não manter a rede carregada sem uso (libera a GPU)
         CrackClassifierChoice.Resolution r=CrackClassifierChoice.resolve(requested,crackModel!=null,net!=null,MobileNetCrackModel.lastError);
         crackResolution=r;
         if(r.message!=null){final String m=r.message;runOnUiThread(()->toast(m));}

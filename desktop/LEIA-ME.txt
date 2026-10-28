@@ -1,11 +1,20 @@
-PelotaVision Windows 0.5.5 - prototipo
+PelotaVision Windows 0.5.6 - prototipo
 ======================================
 
-Nucleo de analise: o MESMO codigo do PelotaVision Android 0.15.5 (deteccao por bordas,
+Nucleo de analise: o MESMO codigo do PelotaVision Android 0.16.0 (deteccao por bordas,
 LoG ou rede neural StarDist, elipses, sugestao de ajuste, triagem de trincas Random Forest
 ou MobileNetV3, granulometria por numero, curva acumulada com ajuste Rosin-Rammler,
 mapa granulometrico, relatorio PDF).
 OpenCV oficial 4.12.0 para Windows x64. PDF gerado com Apache PDFBox 3 (Apache 2.0).
+ONNX Runtime 1.31.1 (MIT) para a aceleracao opcional das redes neurais.
+
+ACELERACAO POR HARDWARE (opcional, desligada por padrao)
+- Caixa "Aceleracao GPU" na barra "Modelos de analise"; "Estado..." mostra o motor de
+  cada rede e o tempo medido na sonda (ONNX Runtime x OpenCV DNN).
+- GPU so com placa NVIDIA + driver + CUDA e cuDNN instalados no Windows (nao vem no
+  pacote). Sem isso, o ONNX Runtime roda na CPU. Cada rede so troca de motor se der o
+  mesmo resultado do OpenCV DNN; se nao der, ou se falhar, volta sozinha ao OpenCV.
+- Acelera so a StarDist e a MobileNetV3. Bordas, LoG e super-resolucao ficam na CPU.
 
 USO
 1. Duas formas, mesmo programa:

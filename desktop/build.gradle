@@ -20,6 +20,9 @@ dependencies {
     implementation 'org.json:json:20240303'
     // 0.5.2: relatorio PDF no Windows (Apache License 2.0; ~3 MB no pacote).
     implementation 'org.apache.pdfbox:pdfbox:3.0.5'
+    // 0.5.6: aceleracao por hardware opcional das redes (CUDA; sem CUDA, CPU). MIT. O pacote Windows
+    // remove do jar as bibliotecas de Linux (ver windows.yml); a CUDA/cuDNN nao vai no pacote.
+    implementation 'com.microsoft.onnxruntime:onnxruntime_gpu:1.31.1'
     testImplementation 'junit:junit:4.13.2'
 }
 

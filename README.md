@@ -38,7 +38,7 @@ Consulte os artefatos das execuções em **GitHub Actions** e as instruções de
 <details>
 <summary><strong>Documentação técnica e histórico de versões</strong></summary>
 
-# PelotaVision — Android 0.14.1 · Windows 0.5.0
+# PelotaVision — Android 0.16.0 · Windows 0.5.6
 
 Análise de imagens de pelotas de minério de ferro: localização e ajuste elíptico, forma 2D b/a, granulometria por número, mapa granulométrico e triagem de possíveis trincas. Android (ARM64) e Windows 11 compartilham o mesmo núcleo em `core/`.
 
@@ -52,7 +52,10 @@ Releases: `v0.14.0-build34` (APK) e `windows-v0.5.0-build33` (pacote portátil).
 - **Android · câmera:** escolha entre traseira, frontal e **externa USB (OTG)**, com diagnóstico USB e atualização ao conectar o cabo. Câmera que não aceita foto simultânea fotografa pelo quadro ao vivo. Limite: o celular precisa publicar a câmera USB no Android (depende do fabricante). Ver `docs/camera-externa-e-ao-vivo.md`.
 - **Ao vivo com o que a foto faz (Android e Windows):** ROI, filtro de luz (o filtro só propõe; medidas nos pixels originais), escala da última foto ou calibrada no próprio quadro (recipiente ou px/mm), histograma, Rosin–Rammler, mapa e D10/D50/D90. Trincas continuam só na foto.
 - **Windows · busca rápida** no lugar da genética: 2,5× mais rápida nas fotos reais de 27/10, com a mesma aptidão; a genética continua como opção. Ver `docs/busca-rapida.md`.
-- **Não compilado aqui:** o código Android foi conferido contra `android.jar` 35 e interfaces mínimas do CameraX, sem o Gradle (repositórios Maven bloqueados neste ambiente). Compile e teste no celular antes de distribuir.
+- **Aceleração por hardware (opcional, desligada por padrão):** as redes neurais (StarDist e MobileNetV3) podem rodar no **ONNX Runtime** no Windows (CUDA em GPU NVIDIA; sem CUDA, CPU) e no **LiteRT** no Android (GPU; sem GPU compatível, CPU). Windows: caixa **Aceleracao GPU** e botão **Estado…**; Android: **Ajustes → Aceleração por hardware**.
+- **Mesmo resultado garantido por sonda:** cada rede só troca de motor se der a mesma saída do OpenCV DNN numa sonda de paridade; senão, ou se o motor falhar no meio da análise, volta sozinha ao OpenCV. O estado mostra o motor de cada rede e o tempo medido nos dois motores **no seu aparelho**.
+- **Android:** modelos `.tflite` convertidos dos mesmos ONNX no CI (`tools/litert/convert_tflite.py`); nas fotos de verificação, as mesmas pelotas que o ONNX (174/48/276/205 na bancada; 2921/3495/3316 na correia) e nenhuma pelota mudou de classe de trinca. Bibliotecas do LiteRT alinhadas a 16 KB.
+- Bordas, LoG, ajuste das elipses e super-resolução continuam na CPU. Ganho em GPU real **não medido** no CI (sem GPU nem celular). Detalhes e requisitos (CUDA/cuDNN) em `docs/aceleracao-hardware.md`.
 
 ## Novo na 0.15.5 (Android) / Windows 0.5.5
 - **Trincas:** a MobileNetV3 passa a ser o padrão; o Random Forest fica como reserva, retreinado com as fotos de bancada de 26/10. Nas 57 fotos de pelota isolada (21 rajadas) nunca vistas, a MobileNetV3 embarcada teve AUC 0,97–0,98 contra 0,74–0,79 do RF. No holdout antigo, 0,96 contra 0,49. Detalhes em `verification/cracks-bench-20261026/`.
