@@ -1,7 +1,7 @@
 {
- "id": "stardist_demo_20261024_v1",
+ "id": "stardist_bench_real_20261028_v2",
  "file": "pellet_stardist.onnx",
- "sha256": "53c78a9ec69dafc90e45c281408c1050a5cc1763bf514750e5be1808c5c543dc",
+ "sha256": "3ba9a0f95442e9d4df89fd18518d652eef913d5ccbe39dbbf883b01292188c3f",
  "demonstration": true,
  "architecture": "StarDist 2D (Schmidt et al. 2018) reimplementado em PyTorch: U-Net 3 níveis (16-32-64-128) + cabeça 32; 488161 parâmetros",
  "input": {
@@ -53,7 +53,18 @@
  "threshold": "max(0,2; min(0,8; 0,75 - 0,005 x sensibilidade))",
  "scale_selection": "uma passada por raio do perfil; escolhe o raio mediano mais perto do nominal (log); passada final reescalada (fator 0,5-2)",
  "training": {
-  "groups": [
+  "conjunto": "bancada_real",
+  "init": "ajuste fino do stardist_demo_20261024_v1 (BN dobrada e congelada)",
+  "iterations": 2000,
+  "batch": 8,
+  "seed": 20261024,
+  "torch": "2.5.1+cu124",
+  "mix": {
+   "cenas": 0.3,
+   "panela": 0.55,
+   "bancada_1pelota": 0.15
+  },
+  "old_scenes": [
    "brown40",
    "gray42",
    "gray20",
@@ -62,63 +73,32 @@
    "spaced",
    "paired40"
   ],
-  "objects": "225 círculos PROVISÓRIOS do assistente em 7 cenas; uma sintética, demais de origem não comprovada",
-  "iterations": 1500,
-  "seed": 20261024,
-  "torch": "2.5.1+cpu",
-  "note": "Modelo de DEMONSTRAÇÃO do encanamento. Não foi treinado nem validado em fotos da usina."
- },
- "validation_holdout": {
-  "trained_without": [
-   "cluster",
-   "paired40"
+  "pan_captures": [
+   "pan:2026-10-27_15-16-51_Teste2",
+   "pan:2026-10-27_15-20-57_Teste2",
+   "pan:2026-10-27_15-26-52_Teste2",
+   "pan:2026-10-27_15-31-57_Teste2",
+   "pan:2026-10-27_16-02-17_Teste2"
   ],
-  "scenes": {
-   "cluster": {
-    "detections": 34,
-    "annotated": 34,
-    "matched": 34,
-    "precision": 1.0,
-    "recall": 1.0,
-    "f1": 1.0,
-    "radius_abs_error_pct": 10.33,
-    "role": "validacao_cena_inteira_fora",
-    "candidates": 11092,
-    "candidate_limit": false,
-    "final_scale": 0.17917028755907857,
-    "seconds": 4.63
-   },
-   "paired40": {
-    "detections": 40,
-    "annotated": 40,
-    "matched": 38,
-    "precision": 0.95,
-    "recall": 0.95,
-    "f1": 0.95,
-    "radius_abs_error_pct": 8.54,
-    "role": "validacao_cena_inteira_fora",
-    "candidates": 4664,
-    "candidate_limit": false,
-    "final_scale": 0.5177048590649319,
-    "seconds": 1.95
-   }
-  },
-  "protocol": "perfil Auto, sensibilidade 75, pós-processamento common.detect (escolha de escala em duas etapas) sobre o ONNX exportado; casamento guloso centro<0,5r e razão de raios 0,7-1,43 contra círculos PROVISÓRIOS"
+  "bench_single_pellet_photos": 53,
+  "label_origin": "cenas: círculos provisórios; panela/bancada: pseudo-rótulos do app (make_pseudo.py), sem verdade-terreno humana",
+  "rules": "ml_training/data_pan_20261027/make_pseudo.py",
+  "note": "Treinado com 5 análises reais de webcam sobre panela (27/10/2026) e 53 fotos de bancada com 1 pelota, além das 7 cenas antigas. Pseudo-rótulos: só pelotas com elipse confiável; duvidosas e regiões não julgáveis com peso 0."
  },
  "training_fit": {
   "brown40": {
-   "detections": 40,
+   "detections": 42,
    "annotated": 40,
    "matched": 40,
-   "precision": 1.0,
+   "precision": 0.9524,
    "recall": 1.0,
-   "f1": 1.0,
-   "radius_abs_error_pct": 2.73,
+   "f1": 0.9756,
+   "radius_abs_error_pct": 3.04,
    "role": "treino",
-   "candidates": 7825,
+   "candidates": 4027,
    "candidate_limit": false,
-   "final_scale": 0.2095602030746213,
-   "seconds": 2.77
+   "final_scale": 0.2054550726593896,
+   "seconds": 4.08
   },
   "gray42": {
    "detections": 42,
@@ -127,12 +107,12 @@
    "precision": 1.0,
    "recall": 1.0,
    "f1": 1.0,
-   "radius_abs_error_pct": 3.3,
+   "radius_abs_error_pct": 3.72,
    "role": "treino",
-   "candidates": 12220,
+   "candidates": 5919,
    "candidate_limit": false,
-   "final_scale": 0.18765885381510458,
-   "seconds": 4.56
+   "final_scale": 0.1852519947047538,
+   "seconds": 6.69
   },
   "gray20": {
    "detections": 20,
@@ -141,26 +121,26 @@
    "precision": 1.0,
    "recall": 1.0,
    "f1": 1.0,
-   "radius_abs_error_pct": 1.66,
+   "radius_abs_error_pct": 1.62,
    "role": "treino",
-   "candidates": 10638,
+   "candidates": 4730,
    "candidate_limit": false,
-   "final_scale": 0.13469243320288896,
-   "seconds": 4.31
+   "final_scale": 0.13684098304688214,
+   "seconds": 6.12
   },
   "dense": {
-   "detections": 30,
+   "detections": 31,
    "annotated": 30,
-   "matched": 28,
-   "precision": 0.9333,
-   "recall": 0.9333,
-   "f1": 0.9333,
-   "radius_abs_error_pct": 2.9,
+   "matched": 30,
+   "precision": 0.9677,
+   "recall": 1.0,
+   "f1": 0.9836,
+   "radius_abs_error_pct": 2.17,
    "role": "treino",
-   "candidates": 10146,
+   "candidates": 3945,
    "candidate_limit": false,
-   "final_scale": 0.13977278650502176,
-   "seconds": 3.85
+   "final_scale": 0.1397601643096384,
+   "seconds": 4.66
   },
   "cluster": {
    "detections": 34,
@@ -169,12 +149,12 @@
    "precision": 1.0,
    "recall": 1.0,
    "f1": 1.0,
-   "radius_abs_error_pct": 6.68,
+   "radius_abs_error_pct": 6.16,
    "role": "treino",
-   "candidates": 8823,
+   "candidates": 4526,
    "candidate_limit": false,
-   "final_scale": 0.17459644546003406,
-   "seconds": 3.8
+   "final_scale": 0.1707004424305334,
+   "seconds": 5.95
   },
   "spaced": {
    "detections": 19,
@@ -183,12 +163,12 @@
    "precision": 1.0,
    "recall": 1.0,
    "f1": 1.0,
-   "radius_abs_error_pct": 1.25,
+   "radius_abs_error_pct": 1.68,
    "role": "treino",
-   "candidates": 7766,
+   "candidates": 3274,
    "candidate_limit": false,
-   "final_scale": 0.15286613391016807,
-   "seconds": 3.16
+   "final_scale": 0.15531588589029607,
+   "seconds": 3.86
   },
   "paired40": {
    "detections": 40,
@@ -197,21 +177,172 @@
    "precision": 1.0,
    "recall": 1.0,
    "f1": 1.0,
-   "radius_abs_error_pct": 6.7,
+   "radius_abs_error_pct": 6.71,
    "role": "treino",
-   "candidates": 7068,
+   "candidates": 4346,
    "candidate_limit": false,
-   "final_scale": 0.4723751307827629,
-   "seconds": 2.52
+   "final_scale": 0.46801472066948996,
+   "seconds": 4.64
   }
  },
  "opencv_parity": {
   "opencv": "4.12.0",
-  "max_abs_output_diff": 8.392333984375e-05,
-  "detections_ort": 30,
-  "detections_opencv": 30,
-  "seconds_ort": 4.01,
-  "seconds_opencv": 4.15
+  "max_abs_output_diff": 9.1552734375e-05,
+  "detections_ort": 31,
+  "detections_opencv": 31,
+  "seconds_ort": 4.49,
+  "seconds_opencv": 5.44
  },
- "license": "Código e pesos: mesmos termos do PelotaVision; método StarDist (BSD-3) reimplementado, sem código copiado."
+ "license": "Código e pesos: mesmos termos do PelotaVision; método StarDist (BSD-3) reimplementado, sem código copiado.",
+ "status_note": "experimental: pseudo-rótulos do app em fotos reais de panela, sem verdade-terreno humana",
+ "validation_pan": {
+  "captures_out_of_training": [
+   "pan:2026-10-27_13-27-28_Teste2",
+   "pan:2026-10-27_16-09-29_Teste2"
+  ],
+  "reference": "pseudo-rótulos do app (LoG + elipse), não verdade-terreno",
+  "protocol": "ml_training/stardist/evaluate_pan.py, sensibilidade 75",
+  "this_model": {
+   "perfil_1": {
+    "scenes": {
+     "pan:2026-10-27_13-27-28_Teste2": {
+      "detections": 157,
+      "confident_inner": 66,
+      "matched_confident": 74,
+      "false_positives_judged": 2,
+      "precision_judged": 0.9737,
+      "recall_confident": 0.9848,
+      "f1": 0.9792,
+      "radius_abs_error_pct": 4.81,
+      "candidate_limit": false,
+      "seconds": 1.76
+     },
+     "pan:2026-10-27_16-09-29_Teste2": {
+      "detections": 172,
+      "confident_inner": 74,
+      "matched_confident": 81,
+      "false_positives_judged": 5,
+      "precision_judged": 0.9419,
+      "recall_confident": 0.9865,
+      "f1": 0.9637,
+      "radius_abs_error_pct": 4.83,
+      "candidate_limit": false,
+      "seconds": 1.55
+     }
+    },
+    "total": {
+     "detections": 329,
+     "confident_inner": 140,
+     "matched_confident": 155,
+     "false_positives_judged": 7
+    }
+   },
+   "perfil_3": {
+    "scenes": {
+     "pan:2026-10-27_13-27-28_Teste2": {
+      "detections": 156,
+      "confident_inner": 66,
+      "matched_confident": 73,
+      "false_positives_judged": 1,
+      "precision_judged": 0.9865,
+      "recall_confident": 0.9697,
+      "f1": 0.978,
+      "radius_abs_error_pct": 4.46,
+      "candidate_limit": false,
+      "seconds": 5.87
+     },
+     "pan:2026-10-27_16-09-29_Teste2": {
+      "detections": 174,
+      "confident_inner": 74,
+      "matched_confident": 81,
+      "false_positives_judged": 7,
+      "precision_judged": 0.9205,
+      "recall_confident": 0.9865,
+      "f1": 0.9523,
+      "radius_abs_error_pct": 5.1,
+      "candidate_limit": false,
+      "seconds": 6.24
+     }
+    },
+    "total": {
+     "detections": 330,
+     "confident_inner": 140,
+     "matched_confident": 154,
+     "false_positives_judged": 8
+    }
+   }
+  },
+  "previous_demo": {
+   "perfil_1": {
+    "scenes": {
+     "pan:2026-10-27_13-27-28_Teste2": {
+      "detections": 176,
+      "confident_inner": 66,
+      "matched_confident": 70,
+      "false_positives_judged": 9,
+      "precision_judged": 0.8861,
+      "recall_confident": 0.9242,
+      "f1": 0.9048,
+      "radius_abs_error_pct": 6.97,
+      "candidate_limit": false,
+      "seconds": 5.45
+     },
+     "pan:2026-10-27_16-09-29_Teste2": {
+      "detections": 182,
+      "confident_inner": 74,
+      "matched_confident": 72,
+      "false_positives_judged": 19,
+      "precision_judged": 0.7912,
+      "recall_confident": 0.8784,
+      "f1": 0.8325,
+      "radius_abs_error_pct": 7.16,
+      "candidate_limit": false,
+      "seconds": 5.83
+     }
+    },
+    "total": {
+     "detections": 358,
+     "confident_inner": 140,
+     "matched_confident": 142,
+     "false_positives_judged": 28
+    }
+   },
+   "perfil_3": {
+    "scenes": {
+     "pan:2026-10-27_13-27-28_Teste2": {
+      "detections": 173,
+      "confident_inner": 66,
+      "matched_confident": 69,
+      "false_positives_judged": 8,
+      "precision_judged": 0.8961,
+      "recall_confident": 0.9091,
+      "f1": 0.9026,
+      "radius_abs_error_pct": 6.46,
+      "candidate_limit": false,
+      "seconds": 9.82
+     },
+     "pan:2026-10-27_16-09-29_Teste2": {
+      "detections": 178,
+      "confident_inner": 74,
+      "matched_confident": 73,
+      "false_positives_judged": 15,
+      "precision_judged": 0.8295,
+      "recall_confident": 0.8919,
+      "f1": 0.8596,
+      "radius_abs_error_pct": 7.47,
+      "candidate_limit": false,
+      "seconds": 9.71
+     }
+    },
+    "total": {
+     "detections": 351,
+     "confident_inner": 140,
+     "matched_confident": 142,
+     "false_positives_judged": 23
+    }
+   }
+  },
+  "gate": "verification/stardist-real-20261028/gate_stardist.json"
+ },
+ "validated_on_plant_photos": false
 }

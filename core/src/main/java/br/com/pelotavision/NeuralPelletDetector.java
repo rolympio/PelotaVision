@@ -68,7 +68,7 @@ public final class NeuralPelletDetector {
     public static synchronized boolean install(File onnx, String metadataJson) {
         try {
             installed = new NeuralPelletDetector(onnx, metadataJson);
-            status = "Rede neural " + installed.id + (installed.demonstration ? " (DEMONSTRAÇÃO, treino em 7 cenas provisórias)" : "");
+            status = "Rede neural " + installed.id + (installed.demonstration ? " (" + installed.metadata.optString("status_note", "DEMONSTRAÇÃO, treino em 7 cenas provisórias") + ")" : "");
             return true;
         } catch (Throwable e) {
             installed = null;

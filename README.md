@@ -46,6 +46,14 @@ Análise de imagens de pelotas de minério de ferro: localização e ajuste elí
 
 Releases: `v0.14.0-build34` (APK) e `windows-v0.5.0-build33` (pacote portátil).
 
+## Novo na 0.16.0 (Android) / Windows 0.6.0
+- **Trincas (MobileNetV3 v3):** retreinada com 31 trincas e 102 pelotas sem trinca revisadas à mão em 6 análises de webcam sobre panela (27/10). Análise inteira fora: AUC 0,922 e 26 de 31 trincas achadas, contra 0,872 e 22 de 31 da v2 nas mesmas pelotas; holdout antigo 0,977, FN 0. Critério fixado antes do treino. Detalhes em `verification/cracks-webcam-20261027/`.
+- **StarDist de bancada:** retreinada com 5 análises reais de webcam sobre panela e 53 fotos de bancada (pseudo-rótulos do app, peso 0 no que não dá para julgar). Nas 2 análises deixadas fora (perfil médio): F1 0,90/0,83 → 0,98/0,96, falsos positivos 28 → 7, erro de raio 7,1% → 4,8%, sempre contra os pseudo-rótulos, não contra verdade-terreno. Ver `verification/stardist-real-20261028/`.
+- **Android · câmera:** escolha entre traseira, frontal e **externa USB (OTG)**, com diagnóstico USB e atualização ao conectar o cabo. Câmera que não aceita foto simultânea fotografa pelo quadro ao vivo. Limite: o celular precisa publicar a câmera USB no Android (depende do fabricante). Ver `docs/camera-externa-e-ao-vivo.md`.
+- **Ao vivo com o que a foto faz (Android e Windows):** ROI, filtro de luz (o filtro só propõe; medidas nos pixels originais), escala da última foto ou calibrada no próprio quadro (recipiente ou px/mm), histograma, Rosin–Rammler, mapa e D10/D50/D90. Trincas continuam só na foto.
+- **Windows · busca rápida** no lugar da genética: 2,5× mais rápida nas fotos reais de 27/10, com a mesma aptidão; a genética continua como opção. Ver `docs/busca-rapida.md`.
+- **Não compilado aqui:** o código Android foi conferido contra `android.jar` 35 e interfaces mínimas do CameraX, sem o Gradle (repositórios Maven bloqueados neste ambiente). Compile e teste no celular antes de distribuir.
+
 ## Novo na 0.15.5 (Android) / Windows 0.5.5
 - **Trincas:** a MobileNetV3 passa a ser o padrão; o Random Forest fica como reserva, retreinado com as fotos de bancada de 26/10. Nas 57 fotos de pelota isolada (21 rajadas) nunca vistas, a MobileNetV3 embarcada teve AUC 0,97–0,98 contra 0,74–0,79 do RF. No holdout antigo, 0,96 contra 0,49. Detalhes em `verification/cracks-bench-20261026/`.
 - **Windows · ao vivo estável:** com a cena parada, busca genética do ajuste e consenso temporal (menos fantasmas, contagem e D50 com ±). Mapa granulométrico também no ao vivo. Ver `docs/ao-vivo-estavel.md`.

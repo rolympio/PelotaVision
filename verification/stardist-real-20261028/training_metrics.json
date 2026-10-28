@@ -1,0 +1,42 @@
+{
+ "model_sha256": "3ba9a0f95442e9d4df89fd18518d652eef913d5ccbe39dbbf883b01292188c3f",
+ "conjunto": "bancada_real",
+ "iterations": 2000,
+ "batch": 8,
+ "crop": 128,
+ "seed": 20261024,
+ "mix": {
+  "cenas": 0.3,
+  "panela": 0.55,
+  "bancada_1pelota": 0.15
+ },
+ "pan_jobs": 24,
+ "init_onnx": "../../app/src/main/assets/pellet_stardist.onnx",
+ "init_max_abs_diff": 1.33514404296875e-05,
+ "batchnorm": "congelada (dobrada do ONNX)",
+ "training_old_scenes": [
+  "brown40",
+  "gray42",
+  "gray20",
+  "dense",
+  "cluster",
+  "spaced",
+  "paired40"
+ ],
+ "training_pan": [
+  "pan:2026-10-27_15-16-51_Teste2",
+  "pan:2026-10-27_15-20-57_Teste2",
+  "pan:2026-10-27_15-26-52_Teste2",
+  "pan:2026-10-27_15-31-57_Teste2",
+  "pan:2026-10-27_16-02-17_Teste2"
+ ],
+ "training_bench_photos": 53,
+ "training_objects_confident": 728,
+ "training_seconds": 2545,
+ "torch": "2.5.1+cu124",
+ "parameters": 488161,
+ "final_bce": 0.25020127721130847,
+ "final_dist_mae_weighted_px": 1.9490927189588547,
+ "loss": "BCE ponderada (peso 0 ignora) + 0,2 x MAE das distâncias ponderado por prob x peso",
+ "label_origin": "cenas: círculos provisórios; panela/bancada: pseudo-rótulos do app (make_pseudo.py), sem verdade-terreno humana"
+}
