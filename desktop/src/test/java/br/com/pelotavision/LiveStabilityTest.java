@@ -28,6 +28,44 @@ public class LiveStabilityTest {
         return new PelletDetector.Result(d, 500, 400, d.size(), 1, false, "test");
     }
 
+    static int[][] exhaustiveMatch(List<PelletDetector.Detection> a, List<PelletDetector.Detection> b) {
+        List<double[]> candidates = new ArrayList<>();
+        for (int i = 0; i < a.size(); i++) for (int j = 0; j < b.size(); j++) {
+            PelletDetector.Detection p = a.get(i), q = b.get(j);
+            double radius = Math.max(p.radius, q.radius);
+            double ratio = Math.max(p.radius, q.radius) / Math.max(1e-9, Math.min(p.radius, q.radius));
+            double distance = Math.hypot(p.x - q.x, p.y - q.y) / Math.max(1e-9, radius);
+            if (distance < LiveConsensus.MATCH_CENTER && ratio <= LiveConsensus.MATCH_RADIUS)
+                candidates.add(new double[]{distance, i, j});
+        }
+        candidates.sort((u, v) -> Double.compare(u[0], v[0]));
+        boolean[] usedA = new boolean[a.size()], usedB = new boolean[b.size()];
+        List<int[]> output = new ArrayList<>();
+        for (double[] candidate : candidates) {
+            int i = (int) candidate[1], j = (int) candidate[2];
+            if (usedA[i] || usedB[j]) continue;
+            usedA[i] = usedB[j] = true;
+            output.add(new int[]{i, j});
+        }
+        return output.toArray(new int[0][]);
+    }
+
+    @Test public void spatialMatchingMatchesExhaustiveReference() {
+        Random rnd = new Random(157);
+        for (int batch = 0; batch < 8; batch++) {
+            List<PelletDetector.Detection> a = new ArrayList<>(), b = new ArrayList<>();
+            for (int i = 0; i < 350; i++) {
+                double x = rnd.nextInt(35) * 24 + rnd.nextGaussian() * 8;
+                double y = rnd.nextInt(35) * 24 + rnd.nextGaussian() * 8;
+                a.add(pellet(x, y, 4 + rnd.nextDouble() * 18));
+                b.add(pellet(x + rnd.nextGaussian() * 5, y + rnd.nextGaussian() * 5, 4 + rnd.nextDouble() * 18));
+            }
+            assertTrue(Arrays.deepEquals(exhaustiveMatch(a, b), LiveConsensus.match(a, b)));
+        }
+        List<PelletDetector.Detection> ties = Arrays.asList(pellet(10, 10, 5), pellet(10, 10, 5));
+        assertTrue(Arrays.deepEquals(exhaustiveMatch(ties, ties), LiveConsensus.match(ties, ties)));
+    }
+
     @Test public void motionNeedsSeveralQuietTicksAndHasHysteresis() {
         LiveMotion m = new LiveMotion();
         byte[] a = new byte[96 * 54];
