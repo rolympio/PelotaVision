@@ -18,7 +18,7 @@ set "WORK=%~1"
 if "%WORK%"=="" set "WORK=E:\PelotaVision\build"
 set "BRANCH=%~2"
 if "%BRANCH%"=="" set "BRANCH=integracao/0.16.0"
-set "REPO=https://github.com/Rolympio/pelotavision"
+set "REPO=https://github.com/rolympio/PelotaVision.git"
 set "SRC=%WORK%\pelotavision"
 rem OpenCV: usa C:\opencv-4.12.0 se ja existir; senao baixa e extrai dentro da pasta de trabalho.
 set "OPENCV=C:\opencv-4.12.0"
@@ -55,27 +55,44 @@ git config --global http.version HTTP/1.1
 git config --global http.lowSpeedLimit 0
 git config --global http.lowSpeedTime 999999
 if exist "%SRC%\.git" goto :atualizar
+
+:clonar_inicio
 if exist "%SRC%" rmdir /s /q "%SRC%"
 set /a TENT=0
 :clonar
 set /a TENT+=1
-echo       tentativa %TENT% de 5 (o pacote tem ~270 MB; quedas de conexao sao comuns)
+echo       download completo, tentativa %TENT% de 5 (~270 MB; quedas de conexao sao comuns)
 git clone --depth 1 -b %BRANCH% %REPO% "%SRC%" >> "%LOG%" 2>&1
 if not errorlevel 1 goto :codigo_ok
 if exist "%SRC%" rmdir /s /q "%SRC%"
 if %TENT% lss 5 (timeout /t 10 /nobreak >nul & goto :clonar)
-echo ERRO: nao foi possivel baixar o codigo. Confira login no GitHub e a rede ^(veja o log^).
+echo ERRO: nao foi possivel baixar o codigo. Ultimas linhas do log:
+powershell -NoProfile -Command "Get-Content -Tail 10 '%LOG%'"
+echo Confira o login no GitHub e a rede; se estiver na rede da Vale, tente outra rede.
 goto :falha
+
 :atualizar
-echo       repositorio ja existe: atualizando
-pushd "%SRC%"
-git fetch --depth 1 origin %BRANCH% >> "%LOG%" 2>&1 || (popd & echo ERRO no git fetch ^(veja o log^). & goto :falha)
-git checkout -B %BRANCH% FETCH_HEAD >> "%LOG%" 2>&1 || (popd & echo ERRO no git checkout ^(veja o log^). & goto :falha)
-popd
+echo       ja existe uma copia: atualizando
+git -C "%SRC%" remote set-url origin %REPO% >> "%LOG%" 2>&1
+set /a TENT=0
+:buscar
+set /a TENT+=1
+echo       atualizacao, tentativa %TENT% de 3
+git -C "%SRC%" fetch --depth 1 origin %BRANCH% >> "%LOG%" 2>&1
+if not errorlevel 1 goto :buscou
+if %TENT% lss 3 (timeout /t 10 /nobreak >nul & goto :buscar)
+echo       a atualizacao falhou; apagando a copia antiga e baixando de novo. Motivo:
+powershell -NoProfile -Command "Get-Content -Tail 6 '%LOG%'"
+goto :clonar_inicio
+:buscou
+git -C "%SRC%" checkout -f -B %BRANCH% FETCH_HEAD >> "%LOG%" 2>&1
+if errorlevel 1 (
+  echo       checkout falhou; apagando a copia antiga e baixando de novo
+  goto :clonar_inicio
+)
+
 :codigo_ok
-pushd "%SRC%"
-for /f %%c in ('git rev-parse --short HEAD') do set COMMIT=%%c
-popd
+for /f %%c in ('git -C "%SRC%" rev-parse --short HEAD') do set COMMIT=%%c
 echo       commit %COMMIT%
 
 rem ---------------------------------------------------------------- 3. OpenCV
