@@ -61,6 +61,13 @@ public final class SphereCalibrationAssistantTest {
                 new SphereCalibrationAssistant.Candidate(3,115.0,11,1,1));
         check(Math.abs(SphereCalibrationAssistant.robustPixelsPerMm(refs)-76.5/11)<1e-12,
                 "Outlier de esfera removido pela mediana/MAD");
+        ContainerCalibration.LevelCorrection level =
+                ContainerCalibration.calibrateLevel(4.4240,6.9648,8);
+        check(Math.abs(level.correctedPixelsPerMm()-6.9648)<1e-12,
+                "Escala do plano das esferas");
+        check(level.requiresReview(),"Divergencia elevada deve exigir revisao");
+        check(ContainerCalibration.calibrateLevel(6.9,6.95,4).requiresReview()==false,
+                "Escalas proximas com quatro referencias");
         System.out.println("SphereCalibrationAssistantTest: OK");
     }
 }
