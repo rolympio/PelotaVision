@@ -6,8 +6,6 @@ import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Rect;
 import org.opencv.core.Size;
-import org.opencv.dnn.Dnn;
-import org.opencv.dnn.Net;
 import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
@@ -16,7 +14,8 @@ import java.security.MessageDigest;
 
 /**
  * EXPERIMENTAL neural crack classifier: MobileNetV3-Small (ONNX via OpenCV DNN, the same engine as
- * StarDist, on Android and Windows). Mirror of tools/cracks/train_mobilenet.py#prep:
+ * StarDist, on Android and Windows; with hardware acceleration on and approved by the parity probe,
+ * ONNX Runtime/LiteRT, see {@link HardwareAcceleration}). Mirror of tools/cracks/train_mobilenet.py#prep:
  * square of side ceil(2*1.15*r) around the pellet, taken from the ORIGINAL analyzed grayscale pixels
  * (never the super-resolution image), BORDER_REFLECT_101 at the photo edge, INTER_AREA to 128x128,
  * outside the 1.08*r circle filled with 128. Normalization and softmax are inside the ONNX.
@@ -29,7 +28,7 @@ public final class MobileNetCrackModel {
     public final JSONObject metadata;
     final int size;
     final double half, maskRadius, fill;
-    private final Net net;
+    private final InferenceBackend backend;
 
     private MobileNetCrackModel(File onnx, String metadataJson) throws Exception {
         metadata = new JSONObject(metadataJson);
@@ -44,11 +43,31 @@ public final class MobileNetCrackModel {
         maskRadius = metadata.getDouble("mask_radius");
         fill = metadata.getDouble("fill");
         if (size < 32 || size > 512 || half < 1 || maskRadius <= 0) throw new IllegalArgumentException("Metadado de trincas inválido.");
-        net = Dnn.readNetFromONNX(onnx.getAbsolutePath());
-        if (net.empty()) throw new IllegalArgumentException("ONNX de trincas não carregado.");
-        net.setPreferableBackend(Dnn.DNN_BACKEND_OPENCV);
-        net.setPreferableTarget(Dnn.DNN_TARGET_CPU);
+        backend = HardwareAcceleration.open(onnx, new HardwareAcceleration.Model("MobileNetV3 " + id, sha256,
+                new int[]{1, 1, size, size}, probe(size, maskRadius / half, (float) fill), SCORE_TOLERANCE, SCORE_TOLERANCE, 0));
     }
+
+    /** Tolerância da sonda de paridade (escore e complemento) do motor acelerado contra o OpenCV DNN. */
+    static final double SCORE_TOLERANCE = .02;
+
+    /** Recorte sintético para a sonda: pelota escura com textura e uma linha (trinca), fora do círculo = fill. */
+    static float[] probe(int size, double maskFraction, float fill) {
+        float[] x = new float[size * size];
+        double c = (size - 1) / 2., r = maskFraction * size / 2.;
+        for (int y = 0; y < size; y++) for (int xx = 0; xx < size; xx++) {
+            double d = Math.hypot(xx - c, y - c);
+            double v = d > r ? fill : 85 + 25 * Math.sin(xx * .31) * Math.cos(y * .23) + 20 * (1 - d / r);
+            if (d <= r && Math.abs((y - c) - .35 * (xx - c)) < 1.6) v = 35;
+            x[y * size + xx] = (float) v;
+        }
+        return x;
+    }
+
+    /** Motor em uso (para status e testes). */
+    public InferenceBackend backend() { return backend; }
+
+    /** Libera o motor (GPU). */
+    public synchronized void close() { backend.close(); }
 
     /** Returns null (and a reason through {@link #lastError}) when the asset is missing or inconsistent. */
     public static MobileNetCrackModel load(File onnx, String metadataJson) {
@@ -109,18 +128,18 @@ public final class MobileNetCrackModel {
     /** Uncalibrated crack score in [0,1]. */
     public synchronized double score(Mat gray, double cx, double cy, double r) {
         Mat x = input(gray, cx, cy, r);
-        Mat blob = null, y = null;
         try {
-            blob = Dnn.blobFromImage(x, 1.0, new Size(size, size), new org.opencv.core.Scalar(0), false, false, CvType.CV_32F);
-            net.setInput(blob);
-            y = net.forward();
-            float[] p = new float[2];
-            y.reshape(1, 1).get(0, 0, p);
+            float[] px = new float[size * size];
+            x.get(0, 0, px);
+            float[] p = backend.run(px, new int[]{1, 1, size, size});
+            if (p.length != 2) throw new IllegalStateException("Saída da rede de trincas inesperada.");
             return p[1];
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Falha na rede de trincas: " + e.getMessage(), e);
         } finally {
             x.release();
-            if (blob != null) blob.release();
-            if (y != null) y.release();
         }
     }
 

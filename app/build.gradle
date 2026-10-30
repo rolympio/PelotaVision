@@ -7,8 +7,8 @@ android {
         applicationId 'br.com.pelotavision'
         minSdk 29
         targetSdk 35
-        versionCode 25
-        versionName '0.15.5'
+        versionCode 26
+        versionName '0.16.0'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
@@ -28,6 +28,8 @@ android {
             }
         }
     }
+    // .tflite sem compressao no APK (o LiteRT pode mapear direto; tambem acelera a copia para o cache).
+    androidResources { noCompress 'tflite' }
     splits { abi { enable true; reset(); include 'arm64-v8a', 'x86_64'; universalApk false } }
     buildTypes { release { minifyEnabled false } }
     testOptions { unitTests { includeAndroidResources = true } }
@@ -48,6 +50,11 @@ dependencies {
     implementation 'androidx.camera:camera-view:1.4.2'
     implementation 'androidx.exifinterface:exifinterface:1.3.7'
     implementation 'org.opencv:opencv:4.12.0'
+    // 0.16.0: aceleracao por hardware opcional (Apache 2.0). API Interpreter + GpuDelegate; bibliotecas
+    // nativas alinhadas a 16 KB (exigencia da Play para targetSdk 35).
+    implementation 'com.google.ai.edge.litert:litert:1.4.2'
+    implementation 'com.google.ai.edge.litert:litert-gpu:1.4.2'
+    implementation 'com.google.ai.edge.litert:litert-gpu-api:1.4.2'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.13'
 }

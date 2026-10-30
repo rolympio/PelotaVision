@@ -28,6 +28,44 @@ public class LiveStabilityTest {
         return new PelletDetector.Result(d, 500, 400, d.size(), 1, false, "test");
     }
 
+    static int[][] exhaustiveMatch(List<PelletDetector.Detection> a, List<PelletDetector.Detection> b) {
+        List<double[]> candidates = new ArrayList<>();
+        for (int i = 0; i < a.size(); i++) for (int j = 0; j < b.size(); j++) {
+            PelletDetector.Detection p = a.get(i), q = b.get(j);
+            double radius = Math.max(p.radius, q.radius);
+            double ratio = Math.max(p.radius, q.radius) / Math.max(1e-9, Math.min(p.radius, q.radius));
+            double distance = Math.hypot(p.x - q.x, p.y - q.y) / Math.max(1e-9, radius);
+            if (distance < LiveConsensus.MATCH_CENTER && ratio <= LiveConsensus.MATCH_RADIUS)
+                candidates.add(new double[]{distance, i, j});
+        }
+        candidates.sort((u, v) -> Double.compare(u[0], v[0]));
+        boolean[] usedA = new boolean[a.size()], usedB = new boolean[b.size()];
+        List<int[]> output = new ArrayList<>();
+        for (double[] candidate : candidates) {
+            int i = (int) candidate[1], j = (int) candidate[2];
+            if (usedA[i] || usedB[j]) continue;
+            usedA[i] = usedB[j] = true;
+            output.add(new int[]{i, j});
+        }
+        return output.toArray(new int[0][]);
+    }
+
+    @Test public void spatialMatchingMatchesExhaustiveReference() {
+        Random rnd = new Random(157);
+        for (int batch = 0; batch < 8; batch++) {
+            List<PelletDetector.Detection> a = new ArrayList<>(), b = new ArrayList<>();
+            for (int i = 0; i < 350; i++) {
+                double x = rnd.nextInt(35) * 24 + rnd.nextGaussian() * 8;
+                double y = rnd.nextInt(35) * 24 + rnd.nextGaussian() * 8;
+                a.add(pellet(x, y, 4 + rnd.nextDouble() * 18));
+                b.add(pellet(x + rnd.nextGaussian() * 5, y + rnd.nextGaussian() * 5, 4 + rnd.nextDouble() * 18));
+            }
+            assertTrue(Arrays.deepEquals(exhaustiveMatch(a, b), LiveConsensus.match(a, b)));
+        }
+        List<PelletDetector.Detection> ties = Arrays.asList(pellet(10, 10, 5), pellet(10, 10, 5));
+        assertTrue(Arrays.deepEquals(exhaustiveMatch(ties, ties), LiveConsensus.match(ties, ties)));
+    }
+
     @Test public void motionNeedsSeveralQuietTicksAndHasHysteresis() {
         LiveMotion m = new LiveMotion();
         byte[] a = new byte[96 * 54];
@@ -123,5 +161,45 @@ public class LiveStabilityTest {
                 () -> calls[0] >= 3, null, 1);
         assertTrue(r.cancelled);
         assertTrue(calls[0] <= 3);
+    }
+
+    /** 0.16.0: a busca rápida acha o mesmo ótimo da paisagem com menos avaliações e é determinística. */
+    @Test public void fastSearchFindsSameOptimumWithFewerEvaluations() {
+        DetectionTuner.Option start = new DetectionTuner.Option(3, 40, DetectionTuner.GRADIENT, false);
+        DetectionAssessment.Context ctx = new DetectionAssessment.Context(null, 500, 400, null, 0);
+        LiveTuner.Evaluator ev = o -> {
+            double dist = Math.abs(o.sensitivity - 80) / 20.0 + (o.method == DetectionTuner.LOG ? 0 : 1.2) + (o.profile == 1 ? 0 : .8);
+            Random rnd = new Random(o.id.hashCode());
+            List<PelletDetector.Result> out = new ArrayList<>();
+            for (int f = 0; f < 3; f++) {
+                PelletDetector.Result full = frame(rnd, (int) Math.round(3 * dist), .4 + .4 * dist);
+                List<PelletDetector.Detection> keep = new ArrayList<>();
+                for (PelletDetector.Detection d : full.circles) if (rnd.nextDouble() > Math.min(.5, .12 * dist)) keep.add(d);
+                out.add(new PelletDetector.Result(keep, 500, 400, keep.size(), 1, false, "test"));
+            }
+            return out;
+        };
+        int[] calls = {0}, gaCalls = {0};
+        LiveTuner.Run fast = LiveSearch.search(start, ctx, o -> { synchronized (calls) { calls[0]++; } return ev.run(o); }, () -> false, null, 3, 0);
+        LiveTuner.Run fast2 = LiveSearch.search(start, ctx, ev, () -> false, null, 1, 0);
+        LiveTuner.Run ga = LiveTuner.evolve(start, ctx, o -> { gaCalls[0]++; return ev.run(o); }, () -> false, null, 42);
+        assertEquals("determinística (paralela = serial)", fast.best.option.id, fast2.best.option.id);
+        assertEquals(DetectionTuner.LOG, fast.best.option.method);
+        assertEquals(1, fast.best.option.profile);
+        assertTrue("sensibilidade " + fast.best.option.sensitivity, Math.abs(fast.best.option.sensitivity - 80) <= 10);
+        assertTrue("aptidão não pior que a do genético", fast.best.fitness() >= ga.best.fitness() - 2);
+        assertEquals(calls[0], fast.evaluated.size());
+        assertTrue("avaliações rápida " + calls[0] + " x genético " + gaCalls[0], calls[0] <= 30);
+        assertEquals(LiveSearch.STRATEGY, fast.strategy);
+    }
+
+    @Test public void fastSearchStopsWhenSceneMoves() {
+        DetectionTuner.Option start = new DetectionTuner.Option(1, 75, DetectionTuner.LOG, false);
+        DetectionAssessment.Context ctx = new DetectionAssessment.Context(null, 500, 400, null, 0);
+        int[] calls = {0};
+        LiveTuner.Run r = LiveSearch.search(start, ctx, o -> { calls[0]++; return Arrays.asList(frame(new Random(1), 0, .3), frame(new Random(2), 0, .3)); },
+                () -> calls[0] >= 3, null, 1, 0);
+        assertTrue(r.cancelled);
+        assertTrue("avaliações após cancelar " + calls[0], calls[0] <= 3);
     }
 }

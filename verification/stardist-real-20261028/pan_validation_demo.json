@@ -1,0 +1,82 @@
+{
+ "protocol": "Avaliação do StarDist de bancada nas análises de panela (webcam) deixadas fora do treino.",
+ "reference": "pseudo-rótulos do app (LoG + elipse), não verdade-terreno",
+ "split": "validacao",
+ "scenes": [
+  "pan:2026-10-27_13-27-28_Teste2",
+  "pan:2026-10-27_16-09-29_Teste2"
+ ],
+ "sensitivity": 75,
+ "models": {
+  "../../app/src/main/assets/pellet_stardist.onnx": {
+   "perfil_1": {
+    "scenes": {
+     "pan:2026-10-27_13-27-28_Teste2": {
+      "detections": 176,
+      "confident_inner": 66,
+      "matched_confident": 70,
+      "false_positives_judged": 9,
+      "precision_judged": 0.8861,
+      "recall_confident": 0.9242,
+      "f1": 0.9048,
+      "radius_abs_error_pct": 6.97,
+      "candidate_limit": false,
+      "seconds": 5.45
+     },
+     "pan:2026-10-27_16-09-29_Teste2": {
+      "detections": 182,
+      "confident_inner": 74,
+      "matched_confident": 72,
+      "false_positives_judged": 19,
+      "precision_judged": 0.7912,
+      "recall_confident": 0.8784,
+      "f1": 0.8325,
+      "radius_abs_error_pct": 7.16,
+      "candidate_limit": false,
+      "seconds": 5.83
+     }
+    },
+    "total": {
+     "detections": 358,
+     "confident_inner": 140,
+     "matched_confident": 142,
+     "false_positives_judged": 28
+    }
+   },
+   "perfil_3": {
+    "scenes": {
+     "pan:2026-10-27_13-27-28_Teste2": {
+      "detections": 173,
+      "confident_inner": 66,
+      "matched_confident": 69,
+      "false_positives_judged": 8,
+      "precision_judged": 0.8961,
+      "recall_confident": 0.9091,
+      "f1": 0.9026,
+      "radius_abs_error_pct": 6.46,
+      "candidate_limit": false,
+      "seconds": 9.82
+     },
+     "pan:2026-10-27_16-09-29_Teste2": {
+      "detections": 178,
+      "confident_inner": 74,
+      "matched_confident": 73,
+      "false_positives_judged": 15,
+      "precision_judged": 0.8295,
+      "recall_confident": 0.8919,
+      "f1": 0.8596,
+      "radius_abs_error_pct": 7.47,
+      "candidate_limit": false,
+      "seconds": 9.71
+     }
+    },
+    "total": {
+     "detections": 351,
+     "confident_inner": 140,
+     "matched_confident": 142,
+     "false_positives_judged": 23
+    }
+   }
+  }
+ }
+}

@@ -96,6 +96,21 @@ python check_onnx.py --conjunto correia --model output/belt.onnx --final-metrics
 
 <!-- RESULTADOS_CORREIA -->
 
+## Bancada real (0.16.0) — `--conjunto bancada_real`
+
+Modelo de bancada distribuído desde a 0.16.0 (`stardist_bench_real_20261028_v2`). Ajuste fino do modelo de demonstração (BN dobrada lida do ONNX e congelada) com:
+- as 7 cenas antigas (peso 1);
+- 5 análises reais de webcam 1920×1080 sobre panela (27/10/2026), com pseudo-rótulos do próprio app (`ml_training/data_pan_20261027/make_pseudo.py`): só pelotas com elipse confiável; duvidosas, faixa junto à ROI e regiões claras não cobertas com peso 0; frestas escuras e fundo fora da panela com peso 1;
+- 53 fotos de bancada com uma pelota (26/10/2026).
+
+Validação: análises 13:27 e 16:09 fora do treino, `evaluate_pan.py` contra os pseudo-rótulos (não é verdade-terreno). Critério fixado antes: `verification/stardist-real-20261028/gate_stardist.json` (aprovado).
+
+```
+python ../data_pan_20261027/make_pseudo.py --exports <pasta com as análises exportadas>
+python train.py --conjunto bancada_real --init-onnx ../../app/src/main/assets/pellet_stardist.onnx --iterations 2000 --out output/real.onnx --metrics output/real_metrics.json
+python evaluate_pan.py --model output/real.onnx --out output/pan_validation.json
+```
+
 ## Contrato Python ↔ Java
 
 `common.py` é a referência de `core/.../NeuralPelletDetector.java`. Os dois implementam o mesmo pipeline:

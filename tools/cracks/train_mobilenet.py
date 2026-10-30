@@ -126,10 +126,73 @@ def build_net(torch, pretrained=True):
     return Wrapped()
 
 
+INIT_ONNX = None  # 0.16.0: ponto de partida = ONNX embarcado (BN dobrada), em vez dos pesos ImageNet
+
+
+def load_from_onnx(torch, model, path):
+    """Copia os pesos de um ONNX exportado por este script (Conv+BN dobradas) para a rede torchvision.
+
+    Cada conv seguida de BN recebe o peso dobrado; a BN vira identidade + viés (média 0, variância 1,
+    escala sqrt(1+eps)) e fica CONGELADA no treino (estatísticas fixas), então a rede começa exatamente igual
+    ao ONNX. Confere a igualdade numa entrada aleatória (erro máximo < 1e-4) antes de devolver."""
+    import onnx
+    from onnx import numpy_helper
+    nn = torch.nn
+    g = onnx.load(str(path)).graph
+    init = {i.name: numpy_helper.to_array(i) for i in g.initializer}
+    convs = [n for n in g.node if n.op_type == 'Conv']
+    gemms = [n for n in g.node if n.op_type == 'Gemm']
+    pairs = []
+    for mod in model.net.modules():
+        if isinstance(mod, nn.Sequential) and len(mod) >= 2 and isinstance(mod[0], nn.Conv2d) and isinstance(mod[1], nn.BatchNorm2d):
+            pairs.append((mod[0], mod[1]))
+    conv_mods = [m for m in model.net.modules() if isinstance(m, nn.Conv2d)]
+    bn_of = {id(c): b for c, b in pairs}
+    assert len(conv_mods) == len(convs), (len(conv_mods), len(convs))
+    with torch.no_grad():
+        for mod, node in zip(conv_mods, convs):
+            W = init[node.input[1]]
+            B = init[node.input[2]] if len(node.input) > 2 else np.zeros(W.shape[0], np.float32)
+            assert tuple(mod.weight.shape) == W.shape, (mod, W.shape)
+            mod.weight.copy_(torch.from_numpy(W))
+            bn = bn_of.get(id(mod))
+            if bn is not None:
+                bn.running_mean.zero_(); bn.running_var.fill_(1.0)
+                bn.weight.fill_(math.sqrt(1.0 + bn.eps)); bn.bias.copy_(torch.from_numpy(B))
+            else:
+                mod.bias.copy_(torch.from_numpy(B))
+        lins = [m for m in model.net.modules() if isinstance(m, nn.Linear)]
+        assert len(lins) == len(gemms)
+        for mod, node in zip(lins, gemms):
+            W, B = init[node.input[1]], init[node.input[2]]
+            trans = next((a.i for a in node.attribute if a.name == 'transB'), 0)
+            W = W if trans else W.T
+            assert tuple(mod.weight.shape) == W.shape
+            mod.weight.copy_(torch.from_numpy(np.ascontiguousarray(W))); mod.bias.copy_(torch.from_numpy(B))
+    model.eval()
+    import onnxruntime as ort
+    x = np.random.default_rng(0).uniform(0, 255, (2, 1, SIZE, SIZE)).astype(np.float32)
+    sess = ort.InferenceSession(str(path), providers=['CPUExecutionProvider'])
+    ref = np.concatenate([sess.run(None, {'input': x[i:i + 1]})[0] for i in range(2)])
+    with torch.no_grad():
+        got = model(torch.from_numpy(x)).numpy()
+    err = float(np.abs(ref - got).max())
+    assert err < 1e-4, f'pesos do ONNX não reproduzem a saída (erro {err})'
+    return err
+
+
+def freeze_bn(torch, model):
+    for m in model.modules():
+        if isinstance(m, torch.nn.BatchNorm2d):
+            m.eval()
+
+
 def fit(torch, X, y, w, seed, log, tag):
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
-    model = build_net(torch)
+    model = build_net(torch, pretrained=INIT_ONNX is None)
+    if INIT_ONNX is not None:
+        load_from_onnx(torch, model, INIT_ONNX)
     pos = max(1.0, float((w * (y == 1)).sum()))
     neg = max(1.0, float((w * (y == 0)).sum()))
     cw = torch.tensor([(pos + neg) / (2 * neg), (pos + neg) / (2 * pos)], dtype=torch.float32)
@@ -140,6 +203,8 @@ def fit(torch, X, y, w, seed, log, tag):
     t0 = time.time()
     for ep in range(EPOCHS):
         model.train()
+        if INIT_ONNX is not None:
+            freeze_bn(torch, model)
         idx = rng.permutation(len(X))
         tot = 0.0
         for s in range(0, len(idx), BATCH):
@@ -232,7 +297,7 @@ def export_onnx(torch, model, path):
 
 
 def main(argv=None):
-    global EPOCHS
+    global EPOCHS, INIT_ONNX, LR
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--manifest', type=Path, required=True)
     p.add_argument('--rf-predictions', type=Path, default=Path('verification/cracks-benchmark-20261025/predictions.csv'))
@@ -243,8 +308,13 @@ def main(argv=None):
     p.add_argument('--lobo-prefix', default='', help='deixa de fora UM grupo dev com este prefixo por vez (os demais dev sempre treinam)')
     p.add_argument('--lobo-limit', type=int, default=0, help='teste rápido: só os N primeiros grupos do LOBO')
     p.add_argument('--model-id', default='mobilenetv3_small_cracks_20261025_v1')
+    p.add_argument('--init-onnx', type=Path, default=None, help='parte do ONNX embarcado (BN congelada) em vez do ImageNet')
+    p.add_argument('--lr', type=float, default=LR)
+    p.add_argument('--holdout-example', type=Path, default=Path('tools/cracks/labels/holdout_crack_example.json'))
     a = p.parse_args(argv)
     EPOCHS = a.epochs
+    INIT_ONNX = a.init_onnx
+    LR = a.lr
     variants = {k: VARIANTS[k] for k in a.variants.split(',') if k in VARIANTS}
     assert variants, 'nenhuma variante válida'
     import torch
@@ -283,7 +353,8 @@ def main(argv=None):
         res = {'uses_synthetic_training': synth}
         if a.lobo_prefix:
             # 2027-10-27: rajadas das fotos de bancada; a pelota física inteira (todas as escalas) sai junta.
-            lg = sorted({r['group_id'] for r in dev if r['group_id'].startswith(a.lobo_prefix)})
+            prefixes = tuple(x for x in a.lobo_prefix.split(',') if x)
+            lg = sorted({r['group_id'] for r in dev if r['group_id'].startswith(prefixes)})
             if a.lobo_limit:
                 lg = lg[:a.lobo_limit]
             idx = [i for i, r in enumerate(dev) if r['group_id'] in set(lg)]
@@ -295,16 +366,15 @@ def main(argv=None):
                 for i, v in zip(te, predict(torch, m, tensors([dev[i] for i in te], cache))):
                     oof[i] = float(v)
             bl = {}
-            for sc, sel in (('original', [i for i in idx if not dev[i]['source_id'].endswith('_x03')]),
-                            ('reduzida_x0.3', [i for i in idx if dev[i]['source_id'].endswith('_x03')]), ('ambas', idx)):
+            srcs = sorted({dev[i]['source_id'] for i in idx})
+            for sc, sel in [(x, [i for i in idx if dev[i]['source_id'] == x]) for x in srcs] + [('ambas', idx)]:
                 yy = lab([dev[i] for i in sel])
                 ss = np.array([oof[i] for i in sel])
                 bl[sc] = {'n': len(sel), 'cracked': int(yy.sum()), 'groups': len({dev[i]['group_id'] for i in sel}),
                           'auc': auc(yy, ss), **binary(yy, ss), 'app_policy_0.4_0.6': app_policy(yy, ss)}
             res['bench_lobo'] = bl
             preds += [(name, 'bench_lobo', dev[i], v) for i, v in oof.items()]
-            log(f'{name}: bancada LOBO AUC original {bl["original"]["auc"]:.3f} reduzida {bl["reduzida_x0.3"]["auc"]:.3f} '
-                f'{bl["ambas"]["confusion_[[TN,FP],[FN,TP]]"]}')
+            log(f'{name}: LOBO ' + ' · '.join(f'{k} AUC {v["auc"]:.3f} n={v["n"]}' for k, v in bl.items()) + f' {bl["ambas"]["confusion_[[TN,FP],[FN,TP]]"]}')
         if not a.skip_dev:
             oof = np.zeros(len(dev))
             for gi, g in enumerate(groups):
@@ -381,7 +451,7 @@ def main(argv=None):
         timing[name] = entry
 
     # Referência para o teste de paridade Java (foto inteira + círculo da anotação).
-    spec = json.loads(Path('tools/cracks/labels/holdout_crack_example.json').read_text(encoding='utf-8'))
+    spec = json.loads(a.holdout_example.read_text(encoding='utf-8'))
     photo = cv2.imread(spec['image'], cv2.IMREAD_GRAYSCALE)
     circles = json.loads(Path(spec['circles']).read_text(encoding='utf-8'))
     hold_ids = [r['instance_id'] for r in hold][:12]
@@ -407,7 +477,7 @@ def main(argv=None):
         'protocol': {'dev': f'LeaveOneGroupOut em {len(groups)} grupos: {groups}', 'holdout': sorted({r['group_id'] for r in hold}),
                      'epochs': EPOCHS, 'batch': BATCH, 'lr': LR, 'weight_decay': WD, 'synthetic_weight': SYNTH_WEIGHT,
                      'input': f'{SIZE}x{SIZE} cinza 0..255, lado {2 * HALF}r, máscara {MASK}r preenchida com {FILL}',
-                     'pretrained': 'torchvision mobilenet_v3_small IMAGENET1K_V1', 'seed': SEED,
+                     'pretrained': (f'ONNX {INIT_ONNX} (BN dobrada e congelada)' if INIT_ONNX else 'torchvision mobilenet_v3_small IMAGENET1K_V1'), 'seed': SEED,
                      'threshold': 0.5, 'app_policy': [0.4, 0.6], 'holdout_used_for_selection': False},
         'results': results, 'inference_cpu_runner': timing, 'java_parity_reference': ref,
         'environment': {'python': sys.version.split()[0], 'platform': platform.platform(), 'torch': _t.__version__,

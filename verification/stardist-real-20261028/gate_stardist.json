@@ -1,0 +1,11 @@
+{
+ "fixado_em": "2026-10-28, durante o treino e antes de qualquer avaliação do modelo novo",
+ "referencia": "pellet_stardist.onnx demo (stardist_demo_20261024_v1) nas análises de validação 13:27 e 16:09 (pan_validation_demo.json)",
+ "medida": "evaluate_pan.py contra pseudo-rótulos do app (NÃO verdade-terreno), sensibilidade 75, perfis 1 (médias) e 3 (Auto)",
+ "criterio_para_substituir_o_asset": {
+  "f1_total_por_perfil": "maior ou igual ao do demo nos dois perfis (soma das duas análises)",
+  "falsos_positivos_julgados_total": "menor ou igual ao do demo nos dois perfis",
+  "erro_de_raio_medio_pct": "no máximo 1 ponto percentual acima do demo",
+  "cenas_antigas": "F1 >= 0,93 em cada uma das 7 cenas de ml_training/data (perfil Auto), para não regredir na bancada antiga"
+ }
+}

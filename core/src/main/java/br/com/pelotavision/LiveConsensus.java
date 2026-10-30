@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 
 /**
  * Consenso temporal do ao vivo (0.15.5): acompanha cada pelota entre quadros e só a mostra como estável
@@ -16,6 +18,7 @@ import java.util.List;
  */
 public final class LiveConsensus {
     public static final double MATCH_CENTER = .40, MATCH_RADIUS = 1.30;
+    private static final long SPATIAL_INDEX_PAIR_THRESHOLD = 4096;
     /** Janela (quadros) e fração mínima de presença para estável. */
     public static final int WINDOW = 10, MIN_HITS = 3;
     public static final double MIN_PRESENCE = .6;
@@ -30,6 +33,14 @@ public final class LiveConsensus {
         int recentHits() { int n = 0; for (boolean b : seen) if (b) n++; return n; }
     }
 
+    private static final class MatchCandidate {
+        final double distance;
+        final int first, second;
+        MatchCandidate(double distance, int first, int second) {
+            this.distance = distance; this.first = first; this.second = second;
+        }
+    }
+
     private final List<Track> tracks = new ArrayList<>();
     private int frame, ghostsDiscarded;
     private int width, height;
@@ -42,26 +53,54 @@ public final class LiveConsensus {
 
     /** Pares (i em a, j em b) da mesma pelota; guloso pela distância normalizada. */
     public static int[][] match(List<PelletDetector.Detection> a, List<PelletDetector.Detection> b) {
-        List<double[]> cand = new ArrayList<>();
+        boolean useSpatialIndex = (long) a.size() * b.size() > SPATIAL_INDEX_PAIR_THRESHOLD;
+        NavigableMap<Double, List<Integer>> byX = useSpatialIndex ? new TreeMap<>() : null;
+        if (useSpatialIndex) {
+            for (int j = 0; j < b.size(); j++)
+                byX.computeIfAbsent(b.get(j).x, ignored -> new ArrayList<>()).add(j);
+        }
+
+        List<MatchCandidate> cand = new ArrayList<>();
         for (int i = 0; i < a.size(); i++) {
             PelletDetector.Detection p = a.get(i);
-            for (int j = 0; j < b.size(); j++) {
-                PelletDetector.Detection q = b.get(j);
-                double r = Math.max(p.radius, q.radius), ratio = Math.max(p.radius, q.radius) / Math.max(1e-9, Math.min(p.radius, q.radius));
-                double d = Math.hypot(p.x - q.x, p.y - q.y) / Math.max(1e-9, r);
-                if (d < MATCH_CENTER && ratio <= MATCH_RADIUS) cand.add(new double[]{d, i, j});
+            if (useSpatialIndex) {
+                // The radius-ratio gate bounds every valid match to this horizontal range.
+                double reach = Math.nextUp(MATCH_CENTER * Math.max(1e-9, p.radius * MATCH_RADIUS));
+                double left = p.x - reach, right = p.x + reach;
+                if (p.radius > 0 && Double.isFinite(p.radius) && Double.isFinite(p.x)
+                        && Double.isFinite(left) && Double.isFinite(right)) {
+                    for (List<Integer> indices : byX.subMap(left, true, right, true).values())
+                        for (int j : indices) addCandidate(cand, i, j, p, b.get(j));
+                } else {
+                    for (int j = 0; j < b.size(); j++) addCandidate(cand, i, j, p, b.get(j));
+                }
+            } else {
+                for (int j = 0; j < b.size(); j++) addCandidate(cand, i, j, p, b.get(j));
             }
         }
-        cand.sort((u, v) -> Double.compare(u[0], v[0]));
+        cand.sort((u, v) -> {
+            int order = Double.compare(u.distance, v.distance);
+            if (order != 0) return order;
+            order = Integer.compare(u.first, v.first);
+            return order != 0 ? order : Integer.compare(u.second, v.second);
+        });
         boolean[] ua = new boolean[a.size()], ub = new boolean[b.size()];
         List<int[]> out = new ArrayList<>();
-        for (double[] c : cand) {
-            int i = (int) c[1], j = (int) c[2];
+        for (MatchCandidate c : cand) {
+            int i = c.first, j = c.second;
             if (ua[i] || ub[j]) continue;
             ua[i] = ub[j] = true;
             out.add(new int[]{i, j});
         }
         return out.toArray(new int[0][]);
+    }
+
+    private static void addCandidate(List<MatchCandidate> candidates, int i, int j,
+                                     PelletDetector.Detection p, PelletDetector.Detection q) {
+        double r = Math.max(p.radius, q.radius);
+        double ratio = Math.max(p.radius, q.radius) / Math.max(1e-9, Math.min(p.radius, q.radius));
+        double d = Math.hypot(p.x - q.x, p.y - q.y) / Math.max(1e-9, r);
+        if (d < MATCH_CENTER && ratio <= MATCH_RADIUS) candidates.add(new MatchCandidate(d, i, j));
     }
 
     /** Novo quadro; devolve o resultado estável (pode ser vazio nos primeiros quadros). */

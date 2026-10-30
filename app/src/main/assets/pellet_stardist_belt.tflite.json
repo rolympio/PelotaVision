@@ -1,0 +1,62 @@
+{
+ "source_onnx": "pellet_stardist_belt.onnx",
+ "onnx_sha256": "35e71a9dd717331acad59f34fe47a5846aa7bdf7bd4bbfc074c3dadccaff0acd",
+ "tflite": "pellet_stardist_belt.tflite",
+ "tflite_sha256": "99fafef4636305866461cdd521d12c874cd50cda5e4809825f5e15f55b9ca79b",
+ "input_shape": [
+  1,
+  384,
+  384,
+  1
+ ],
+ "output_shape": [
+  1,
+  384,
+  384,
+  33
+ ],
+ "output_layout": "NHWC",
+ "converter": {
+  "onnx2tf": "2.6.9",
+  "tensorflow": "2.21.0",
+  "onnx": "1.20.1",
+  "onnxruntime": "1.26.0",
+  "ai_edge_litert": "2.1.2",
+  "numpy": "2.2.6"
+ },
+ "accepted": true,
+ "parity_float32": {
+  "tiles": 12,
+  "max_abs_diff_prob": 2.294778823852539e-06,
+  "max_abs_diff_dist_px": 0.0001049041748046875,
+  "ms_per_tile_onnxruntime_cpu": 263.82,
+  "ms_per_tile_tflite_cpu": 253.19,
+  "detection": [
+   {
+    "image": "verification/belt-0.9.0/input_correia.jpg",
+    "onnx": 2921,
+    "tflite": 2921,
+    "matched": 2921,
+    "max_center_shift_rel_radius": 2e-05,
+    "max_radius_rel_diff": 1e-05
+   },
+   {
+    "image": "ml_training/data_belt/raw/img422.jpg",
+    "onnx": 3495,
+    "tflite": 3495,
+    "matched": 3495,
+    "max_center_shift_rel_radius": 3e-05,
+    "max_radius_rel_diff": 0.0
+   },
+   {
+    "image": "ml_training/data_belt/raw/img919.jpg",
+    "onnx": 3316,
+    "tflite": 3316,
+    "matched": 3316,
+    "max_center_shift_rel_radius": 6e-05,
+    "max_radius_rel_diff": 0.0
+   }
+  ]
+ },
+ "generated_by": "tools/litert/convert_tflite.py"
+}

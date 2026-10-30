@@ -1,0 +1,159 @@
+{
+ "tool": "tools/litert/convert_tflite.py",
+ "versions": {
+  "onnx2tf": "2.6.9",
+  "tensorflow": "2.21.0",
+  "onnx": "1.20.1",
+  "onnxruntime": "1.26.0",
+  "ai_edge_litert": "2.1.2",
+  "numpy": "2.2.6"
+ },
+ "models": [
+  {
+   "model": "pellet_stardist.onnx",
+   "onnx_sha256": "3ba9a0f95442e9d4df89fd18518d652eef913d5ccbe39dbbf883b01292188c3f",
+   "convert_seconds": 4.3,
+   "tflite": "pellet_stardist.tflite",
+   "tflite_sha256": "6f2427f4f79bf307e25b1a634e3e1750e63fd8e283b36d644dbf8e4f5404bbb6",
+   "tflite_bytes": 1959904,
+   "input_shape": [
+    1,
+    384,
+    384,
+    1
+   ],
+   "output_shape": [
+    1,
+    384,
+    384,
+    33
+   ],
+   "output_layout": "NHWC",
+   "parity_float32": {
+    "tiles": 4,
+    "max_abs_diff_prob": 1.2218952178955078e-06,
+    "max_abs_diff_dist_px": 5.91278076171875e-05,
+    "ms_per_tile_onnxruntime_cpu": 293.59,
+    "ms_per_tile_tflite_cpu": 298.94,
+    "detection": [
+     {
+      "image": "verification/fixtures/1000411645.jpg",
+      "onnx": 159,
+      "tflite": 159,
+      "matched": 159,
+      "max_center_shift_rel_radius": 1e-05,
+      "max_radius_rel_diff": 0.0
+     },
+     {
+      "image": "verification/fixtures/1000411646.jpg",
+      "onnx": 38,
+      "tflite": 38,
+      "matched": 38,
+      "max_center_shift_rel_radius": 0.0,
+      "max_radius_rel_diff": 0.0
+     },
+     {
+      "image": "verification/fixtures/1000411647.jpg",
+      "onnx": 253,
+      "tflite": 253,
+      "matched": 253,
+      "max_center_shift_rel_radius": 0.0,
+      "max_radius_rel_diff": 0.0
+     },
+     {
+      "image": "verification/fixtures/crack_example.png",
+      "onnx": 177,
+      "tflite": 177,
+      "matched": 177,
+      "max_center_shift_rel_radius": 1e-05,
+      "max_radius_rel_diff": 0.0
+     }
+    ]
+   },
+   "accepted": true
+  },
+  {
+   "model": "pellet_stardist_belt.onnx",
+   "onnx_sha256": "35e71a9dd717331acad59f34fe47a5846aa7bdf7bd4bbfc074c3dadccaff0acd",
+   "convert_seconds": 1.5,
+   "tflite": "pellet_stardist_belt.tflite",
+   "tflite_sha256": "99fafef4636305866461cdd521d12c874cd50cda5e4809825f5e15f55b9ca79b",
+   "tflite_bytes": 1959912,
+   "input_shape": [
+    1,
+    384,
+    384,
+    1
+   ],
+   "output_shape": [
+    1,
+    384,
+    384,
+    33
+   ],
+   "output_layout": "NHWC",
+   "parity_float32": {
+    "tiles": 12,
+    "max_abs_diff_prob": 2.294778823852539e-06,
+    "max_abs_diff_dist_px": 0.0001049041748046875,
+    "ms_per_tile_onnxruntime_cpu": 263.82,
+    "ms_per_tile_tflite_cpu": 253.19,
+    "detection": [
+     {
+      "image": "verification/belt-0.9.0/input_correia.jpg",
+      "onnx": 2921,
+      "tflite": 2921,
+      "matched": 2921,
+      "max_center_shift_rel_radius": 2e-05,
+      "max_radius_rel_diff": 1e-05
+     },
+     {
+      "image": "ml_training/data_belt/raw/img422.jpg",
+      "onnx": 3495,
+      "tflite": 3495,
+      "matched": 3495,
+      "max_center_shift_rel_radius": 3e-05,
+      "max_radius_rel_diff": 0.0
+     },
+     {
+      "image": "ml_training/data_belt/raw/img919.jpg",
+      "onnx": 3316,
+      "tflite": 3316,
+      "matched": 3316,
+      "max_center_shift_rel_radius": 6e-05,
+      "max_radius_rel_diff": 0.0
+     }
+    ]
+   },
+   "accepted": true
+  },
+  {
+   "model": "crack_mobilenetv3.onnx",
+   "onnx_sha256": "6fcbe38d7fa931773d88d10623051ea27654bf7b9fae374859d79211f39a0410",
+   "convert_seconds": 3.4,
+   "tflite": "crack_mobilenetv3.tflite",
+   "tflite_sha256": "657d0fb7367b8a0cfd26ae17164fa21f351cf1a552fa41084eac032901e82d61",
+   "tflite_bytes": 6128436,
+   "input_shape": [
+    1,
+    128,
+    128,
+    1
+   ],
+   "output_shape": [
+    1,
+    2
+   ],
+   "output_layout": "NCHW",
+   "parity_float32": {
+    "crops": 130,
+    "max_abs_diff_p_cracked": 7.748603820800781e-06,
+    "mean_abs_diff_p_cracked": 1.2449347055875337e-06,
+    "policy_class_changes": 0,
+    "ms_per_crop_onnxruntime_cpu": 2.119,
+    "ms_per_crop_tflite_cpu": 3.988
+   },
+   "accepted": true
+  }
+ ]
+}

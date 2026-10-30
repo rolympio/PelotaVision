@@ -1,0 +1,25 @@
+{
+ "checks": {
+  "webcam_auc": [
+   0.9215686274509803,
+   true
+  ],
+  "webcam_recall": [
+   0.8387096774193549,
+   true
+  ],
+  "webcam_sem_indicacao": [
+   3,
+   true
+  ],
+  "holdout_auc": [
+   0.9771428571428571,
+   true
+  ],
+  "holdout_fn": [
+   0,
+   true
+  ]
+ },
+ "aprovado": true
+}

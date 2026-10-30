@@ -1,0 +1,24 @@
+alvos: cenas 49, panela 120, bancada_1pelota 106 em 175s
+it     1  bce 0.2192  dist_mae_pond 2.302  3s
+it   100  bce 0.2583  dist_mae_pond 2.541  170s
+it   200  bce 0.2568  dist_mae_pond 2.383  359s
+it   300  bce 0.2607  dist_mae_pond 2.377  666s
+it   400  bce 0.2500  dist_mae_pond 2.262  1113s
+it   500  bce 0.2463  dist_mae_pond 2.185  1474s
+it   600  bce 0.2496  dist_mae_pond 2.195  1689s
+it   700  bce 0.2505  dist_mae_pond 2.198  1747s
+it   800  bce 0.2514  dist_mae_pond 2.195  1804s
+it   900  bce 0.2556  dist_mae_pond 2.113  1866s
+it  1000  bce 0.2459  dist_mae_pond 2.061  1928s
+it  1100  bce 0.2529  dist_mae_pond 2.089  1993s
+it  1200  bce 0.2539  dist_mae_pond 2.057  2059s
+it  1300  bce 0.2549  dist_mae_pond 2.019  2123s
+it  1400  bce 0.2467  dist_mae_pond 2.075  2190s
+it  1500  bce 0.2490  dist_mae_pond 1.933  2253s
+it  1600  bce 0.2467  dist_mae_pond 1.972  2313s
+it  1700  bce 0.2566  dist_mae_pond 2.015  2372s
+it  1800  bce 0.2569  dist_mae_pond 1.942  2428s
+it  1900  bce 0.2480  dist_mae_pond 1.965  2486s
+it  2000  bce 0.2524  dist_mae_pond 1.933  2544s
+/home/claude/pelotavision/ml_training/stardist/train.py:53: TracerWarning: Converting a tensor to a Python boolean might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  return torch.cat([p if logits else torch.sigmoid(p), self.dist(f)], 1)

@@ -1,0 +1,35 @@
+{
+ "source_onnx": "crack_mobilenetv3.onnx",
+ "onnx_sha256": "6fcbe38d7fa931773d88d10623051ea27654bf7b9fae374859d79211f39a0410",
+ "tflite": "crack_mobilenetv3.tflite",
+ "tflite_sha256": "657d0fb7367b8a0cfd26ae17164fa21f351cf1a552fa41084eac032901e82d61",
+ "input_shape": [
+  1,
+  128,
+  128,
+  1
+ ],
+ "output_shape": [
+  1,
+  2
+ ],
+ "output_layout": "NCHW",
+ "converter": {
+  "onnx2tf": "2.6.9",
+  "tensorflow": "2.21.0",
+  "onnx": "1.20.1",
+  "onnxruntime": "1.26.0",
+  "ai_edge_litert": "2.1.2",
+  "numpy": "2.2.6"
+ },
+ "accepted": true,
+ "parity_float32": {
+  "crops": 130,
+  "max_abs_diff_p_cracked": 7.748603820800781e-06,
+  "mean_abs_diff_p_cracked": 1.2449347055875337e-06,
+  "policy_class_changes": 0,
+  "ms_per_crop_onnxruntime_cpu": 2.119,
+  "ms_per_crop_tflite_cpu": 3.988
+ },
+ "generated_by": "tools/litert/convert_tflite.py"
+}
