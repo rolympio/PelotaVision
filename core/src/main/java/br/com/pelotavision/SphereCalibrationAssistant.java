@@ -94,6 +94,50 @@ public final class SphereCalibrationAssistant {
                 (sorted.get(n / 2 - 1) + sorted.get(n / 2)) / 2.0;
     }
 
+
+    /**
+     * Amostra metrologica conservadora. Nao elimina deteccoes por tamanho
+     * em mm ou por aderencia a Rosin-Rammler: isso causaria vies.
+     * fitSupport e fitRms sao avaliados somente quando finitos.
+     */
+    public static boolean isCompleteMeasurement(PelletDetector.Detection d) {
+        if (d == null || !d.ellipseFitted || d.partial || d.needsReview) return false;
+        if (!(d.semiMajor > 0 && d.semiMinor > 0)) return false;
+        if (d.semiMinor / d.semiMajor < 0.72) return false;
+        if (Double.isFinite(d.fitSupport) && d.fitSupport < 0.65) return false;
+        if (Double.isFinite(d.fitRms) && d.fitRms > 0.20 * d.semiMinor) return false;
+        return true;
+    }
+
+    /** Nao inclui as esferas confirmadas nem objetos com geometria inconclusiva. */
+    public static List<Integer> validatedPelletIndices(PelletDetector.Result result,
+            InterestRegion roi, Set<Integer> confirmedSphereIndices) {
+        if (result == null) throw new IllegalArgumentException("Resultado ausente");
+        Set<Integer> spheres = confirmedSphereIndices == null
+                ? Collections.emptySet() : new HashSet<>(confirmedSphereIndices);
+        for (Integer i : spheres)
+            if (i == null || i < 0 || i >= result.circles.size())
+                throw new IllegalArgumentException("Indice de esfera invalido");
+        List<Integer> valid = new ArrayList<>();
+        for (int i = 0; i < result.circles.size(); i++) {
+            PelletDetector.Detection d = result.circles.get(i);
+            if (!spheres.contains(i) && (roi == null || roi.includes(d))
+                    && isCompleteMeasurement(d)) valid.add(i);
+        }
+        return Collections.unmodifiableList(valid);
+    }
+
+    /**
+     * Compara calibracoes sem substituir silenciosamente a escala da esfera.
+     * A diferenca de planos torna a escala da borda inadequada como substituta.
+     */
+    public static double borderRelativeBias(double spherePxPerMm, double borderPxPerMm) {
+        if (!Double.isFinite(spherePxPerMm) || spherePxPerMm <= 0
+                || !Double.isFinite(borderPxPerMm) || borderPxPerMm <= 0)
+            throw new IllegalArgumentException("Escalas invalidas");
+        return spherePxPerMm / borderPxPerMm - 1.0;
+    }
+
     /** Índices estáveis somente para o resultado de segmentação informado. */
     public static List<Integer> acceptedIndices(PelletDetector.Result result,
             InterestRegion roi, ObjectCalibration.Reference reference,
