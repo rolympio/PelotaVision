@@ -61,6 +61,39 @@ public final class SphereCalibrationAssistant {
                 ranked.subList(0,Math.min(limit,ranked.size()))));
     }
 
+
+    /**
+     * Escala robusta das esferas CONFIRMADAS pelo operador. A mediana evita
+     * que uma esfera mal segmentada distorca toda a granulometria.
+     * Nao estima profundidade nem aplica correcao de altura nao identificavel.
+     */
+    public static double robustPixelsPerMm(List<Candidate> confirmed) {
+        if (confirmed == null || confirmed.isEmpty())
+            throw new IllegalArgumentException("Nenhuma esfera confirmada");
+        List<Double> values = new ArrayList<>();
+        for (Candidate c : confirmed) {
+            if (c == null || !Double.isFinite(c.pixelsPerMm) || c.pixelsPerMm <= 0)
+                throw new IllegalArgumentException("Escala de esfera invalida");
+            values.add(c.pixelsPerMm);
+        }
+        Collections.sort(values);
+        double median = median(values);
+        List<Double> deviations = new ArrayList<>();
+        for (double v : values) deviations.add(Math.abs(v - median));
+        Collections.sort(deviations);
+        double cutoff = Math.max(0.04 * median, 3.0 * 1.4826 * median(deviations));
+        List<Double> kept = new ArrayList<>();
+        for (double v : values) if (Math.abs(v - median) <= cutoff) kept.add(v);
+        return median(kept);
+    }
+
+    private static double median(List<Double> sorted) {
+        int n = sorted.size();
+        if (n == 0) throw new IllegalArgumentException("Sem medidas validas");
+        return n % 2 == 1 ? sorted.get(n / 2) :
+                (sorted.get(n / 2 - 1) + sorted.get(n / 2)) / 2.0;
+    }
+
     /** Índices estáveis somente para o resultado de segmentação informado. */
     public static List<Integer> acceptedIndices(PelletDetector.Result result,
             InterestRegion roi, ObjectCalibration.Reference reference,
