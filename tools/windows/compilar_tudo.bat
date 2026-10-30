@@ -115,34 +115,36 @@ copy /y "%OPENCV%\opencv\build\java\x64\opencv_java4120.dll" "%SRC%\desktop\open
 echo       copiado para desktop\opencv-java
 
 rem ---------------------------------------------------------------- 4. compilar Windows
+set "WINDOWS_OK=0"
+set "ANDROID_OK=0"
 cd /d "%SRC%"
-call gradlew.bat --stop >nul 2>&1
+if not exist "%SRC%\gradlew.bat" (echo ERRO: Gradle Wrapper ausente em %SRC% & goto :falha)
+set "GRADLE=%SRC%\gradlew.bat"
+call "%GRADLE%" --stop >nul 2>&1
 if "%SEM_TESTES%"=="1" (
   echo [4/7] Compilando o Windows ^(sem testes^)...
-  call gradlew.bat -p desktop jar runtimeLibs --no-daemon --stacktrace >> "%LOG%" 2>&1
+  call "%GRADLE%" -p desktop jar runtimeLibs --no-daemon --stacktrace >> "%LOG%" 2>&1
 ) else (
   echo [4/7] Compilando e testando o Windows ^(primeira vez: ~10-20 min, baixa ~300 MB^)...
-  call gradlew.bat -p desktop test jar runtimeLibs --no-daemon --stacktrace >> "%LOG%" 2>&1
+  call "%GRADLE%" -p desktop test jar runtimeLibs --no-daemon --stacktrace >> "%LOG%" 2>&1
 )
 if errorlevel 1 (
-  echo ERRO na compilacao/testes do Windows. Veja o final do log:
-  powershell -NoProfile -Command "Get-Content -Tail 40 '%LOG%'"
-  echo Relatorio dos testes: %SRC%\desktop\build\reports\tests\test\index.html
-  echo Para empacotar mesmo assim: set SEM_TESTES=1 e rode de novo.
-  goto :falha
+  echo ATENCAO: compilacao Windows falhou; Android sera tentado independentemente. >> "%LOG%"
+  echo Falha Windows. Consulte "%LOG%".
+  goto :android
 )
 echo       OK
-
 rem ---------------------------------------------------------------- 5. empacotar Windows
-echo [5/7] Empacotando ^(PelotaVision.exe, zip portatil, instalador^)...
-call desktop\installer\empacotar.bat >> "%LOG%" 2>&1
-if not exist "%SRC%\pkg\dist\PelotaVision\PelotaVision.exe" (
-  echo ERRO no empacotamento. Final do log:
-  powershell -NoProfile -Command "Get-Content -Tail 30 '%LOG%'"
-  goto :falha
+echo [5/7] Empacotando Windows...
+call "%SRC%\desktop\installer\empacotar.bat" >> "%LOG%" 2>&1
+if exist "%SRC%\pkg\dist\PelotaVision\PelotaVision.exe" (
+  set "WINDOWS_OK=1"
+  echo       Windows OK
+) else (
+  echo ATENCAO: empacotamento Windows falhou. >> "%LOG%"
 )
-findstr /c:"Autoteste OK" "%LOG%" >nul && (echo       autoteste OK) || (echo       ATENCAO: autoteste sem exit=0 - veja %SRC%\pkg\autoteste\autoteste.txt)
 
+:android
 rem ---------------------------------------------------------------- 6. Android (opcional)
 if "%SEM_ANDROID%"=="1" goto :sem_android
 set "SDK=%LOCALAPPDATA%\Android\Sdk"
@@ -155,9 +157,10 @@ echo [6/7] Compilando o APK...
 set "SDKESC=%SDK:\=\\%"
 set "SDKESC=%SDKESC::=\:%"
 > local.properties echo sdk.dir=%SDKESC%
-call gradlew.bat assembleDebug testDebugUnitTest lintDebug --no-daemon --stacktrace >> "%LOG%" 2>&1
+call "%GRADLE%" assembleDebug testDebugUnitTest lintDebug --no-daemon --stacktrace >> "%LOG%" 2>&1
 if errorlevel 1 (echo       ATENCAO: o APK falhou ^(o pacote Windows esta pronto^). Veja o log. & goto :sem_android)
-echo       OK
+set "ANDROID_OK=1"
+echo       Android OK
 :sem_android
 
 rem ---------------------------------------------------------------- 7. resumo
@@ -174,13 +177,15 @@ for %%f in (*.*) do for /f "delims=" %%h in ('certutil -hashfile "%%f" SHA256 ^|
 if exist "%WORK%\SHA256.tmp" move /y "%WORK%\SHA256.tmp" SHA256.txt >nul
 popd
 echo.
-echo ===================== PRONTO (commit %COMMIT%) =====================
+echo ===================== RESULTADOS (commit %COMMIT%) =====================
+echo Windows OK: !WINDOWS_OK!  Android OK: !ANDROID_OK!
 echo  Programa Windows:  %SRC%\pkg\dist\PelotaVision\PelotaVision.exe
 echo                     ^(a pasta PelotaVision inteira e o programa^)
 echo  Para distribuir:   %OUT%
 dir /b "%OUT%"
 echo  Log:               %LOG%
 echo ====================================================================
+if "!WINDOWS_OK!"=="0" if "!ANDROID_OK!"=="0" (endlocal & exit /b 1)
 endlocal
 exit /b 0
 

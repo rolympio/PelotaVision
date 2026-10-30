@@ -117,5 +117,32 @@ public final class ContainerCalibration {
         if(rim==null)return null;double r=Math.min(rim.r*.98,Math.min(Math.min(rim.cx,w-rim.cx),Math.min(rim.cy,h-rim.cy)));
         if(!(r>=8))return null;return new InterestRegion(InterestRegion.Shape.CIRCLE,rim.cx-r,rim.cy-r,rim.cx+r,rim.cy+r);
     }
+
+    /**
+     * Correcao empirica da borda ancorada em esferas certificadas na MESMA
+     * fotografia e no plano de interesse. Nao extrapolar para outra altura,
+     * distancia de camera ou recipiente sem nova verificacao.
+     */
+    public static final class LevelCorrection {
+        public final double borderPxPerMm, spherePxPerMm, factor, discrepancy;
+        public final int referenceCount;
+        private LevelCorrection(double border, double sphere, int count) {
+            if (!Double.isFinite(border) || border <= 0 ||
+                    !Double.isFinite(sphere) || sphere <= 0 || count < 1)
+                throw new IllegalArgumentException("Referencias de escala invalidas");
+            borderPxPerMm=border; spherePxPerMm=sphere;
+            factor=sphere/border; discrepancy=Math.abs(factor-1);
+            referenceCount=count;
+        }
+        /** Escala medida no plano das esferas, nunca uma altura fisica inferida. */
+        public double correctedPixelsPerMm(){return borderPxPerMm*factor;}
+        /** Aviso de diferenca de planos, sem ocultar a divergencia. */
+        public boolean requiresReview(){return discrepancy>0.05 || referenceCount<3;}
+    }
+    public static LevelCorrection calibrateLevel(double borderPxPerMm,
+            double spherePxPerMm,int confirmedSphereCount) {
+        return new LevelCorrection(borderPxPerMm,spherePxPerMm,confirmedSphereCount);
+    }
+
     private static double clamp(double v,double a,double b){return Math.max(a,Math.min(b,v));}
 }
