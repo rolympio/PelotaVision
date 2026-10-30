@@ -44,6 +44,23 @@ public final class SphereCalibrationAssistantTest {
                 Collections.singleton(9));}
         catch(IllegalArgumentException expected){invalid=true;}
         check(invalid,"Índice inválido rejeitado");
+        check(SphereCalibrationAssistant.isCompleteMeasurement(sphere),
+                "Esfera com elipse completa");
+        check(!SphereCalibrationAssistant.isCompleteMeasurement(bad),
+                "Sem elipse nao pode integrar amostra validada");
+        check(SphereCalibrationAssistant.validatedPelletIndices(all,null,
+                Collections.singleton(1)).equals(Collections.singletonList(0)),
+                "Excluir esfera e objeto inconclusivo");
+        check(Math.abs(SphereCalibrationAssistant.borderRelativeBias(
+                6.9648,4.4240)-0.574322)<0.0001,
+                "Divergencia entre planos de calibracao");
+        List<SphereCalibrationAssistant.Candidate> refs=Arrays.asList(
+                new SphereCalibrationAssistant.Candidate(0,76.0,11,1,1),
+                new SphereCalibrationAssistant.Candidate(1,77.0,11,1,1),
+                new SphereCalibrationAssistant.Candidate(2,76.5,11,1,1),
+                new SphereCalibrationAssistant.Candidate(3,115.0,11,1,1));
+        check(Math.abs(SphereCalibrationAssistant.robustPixelsPerMm(refs)-76.5/11)<1e-12,
+                "Outlier de esfera removido pela mediana/MAD");
         System.out.println("SphereCalibrationAssistantTest: OK");
     }
 }
