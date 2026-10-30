@@ -30,6 +30,9 @@ final class PhotoSession {
     private DesktopAnalysis.Output all;     // ultima analise (escopo = all.window)
     private CrackAnalysis allCracks;        // com revisoes manuais, mesma ordem de all.result
     private boolean needsAnalysis = true;
+    /** Confirmacoes pertencem exclusivamente a ultima segmentacao. */
+    private final java.util.Set<Integer> confirmedSphereIndices = new java.util.HashSet<>();
+    private boolean validatedOnly = false;
     private Granulometry.Settings scale;
     private double minimumExpectedMm = 5;
 
@@ -122,6 +125,7 @@ final class PhotoSession {
             scale = null;
             warning = "A borda do recipiente pertence a outra imagem. Recalibre.";
         }
+        confirmedSphereIndices.clear(); // indices anteriores nao sobrevivem a reanalise
         all = out;
         allCracks = out.cracks;
         needsAnalysis = !new AnalysisWindow(width, height, region).sameScope(out.window);
@@ -154,7 +158,7 @@ final class PhotoSession {
     /** Valida calculando a distribuicao antes de aplicar (commitScale do Android). */
     void setScale(Granulometry.Settings s) {
         if (s != null && all != null && !needsAnalysis) {
-            List<Integer> ids = ObjectCalibration.sampleIndices(all.result, region, s.selectedObject);
+            List<Integer> ids = selectedIndices();
             Granulometry.compute(items(InterestRegion.select(all.result, ids)), s, originalWidth, originalHeight, width, height);
         }
         scale = s;
@@ -166,6 +170,38 @@ final class PhotoSession {
         if (all == null) throw new IllegalArgumentException("Analise a foto primeiro.");
         List<Integer> ids = ObjectCalibration.sampleIndices(all.result, region, s.selectedObject);
         return Granulometry.compute(items(InterestRegion.select(all.result, ids)), s, originalWidth, originalHeight, width, height);
+    }
+
+    /** Confirma esferas de 11 mm pelo indice na segmentacao integral. */
+    void setConfirmedSphereIndices(java.util.Set<Integer> ids) {
+        if (all == null || needsAnalysis)
+            throw new IllegalStateException("Analise a foto antes de confirmar esferas");
+        java.util.Set<Integer> validated = ids == null
+                ? java.util.Collections.emptySet() : new java.util.HashSet<>(ids);
+        for (Integer i : validated)
+            if (i == null || i < 0 || i >= all.result.circles.size())
+                throw new IllegalArgumentException("Indice de esfera invalido");
+        confirmedSphereIndices.clear();
+        confirmedSphereIndices.addAll(validated);
+        refresh();
+    }
+
+    void setValidatedOnly(boolean enabled) { validatedOnly = enabled; refresh(); }
+    boolean validatedOnly() { return validatedOnly; }
+    java.util.Set<Integer> confirmedSphereIndices() {
+        return java.util.Collections.unmodifiableSet(new java.util.HashSet<>(confirmedSphereIndices));
+    }
+
+    private List<Integer> selectedIndices() {
+        List<Integer> base = ObjectCalibration.sampleIndices(all.result, region, reference());
+        if (confirmedSphereIndices.isEmpty() && !validatedOnly) return base;
+        java.util.Set<Integer> allowed = validatedOnly
+                ? new java.util.HashSet<>(SphereCalibrationAssistant.validatedPelletIndices(
+                        all.result, region, confirmedSphereIndices)) : null;
+        List<Integer> selected = new ArrayList<>();
+        for (int i : base) if (!confirmedSphereIndices.contains(i)
+                && (!validatedOnly || allowed.contains(i))) selected.add(i);
+        return selected;
     }
 
     // ---------------- Trincas ----------------
@@ -207,7 +243,7 @@ final class PhotoSession {
     private void refresh() {
         distribution = null; distributionError = null; shape = null; activeCracks = null;
         if (all == null) { active = null; indices = Collections.emptyList(); return; }
-        indices = ObjectCalibration.sampleIndices(all.result, region, reference());
+        indices = selectedIndices();
         if (needsAnalysis) {
             active = new PelletDetector.Result(Collections.emptyList(), all.result.width, all.result.height, 0, 0, false, "pending_roi_analysis");
             return;
