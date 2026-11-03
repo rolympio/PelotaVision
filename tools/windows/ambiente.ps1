@@ -146,6 +146,50 @@ function New-WindowsPackage([string]$Ocv) {
         !(Select-String -LiteralPath "$out\autoteste\autoteste.txt" -Pattern '^exit=0$' -Quiet)) {
         throw 'Autoteste do executavel falhou; pacote nao aprovado.'
     }
+    # Janela real e exportacao completa SEM Python/JDK no PATH e com cwd independente.
+    $oldPath = $env:PATH; $oldJava = $env:JAVA_HOME; $oldPython = $env:PYTHONHOME
+    New-Item -ItemType Directory -Path "$out\cwd-vazio" | Out-Null
+    try {
+        $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+        $env:JAVA_HOME = ''; $env:PYTHONHOME = ''
+        $gui = Start-Process -FilePath $exe -WorkingDirectory "$out\cwd-vazio" `
+            -ArgumentList @('--studio-smoke', "`"$repo\verification\fixtures\1000411645.jpg`"", "`"$out\studio-smoke`"") -PassThru
+        $handle = $gui.Handle
+        if (!$gui.WaitForExit(360000)) { $gui.Kill(); throw 'Timeout do ensaio GUI do pacote.' }
+        $gui.Refresh()
+        $smokePath = "$out\studio-smoke\studio-smoke.json"
+        if ($gui.ExitCode -ne 0 -or !(Test-Path $smokePath)) { throw 'Ensaio GUI do executavel falhou.' }
+        $smoke = Get-Content $smokePath -Raw | ConvertFrom-Json
+        if ($smoke.exit -ne 0 -or $smoke.stages_rendered -ne 6 -or $smoke.pdf_pages -lt 1) {
+            throw 'Ensaio GUI incompleto: pacote nao aprovado.'
+        }
+    } finally { $env:PATH = $oldPath; $env:JAVA_HOME = $oldJava; $env:PYTHONHOME = $oldPython }
+    $metadata = [ordered]@{ version=$version; commit=[string](Invoke-Git @('rev-parse','HEAD'))
+        created_utc=[DateTime]::UtcNow.ToString('o'); executable=$exe; packaged_gui_test=$true
+        clean_vm_tested=$false; python_required=$false; experimental=$true }
+    $metadata | ConvertTo-Json | Set-Content -Encoding UTF8 "$out\dist\PelotaVision\VERSION.json"
+    @'
+@echo off
+rem Atualizacoes sao distribuidas apenas apos aprovacao. Nunca sobrescreve esta pasta.
+start "" "https://github.com/rolympio/PelotaVision/releases"
+'@ | Set-Content -Encoding ASCII "$out\dist\PelotaVision\VERIFICAR_ATUALIZACOES.bat"
+    $zip = "$out\PelotaVision_Studio_Windows_$version.zip"
+    Compress-Archive -Path "$out\dist\PelotaVision" -DestinationPath $zip -CompressionLevel Optimal
+    $hash = Get-FileHash $zip -Algorithm SHA256
+    "$($hash.Hash)  $([IO.Path]::GetFileName($zip))" | Set-Content -Encoding ASCII "$out\SHA256.txt"
+    $metadata | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $LocalRoot 'latest-package.json')
+    $desktop = [Environment]::GetFolderPath('Desktop')
+    if ($desktop -and (Test-Path -LiteralPath $desktop)) {
+        $shortcutPath = Join-Path $desktop 'PelotaVision Studio.lnk'
+        if (Test-Path $shortcutPath) { $shortcutPath = Join-Path $desktop "PelotaVision Studio-$runId.lnk" }
+        $shell = New-Object -ComObject WScript.Shell
+        $shortcut = $shell.CreateShortcut($shortcutPath)
+        $shortcut.TargetPath = $exe; $shortcut.WorkingDirectory = Split-Path $exe -Parent
+        $shortcut.IconLocation = "$exe,0"
+        $shortcut.Save()
+        Write-Output "Atalho criado: $shortcutPath"
+    }
+    Write-Output "Distribuicao: $zip | SHA256=$($hash.Hash)"
     Write-Output "Pacote Windows testado: $exe"
 }
 
