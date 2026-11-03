@@ -149,8 +149,19 @@ def test_embedded_model_unchanged_and_reproduces_reference_scores():
     meta = json.loads((ROOT / 'app/src/main/assets/metadata.json').read_text())
     import hashlib
     assert hashlib.sha256(EMBEDDED.read_bytes()).hexdigest() == meta['sha256']
+    # O RF de reserva foi retreinado na 0.15.5; o NPZ antigo pertence ao RF anterior.
+    # O CSV versionado da 0.15.5 ja contem features e escores congelados do modelo atual.
+    reference_path = 'verification/ml-0.15.5/reference_vectors.csv'
+    assert meta['reference_vectors'].startswith(reference_path)
+    ref = np.loadtxt(ROOT / reference_path, delimiter=',')
+    assert ref.ndim == 2 and ref.shape[1] == meta['features'] + 1
+    assert np.abs(pvrf.score_pvrf(pvrf.read_pvrf(EMBEDDED), ref[:, :-1]) - ref[:, -1]).max() < 1e-12
+
+
+def test_legacy_rf_keeps_its_original_reference_scores():
     ref = np.load(ROOT / 'ml_training/training/reference_vectors.npz')
-    assert np.abs(pvrf.score_pvrf(pvrf.read_pvrf(EMBEDDED), ref['features']) - ref['score_final']).max() < 1e-12
+    legacy = ROOT / 'ml_training/training/crack_forest.pvrf'
+    assert np.abs(pvrf.score_pvrf(pvrf.read_pvrf(legacy), ref['features']) - ref['score_final']).max() < 1e-12
 
 
 def test_reference_features_reproduced_with_installed_opencv():

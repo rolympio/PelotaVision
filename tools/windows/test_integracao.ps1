@@ -114,3 +114,5 @@ Run-Update 1
 Git @('-C',$repo,'remote','set-url','origin','https://github.com/outro/projeto.git') | Out-Null
 Run-Update 1
 Write-Output "7 cenarios de integracao passaram. Repositorios sinteticos preservados em: $base"
+# O ultimo cenario espera exit=1 do atalho; nao vazar esse codigo ao wrapper do Actions.
+exit 0
