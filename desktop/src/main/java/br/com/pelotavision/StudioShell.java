@@ -25,6 +25,9 @@ final class StudioShell extends JPanel {
         JLabel brand = new JLabel("PELOTAVISION STUDIO");
         brand.setFont(new Font("Segoe UI", Font.BOLD, 21));
         brand.setForeground(StudioTheme.TEXT);
+        List<Image> icons = MainFrame.appIcons();
+        if (!icons.isEmpty()) brand.setIcon(new ImageIcon(icons.get(icons.size() - 1).getScaledInstance(36, 36, Image.SCALE_SMOOTH)));
+        brand.setIconTextGap(10);
         JLabel badge = new JLabel("P&D · medidas 2D · IA experimental");
         badge.setForeground(new Color(245, 184, 75));
         JPanel identity = new JPanel(new BorderLayout());
@@ -57,6 +60,15 @@ final class StudioShell extends JPanel {
         resultsSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, viewer, inspector);
         resultsSplit.setResizeWeight(1);
         resultsSplit.setDividerSize(7);
+        resultsSplit.addComponentListener(new java.awt.event.ComponentAdapter() {
+            private boolean positioned;
+            @Override public void componentResized(java.awt.event.ComponentEvent e) {
+                if (!positioned && resultsSplit.getWidth() > 400) {
+                    resultsSplit.setDividerLocation(Math.max(200, resultsSplit.getWidth() - 350));
+                    positioned = true;
+                }
+            }
+        });
         inspector.setPreferredSize(new Dimension(345, 620));
         inspector.setMinimumSize(new Dimension(0, 0));
         controlsSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, controlPanel, resultsSplit);

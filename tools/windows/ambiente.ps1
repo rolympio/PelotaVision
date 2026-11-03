@@ -185,6 +185,7 @@ start "" "https://github.com/rolympio/PelotaVision/releases"
         $shell = New-Object -ComObject WScript.Shell
         $shortcut = $shell.CreateShortcut($shortcutPath)
         $shortcut.TargetPath = $exe; $shortcut.WorkingDirectory = Split-Path $exe -Parent
+        $shortcut.IconLocation = "$exe,0"
         $shortcut.Save()
         Write-Output "Atalho criado: $shortcutPath"
     }

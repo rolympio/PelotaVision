@@ -158,6 +158,7 @@ jobs:
           echo "$JP_OUT"
           [ $JP_RC -eq 0 ] || { echo "::error title=jpackage::$(echo "$JP_OUT" | tail -8 | tr '\n' ' ')"; exit 1; }
           cp desktop/LEIA-ME.txt pkg/dist/PelotaVision/
+          cp -r third_party pkg/dist/PelotaVision/
           find pkg/dist/PelotaVision -maxdepth 2 > pkg/conteudo.txt; cat pkg/conteudo.txt
 
       - name: Autoteste do pacote montado
@@ -237,7 +238,7 @@ jobs:
           echo "::notice title=Instalador testado::instalou sem administrador, autoteste exit=0, desinstalou"
 
       - name: Publicar artefato
-        # Cota de artefatos do Actions esgotada nao pode bloquear a Release (o entregavel de fato).
+        # Falha/cota no upload deve ficar visivel; nao contornar publicando Release sem aprovacao.
         uses: actions/upload-artifact@v6
         with:
           name: PelotaVision-Windows-${{ github.sha }}
@@ -251,7 +252,7 @@ jobs:
           retention-days: 30
 
       - name: Publicar Release
-        if: success() && ((github.event_name == 'workflow_dispatch' && inputs.publicar) || (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish-lowlight]')) || startsWith(github.ref, 'refs/tags/windows-v'))
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.publicar
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

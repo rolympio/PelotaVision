@@ -46,3 +46,14 @@ não equivale a uma VM Windows limpa; essa etapa deve ter evidência separada no
 O atalho `ABRIR_PELOTAVISION_STUDIO.bat` abre o último pacote local testado.
 Atualizações distribuídas só após aprovação, pelo link oficial de Releases;
 não há sobrescrita silenciosa nem autoatualização de modelos experimentais.
+
+## Ícone
+
+O desenho próprio de pelotas está em `tools/icon/pelotavision_512.png`. O `.ico`
+multirresolução correspondente é `desktop/installer/PelotaVision.ico`: ele é
+embutido por `jpackage` no executável e configurado explicitamente no atalho.
+Os ícones da janela vêm de `desktop/src/main/resources/icon/`. Para atualizar o
+ícone mostrado de uma instalação antiga, é preciso abrir o novo pacote/atalho;
+não substituímos nem fechamos a instalação anterior automaticamente. A imagem
+de microscopia enviada como referência pertence a outro aplicativo, cujo ícone
+próprio é distinto do ícone de pelotas do PelotaVision.

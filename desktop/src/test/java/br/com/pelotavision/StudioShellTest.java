@@ -20,4 +20,10 @@ public class StudioShellTest {
         try { new StudioShell(new JPanel(), new JPanel(), new JPanel[0]); fail(); }
         catch (IllegalArgumentException expected) { }
     }
+    @Test public void developedIconIsPackagedAtAllRequiredSizes() {
+        java.util.List<java.awt.Image> icons = MainFrame.appIcons();
+        assertEquals(6, icons.size());
+        assertEquals(16, icons.get(0).getWidth(null));
+        assertEquals(256, icons.get(icons.size() - 1).getWidth(null));
+    }
 }
