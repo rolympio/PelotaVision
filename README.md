@@ -31,6 +31,13 @@ Acurácia de segmentação, granulometria e detecção de trincas deve ser medid
 
 ## Instalação e documentação
 
+Para preparar/atualizar um clone local sem sobrescrever trabalho existente, use
+os atalhos `VERIFICAR_AMBIENTE.bat`, `INSTALAR_PELOTAVISION.bat`,
+`ATUALIZAR_PELOTAVISION.bat`, `COMPILAR_PELOTAVISION.bat` e
+`SINCRONIZAR_DADOS.bat`. Veja [ambiente Windows seguro](docs/ambiente-windows.md),
+[inventário privado de imagens](docs/ia/PLANO_INVENTARIO_LOCAL.md) e
+[skills do OpenCode](docs/opencode-skills.md).
+
 Consulte os artefatos das execuções em **GitHub Actions** e as instruções de compilação abaixo. A disponibilidade de APK, executável Windows e PDF depende da versão e do resultado dos respectivos builds. Não se deve presumir que uma funcionalidade esteja distribuída apenas por ter sido desenvolvida em uma branch.
 
 ---
