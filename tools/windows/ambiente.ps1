@@ -148,6 +148,7 @@ function New-WindowsPackage([string]$Ocv) {
     }
     # Janela real e exportacao completa SEM Python/JDK no PATH e com cwd independente.
     $oldPath = $env:PATH; $oldJava = $env:JAVA_HOME; $oldPython = $env:PYTHONHOME
+    $aiPreviewTested = $false
     New-Item -ItemType Directory -Path "$out\cwd-vazio" | Out-Null
     try {
         $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
@@ -163,10 +164,26 @@ function New-WindowsPackage([string]$Ocv) {
         if ($smoke.exit -ne 0 -or $smoke.stages_rendered -ne 6 -or $smoke.pdf_pages -lt 1) {
             throw 'Ensaio GUI incompleto: pacote nao aprovado.'
         }
+        if ($env:PELOTAVISION_EXPERIMENTAL_MODEL) {
+            $modelPath = $env:PELOTAVISION_EXPERIMENTAL_MODEL
+            if (!(Test-Path -LiteralPath $modelPath -PathType Leaf)) { throw 'ONNX experimental solicitado para teste nao existe.' }
+            $ai = Start-Process -FilePath $exe -WorkingDirectory "$out\cwd-vazio" `
+                -ArgumentList @('--studio-ai-smoke', "`"$repo\verification\fixtures\1000411645.jpg`"", "`"$out\studio-ai-smoke`"", "`"$modelPath`"") -PassThru
+            $handle = $ai.Handle
+            if (!$ai.WaitForExit(480000)) { $ai.Kill(); throw 'Timeout do ensaio GUI da IA.' }
+            $ai.Refresh()
+            $aiPath = "$out\studio-ai-smoke\studio-smoke.json"
+            if ($ai.ExitCode -ne 0 -or !(Test-Path $aiPath)) { throw 'Ensaio GUI da IA falhou.' }
+            $aiResult = Get-Content $aiPath -Raw | ConvertFrom-Json
+            if ($aiResult.exit -ne 0 -or $aiResult.experimental_ai -ne 'preview_cpu_sha_verificado_sem_alteracao_de_medicoes') {
+                throw 'Previa IA nao concluiu sem alterar as medicoes.'
+            }
+            $aiPreviewTested = $true
+        }
     } finally { $env:PATH = $oldPath; $env:JAVA_HOME = $oldJava; $env:PYTHONHOME = $oldPython }
     $metadata = [ordered]@{ version=$version; commit=[string](Invoke-Git @('rev-parse','HEAD'))
         created_utc=[DateTime]::UtcNow.ToString('o'); executable=$exe; packaged_gui_test=$true
-        clean_vm_tested=$false; python_required=$false; experimental=$true }
+        ai_preview_tested=$aiPreviewTested; clean_vm_tested=$false; python_required=$false; experimental=$true }
     $metadata | ConvertTo-Json | Set-Content -Encoding UTF8 "$out\dist\PelotaVision\VERSION.json"
     @'
 @echo off
