@@ -61,6 +61,7 @@ final class MainFrame extends JFrame {
     private final HistogramView histogram = new HistogramView();
     // 0.5.3: curva acumulada com ajuste Rosin–Rammler (mesmas pelotas e classes do histograma).
     private final RosinRammlerView rrView = new RosinRammlerView();
+    final ReportPreview reportPreview = new ReportPreview();
     private final JComboBox<String> rrBasisBox = new JComboBox<>(new String[]{RosinRammler.Basis.NUMBER.label, RosinRammler.Basis.MASS.label});
     private final JButton scaleButton = new JButton("Escala e histograma…");
     private javax.swing.JDialog scaleDialog;
@@ -118,7 +119,7 @@ final class MainFrame extends JFrame {
     private final JButton clearScaleButton = new JButton("Sem escala (px)");
     private final JLabel scaleLabel = new JLabel("Sem escala fisica · valores em px");
     // ---- Modelos de analise (0.5.0): visualizacao, mapa, classificador de trincas e grafico ----
-    private final JComboBox<String> viewBox = new JComboBox<>(new String[]{"Original", "Segmentacao", "Mapa granulometrico", "Instâncias (elipses)", "Classes visíveis (elipses)", "Possíveis trincas", "IA multitarefa experimental", "Incerteza IA (não calibrada)"});
+    private final JComboBox<String> viewBox = new JComboBox<>(new String[]{"Original", "Segmentacao", "Mapa granulometrico", "Instâncias (elipses)", "Classes visíveis (elipses)", "Possíveis trincas", "IA multitarefa experimental", "Incerteza IA (não calibrada)", "IA: bordas candidatas", "IA: separação candidata"});
     private final javax.swing.JSlider opacitySlider = new javax.swing.JSlider(0, 90, 55);
     private final JCheckBox mapLabels = new JCheckBox("Diametros");
     private final JCheckBox mapFixed = new JCheckBox("Escala fixa");
@@ -187,7 +188,8 @@ final class MainFrame extends JFrame {
 
         JPanel side = new StudioScrollablePanel();
         side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
-        side.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+        side.setBackground(StudioTheme.BACKGROUND);
+        side.setBorder(BorderFactory.createEmptyBorder(0, 4, 8, 8));
         scalePanel = new JPanel();
         scalePanel.setLayout(new BoxLayout(scalePanel, BoxLayout.Y_AXIS));
         scalePanel.setBorder(BorderFactory.createTitledBorder("Escala e classes do histograma"));
@@ -200,33 +202,41 @@ final class MainFrame extends JFrame {
         // 0.5.3: o painel de escala abre por botão; o espaço lateral fica para histograma + Rosin–Rammler.
         scaleButton.setToolTipText("px/mm, classe, exclusões, referência, correia, recipiente, objeto e média");
         scaleButton.addActionListener(e -> showScaleDialog());
-        JPanel scaleRow = new JPanel(new BorderLayout(4, 4));
-        scaleRow.add(scaleButton, BorderLayout.NORTH);
+        JPanel scaleRow = new JPanel(new BorderLayout(4, 6));
+        scaleRow.setOpaque(false);
         scaleRow.add(scaleLabel, BorderLayout.CENTER);
-        scaleRow.setAlignmentX(Component.LEFT_ALIGNMENT);
-        scaleRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 85));
-        side.add(scaleRow);
+        scaleRow.add(scaleButton, BorderLayout.SOUTH);
+        scaleLabel.setForeground(StudioTheme.TEXT);
+        addCard(side, StudioShell.card("Escala", scaleRow));
         summary.setEditable(false);
         summary.setLineWrap(true); summary.setWrapStyleWord(true);
         summary.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        summary.setRows(7);
+        summary.setBackground(StudioTheme.BACKGROUND);
+        summary.setForeground(StudioTheme.TEXT);
+        summary.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
         JScrollPane sp = new JScrollPane(summary);
-        sp.setBorder(BorderFactory.createTitledBorder("Resultado"));
-        side.add(sp);
-        histogram.setBorder(BorderFactory.createTitledBorder("Histograma por numero"));
-        side.add(histogram);
+        sp.setBorder(BorderFactory.createEmptyBorder());
+        addCard(side, StudioShell.card("Resultado", sp));
+        addCard(side, StudioShell.card("Histograma por número", histogram));
+        // Fonte lógica com substituição de glifos: Segoe UI não tem "∝".
+        rrBasisBox.setFont(new Font(Font.DIALOG, Font.PLAIN, 13));
         rrBasisBox.setSelectedIndex(RosinRammler.Basis.fromId(prefs.get("rrBasis", "number")).ordinal());
         rrBasisBox.setToolTipText("<html>Numero: o que a imagem mede (contagem de pelotas).<br>Massa estimada: pondera cada pelota por d³ (esferas de mesma densidade) — aproxima a base das curvas de peneira, sem substituir o peneiramento.</html>");
         rrBasisBox.addActionListener(e -> { prefs.put("rrBasis", rrBasis().id); refreshCharts(session); });
-        JPanel rrPanel = new JPanel(new BorderLayout());
-        rrPanel.setBorder(BorderFactory.createTitledBorder("Curva acumulada · Rosin–Rammler"));
-        rrPanel.add(row(new JLabel("Base:"), rrBasisBox), BorderLayout.NORTH);
+        JPanel rrPanel = new JPanel(new BorderLayout(0, 6));
+        rrPanel.setOpaque(false);
+        JPanel basisRow = new JPanel(new BorderLayout(6, 0));
+        basisRow.setOpaque(false);
+        basisRow.add(new JLabel("Base:"), BorderLayout.WEST);
+        basisRow.add(rrBasisBox, BorderLayout.CENTER);
+        rrPanel.add(basisRow, BorderLayout.NORTH);
         rrPanel.add(rrView, BorderLayout.CENTER);
-        side.add(rrPanel);
-        JLabel legend = new JLabel("<html><body style='width:270px'><b>Legenda:</b> verde = aceita · amarelo = revisar/inconclusivo · vermelho = possivel trinca · "
-                + "cinza = parcial na borda · tracejado = forma sem confianca · ciano = REF.<br>Clique numa pelota para revisar/calibrar. "
-                + "Roda = zoom · arrastar = mover · duplo clique = ajustar.</body></html>");
-        legend.setBorder(BorderFactory.createEmptyBorder(6, 2, 2, 2));
-        side.add(legend);
+        addCard(side, StudioShell.card("Curva acumulada · Rosin–Rammler", rrPanel));
+        JLabel legend = new JLabel("<html><body style='width:280px'>verde = aceita · amarelo = revisar/inconclusivo · vermelho = possível trinca · "
+                + "cinza = parcial na borda · tracejado = forma sem confiança · ciano = REF.<br>Clique numa pelota para revisar/calibrar.</body></html>");
+        legend.setForeground(StudioTheme.MUTED);
+        addCard(side, StudioShell.card("Legenda", legend));
         // BoxLayout calcula a altura natural dos graficos; JScrollPane permite rolar.
         side.setMinimumSize(new Dimension(200, 1));
 
@@ -260,14 +270,30 @@ final class MainFrame extends JFrame {
                 StudioShell.note("Histogramas por número e massa estimada não substituem peneiramento. Objetos incertos devem ser revisados."));
         javax.swing.JList<String> history = new javax.swing.JList<>(historyModel);
         history.setVisibleRowCount(7);
+        // Mostra o nome da pasta; o caminho completo fica na dica.
+        history.setCellRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override public Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index, boolean selected, boolean focus) {
+                super.getListCellRendererComponent(list, value, index, selected, focus);
+                File f = new File(String.valueOf(value));
+                setText(f.getName()); setToolTipText(f.getPath());
+                return this;
+            }
+        });
         for (int i = 0; i < 15; i++) { String path = prefs.get("history." + i, ""); if (!path.isEmpty()) historyModel.addElement(path); }
         JButton openHistory = new JButton("Abrir pasta selecionada");
         openHistory.addActionListener(e -> { String path = history.getSelectedValue(); if (path != null) {
             try { java.awt.Desktop.getDesktop().open(new File(path)); } catch (Exception ex) { error("Histórico", ex); }
         } });
-        JPanel report = StudioShell.stack(StudioShell.note("Exporta imagem original, segmentação, mapa, CSV, JSON e relatório PDF. Revise calibração, contornos e advertências antes de salvar."),
-                saveButton, new JLabel("Histórico local de exportações"), new JScrollPane(history), openHistory);
-        studio = new StudioShell(view, new JScrollPane(side), new JPanel[]{acquisition, calibration, segmentation, analysis, results, report});
+        JButton previewHistory = new JButton("Ver PDF da exportação");
+        previewHistory.addActionListener(e -> { String path = history.getSelectedValue(); if (path != null) previewLatestPdf(new File(path)); });
+        JPanel report = StudioShell.stack(StudioShell.note("Exporta imagem original, segmentação, mapa, CSV, JSON e relatório PDF. Revise calibração, contornos e advertências antes de salvar. O PDF salvo aparece ao lado."),
+                saveButton, new JLabel("Histórico local de exportações"), new JScrollPane(history), previewHistory, openHistory);
+        JScrollPane inspector = new JScrollPane(side);
+        inspector.setBorder(BorderFactory.createEmptyBorder());
+        inspector.getViewport().setBackground(StudioTheme.BACKGROUND);
+        inspector.getVerticalScrollBar().setUnitIncrement(20);
+        inspector.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        studio = new StudioShell(view, inspector, new JPanel[]{acquisition, calibration, segmentation, analysis, results, report}, reportPreview);
         getContentPane().add(studio, BorderLayout.CENTER);
         getContentPane().add(bottom, BorderLayout.SOUTH);
         pack();
@@ -414,6 +440,11 @@ final class MainFrame extends JFrame {
 
     /** Pontos de extensao para recursos adicionais (calibracoes, trincas, ajustes). */
     private void installExtensions() { Features.install(this); }
+
+    private static void addCard(JPanel side, JPanel card) {
+        side.add(card);
+        side.add(Box.createVerticalStrut(10));
+    }
 
     static JPanel row(Component... cs) {
         JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 3));
@@ -1184,14 +1215,32 @@ final class MainFrame extends JFrame {
         prefs.put("lastTestName", choice.testName == null ? "" : choice.testName);
         try {
             List<File> files = DesktopExport.save(folder, s, config(), choice.testName);
-            StringBuilder t = new StringBuilder((choice.testName == null ? "" : "Teste: " + choice.testName + "\n") + "Arquivos salvos em\n" + folder + "\n\n");
-            for (File f : files) t.append(f.getName()).append('\n');
-            JOptionPane.showMessageDialog(this, t.toString(), "Resultado salvo", JOptionPane.INFORMATION_MESSAGE);
-            setStatus("Resultados salvos em " + folder);
             rememberExport(folder);
+            File pdf = files.stream().filter(f -> f.getName().endsWith("_relatorio.pdf")).findFirst().orElse(null);
+            if (pdf != null) {
+                showReport(pdf);
+                setStatus("Resultados salvos em " + folder + " · relatório aberto na etapa Relatório");
+            } else {
+                StringBuilder t = new StringBuilder("Arquivos salvos em\n" + folder + "\n\nO PDF não foi gerado; consulte o JSON.\n\n");
+                for (File f : files) t.append(f.getName()).append('\n');
+                JOptionPane.showMessageDialog(this, t.toString(), "Resultado salvo", JOptionPane.WARNING_MESSAGE);
+                setStatus("Resultados salvos em " + folder);
+            }
         } catch (Exception ex) {
             error("Salvar", ex);
         }
+    }
+
+    void showReport(File pdf) {
+        reportPreview.open(pdf);
+        studio.select(StudioShell.STAGES.length - 1);
+    }
+
+    private void previewLatestPdf(File folder) {
+        File[] pdfs = folder.listFiles((dir, name) -> name.endsWith("_relatorio.pdf"));
+        if (pdfs == null || pdfs.length == 0) { info("Nenhum relatório PDF nesta pasta."); return; }
+        java.util.Arrays.sort(pdfs, java.util.Comparator.comparing(File::getName));
+        showReport(pdfs[pdfs.length - 1]);
     }
 
     private void runExperimentalPreview() {

@@ -14,11 +14,21 @@ final class StudioShell extends JPanel {
     private final JLabel contextTitle = new JLabel();
     private final JSplitPane controlsSplit;
     private final JSplitPane resultsSplit;
+    private final CardLayout viewerCards = new CardLayout();
+    private final JPanel viewerHost = new JPanel(viewerCards);
+    private final JComponent inspector;
+    private boolean inspectorWanted = true;
     private int stage;
+    static final int CONTROLS_WIDTH = 290, INSPECTOR_WIDTH = 370;
 
     StudioShell(JComponent viewer, JComponent inspector, JPanel[] panels) {
+        this(viewer, inspector, panels, null);
+    }
+
+    StudioShell(JComponent viewer, JComponent inspector, JPanel[] panels, JComponent reportViewer) {
         super(new BorderLayout(12, 12));
         if (panels.length != STAGES.length) throw new IllegalArgumentException("Esperadas seis etapas");
+        this.inspector = inspector;
         setBorder(BorderFactory.createEmptyBorder(12, 14, 8, 14));
         setBackground(StudioTheme.BACKGROUND);
         JPanel header = new JPanel(new BorderLayout(12, 12));
@@ -60,24 +70,28 @@ final class StudioShell extends JPanel {
         contextTitle.setFont(new Font("Segoe UI", Font.BOLD, 17));
         controlPanel.add(contextTitle, BorderLayout.NORTH);
         controlPanel.add(contexts, BorderLayout.CENTER);
-        resultsSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, viewer, inspector);
+        viewerHost.add(viewer, "imagem");
+        if (reportViewer != null) viewerHost.add(reportViewer, "relatorio");
+        resultsSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, viewerHost, inspector);
         resultsSplit.setResizeWeight(1);
         resultsSplit.setDividerSize(7);
+        resultsSplit.setBorder(BorderFactory.createEmptyBorder());
         resultsSplit.addComponentListener(new java.awt.event.ComponentAdapter() {
             private boolean positioned;
             @Override public void componentResized(java.awt.event.ComponentEvent e) {
                 if (!positioned && resultsSplit.getWidth() > 400) {
-                    resultsSplit.setDividerLocation(Math.max(200, resultsSplit.getWidth() - 350));
+                    if (inspector.isVisible()) resultsSplit.setDividerLocation(Math.max(200, resultsSplit.getWidth() - INSPECTOR_WIDTH));
                     positioned = true;
                 }
             }
         });
-        inspector.setPreferredSize(new Dimension(345, 620));
+        inspector.setPreferredSize(new Dimension(INSPECTOR_WIDTH, 620));
         inspector.setMinimumSize(new Dimension(0, 0));
         controlsSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, controlPanel, resultsSplit);
-        controlsSplit.setDividerLocation(300);
+        controlsSplit.setDividerLocation(CONTROLS_WIDTH);
         controlsSplit.setDividerSize(7);
         controlsSplit.setResizeWeight(0);
+        controlsSplit.setBorder(BorderFactory.createEmptyBorder());
         add(controlsSplit, BorderLayout.CENTER);
 
         JPanel options = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
@@ -85,12 +99,11 @@ final class StudioShell extends JPanel {
         JCheckBox showResults = new JCheckBox("Indicadores e gráficos", true);
         showControls.addActionListener(e -> {
             controlPanel.setVisible(showControls.isSelected());
-            controlsSplit.setDividerLocation(showControls.isSelected() ? 300 : 0);
+            controlsSplit.setDividerLocation(showControls.isSelected() ? CONTROLS_WIDTH : 0);
         });
         showResults.addActionListener(e -> {
-            inspector.setVisible(showResults.isSelected());
-            if (showResults.isSelected()) resultsSplit.setDividerLocation(Math.max(200, resultsSplit.getWidth() - 350));
-            else resultsSplit.setDividerLocation(1.0);
+            inspectorWanted = showResults.isSelected();
+            updateInspector();
         });
         options.add(showControls); options.add(showResults);
         options.add(new JLabel("Roda: zoom · arraste: mover · duplo clique: ajustar"));
@@ -104,12 +117,28 @@ final class StudioShell extends JPanel {
         buttons.get(index).setSelected(true);
         contextTitle.setText((index + 1) + ". " + STAGES[index]);
         cards.show(contexts, Integer.toString(index));
+        viewerCards.show(viewerHost, reportStage() ? "relatorio" : "imagem");
+        updateInspector();
+    }
+
+    /** No relatório, o PDF usa a área central e os gráficos laterais ficam recolhidos. */
+    boolean reportStage() { return stage == STAGES.length - 1 && viewerHost.getComponentCount() > 1; }
+
+    boolean inspectorVisible() { return inspector.isVisible(); }
+
+    private void updateInspector() {
+        boolean visible = inspectorWanted && !reportStage();
+        inspector.setVisible(visible);
+        if (visible) resultsSplit.setDividerLocation(Math.max(200, resultsSplit.getWidth() - INSPECTOR_WIDTH));
+        else resultsSplit.setDividerLocation(1.0);
+        resultsSplit.revalidate();
     }
 
     int stage() { return stage; }
 
     static JPanel stack(Component... components) {
-        JPanel p = new JPanel();
+        // Acompanha a largura da coluna: conteúdo longo não empurra botões para fora da tela.
+        JPanel p = new StudioScrollablePanel();
         p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
         p.setBorder(BorderFactory.createEmptyBorder(4, 4, 8, 8));
         for (Component c : components) {
@@ -117,10 +146,31 @@ final class StudioShell extends JPanel {
                 jc.setAlignmentX(Component.LEFT_ALIGNMENT);
                 Dimension preferred = jc.getPreferredSize();
                 jc.setMaximumSize(new Dimension(Integer.MAX_VALUE, Math.max(32, preferred.height)));
+                if (jc instanceof JScrollPane) jc.setPreferredSize(new Dimension(160, preferred.height));
+                else if (!(jc instanceof JLabel)) jc.setMinimumSize(new Dimension(0, preferred.height));
             }
             p.add(c); p.add(Box.createVerticalStrut(8));
         }
         return p;
+    }
+
+    /** Cartão lateral padronizado: título discreto, borda fina e largura total do painel. */
+    static JPanel card(String title, JComponent content) {
+        JPanel card = new JPanel(new BorderLayout(0, 6)) {
+            // Altura acompanha o conteúdo atual (ex.: texto da escala que muda após calibrar).
+            @Override public Dimension getMaximumSize() { return new Dimension(Integer.MAX_VALUE, getPreferredSize().height); }
+        };
+        card.setBackground(StudioTheme.SURFACE);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 1, 1, 1, StudioTheme.BORDER),
+                BorderFactory.createEmptyBorder(8, 10, 10, 10)));
+        JLabel label = new JLabel(title.toUpperCase(java.util.Locale.ROOT));
+        label.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        label.setForeground(StudioTheme.MUTED);
+        card.add(label, BorderLayout.NORTH);
+        card.add(content, BorderLayout.CENTER);
+        card.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return card;
     }
 
     static JLabel note(String text) {
