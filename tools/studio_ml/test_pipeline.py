@@ -74,13 +74,20 @@ class PipelineTest(unittest.TestCase):
 
     def test_semantic_uncertainty_cracks_and_targets(self):
         image = self.scene()
+        cv2.circle(image, (65, 80), 29, (30, 60, 120), -1)
+        cv2.circle(image, (155, 80), 29, (30, 60, 120), -1)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         roi = np.ones(gray.shape, np.uint8)
         fg, _ = foreground(gray, roi)
         a = watershed_instances(image, fg, seed_radius=15)
-        semantic, desc = describe_instances(a, roi, 60)
-        self.assertTrue(set(np.unique(semantic)).issubset({0, 1, 2, 3}))
+        semantic, desc = describe_instances(a, roi, 60, image)
+        self.assertTrue(set(np.unique(semantic)).issubset({1, 2, 3}))
+        self.assertTrue((semantic == 3).any())
         self.assertTrue(all(d["structural_integrity"] == "nao_avaliada" for d in desc))
+        self.assertTrue(all(d["calibration_reference_confirmed"] is False for d in desc))
+        # Objetos sao consenso entre duas variantes, nunca verdade: objetos branco
+        # candidatos nao recebem elegibilidade de calibração nem supervisionam fundo.
+        self.assertTrue(all(d["semantic"] != 2 for d in desc))
         agreed, weight, uncertainty = consensus(a, a, compare_instances(a, a), desc, roi)
         self.assertGreater((agreed > 0).sum(), 0)
         self.assertTrue(np.array_equal(uncertainty, 255-weight))
@@ -115,6 +122,21 @@ class PipelineTest(unittest.TestCase):
             compare_instances(roi, roi[:, :-1])
         with self.assertRaises(ValueError):
             compare_instances(roi.astype(float), roi.astype(float))
+
+    def test_unannotated_background_and_sphere_candidate(self):
+        labels = np.zeros((50, 50), np.uint16)
+        roi = np.ones(labels.shape, np.uint8)
+        background = np.zeros(labels.shape, np.uint8)
+        background[2:5, 2:5] = 255
+        _, weight, uncertainty = consensus(labels, labels, compare_instances(labels, labels), [], roi, background)
+        self.assertEqual(weight[3, 3], 255)
+        self.assertEqual(weight[20, 20], 0)
+        self.assertEqual(uncertainty[20, 20], 255)
+        labels[18:32, 18:32] = 1
+        image = np.full((50, 50, 3), 255, np.uint8)
+        semantic, descriptions = describe_instances(labels, roi, 60, image)
+        self.assertEqual(semantic[25, 25], 2)
+        self.assertFalse(descriptions[0]["calibration_reference_confirmed"])
 
     def test_patch_padding_has_no_supervision(self):
         gray = np.full((20, 25), 120, np.uint8)

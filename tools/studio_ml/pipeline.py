@@ -189,8 +189,13 @@ def compare_instances(a, b, iou_threshold=.5, tolerance=2):
             "meanings": "Bordas/contornos globais incluem objetos sem par; IoU/Dice medios somente pares aceitos."}
 
 
-def describe_instances(labels, roi, min_area):
-    semantic = np.where(roi > 0, 0, 3).astype(np.uint8)
+def describe_instances(labels, roi, min_area, bgr=None):
+    # Regioes sem proposta NAO sao fundo confirmado. So revisao explicita pode
+    # promover pixels de classe desconhecida para fundo supervisionado.
+    semantic = np.full(roi.shape, 3, np.uint8)
+    if bgr is not None and (bgr.shape[:2] != labels.shape or bgr.ndim != 3 or bgr.shape[2] != 3):
+        raise ValueError("Imagem BGR incompatível com a grade da mascara")
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV) if bgr is not None else None
     descriptions = []
     roi_edge = cv2.dilate((1-roi).astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
     for ident in np.unique(labels):
@@ -205,20 +210,32 @@ def describe_instances(labels, roi, min_area):
         x, y, w, h = cv2.boundingRect(c)
         partial = x == 0 or y == 0 or x+w == labels.shape[1] or y+h == labels.shape[0] or bool((mask & roi_edge).any())
         aspect = min(w, h) / max(w, h)
-        category = 2 if circularity >= .72 and aspect >= .75 and not partial else 1
+        white_fraction = None
+        if hsv is not None:
+            inner = cv2.erode(mask, np.ones((3, 3), np.uint8)) > 0
+            if not inner.any():
+                inner = mask > 0
+            white_fraction = float(((hsv[:, :, 1] <= 40) & (hsv[:, :, 2] >= 180) & inner).sum() / inner.sum())
+        # Cor clara e forma sao apenas triagem visual. Nao comprovam referencia de 11 mm.
+        sphere_candidate = (white_fraction is not None and white_fraction >= .80 and circularity >= .72
+                            and aspect >= .75 and not partial)
+        category = 2 if sphere_candidate else 1
         if area > labels.size * .18 or area < min_area:
             category = 3
         semantic[mask > 0] = category
         descriptions.append({"id": int(ident), "area_px": area, "bbox_xywh": [x, y, w, h],
                              "circularity_2d": circularity, "aspect_bbox": aspect, "partial": partial,
-                             "semantic": category, "structural_integrity": "nao_avaliada",
+                             "semantic": category, "white_fraction_heuristic": white_fraction,
+                             "calibration_reference_confirmed": False,
+                             "structural_integrity": "nao_avaliada",
                              "contours_xy": [p.reshape(-1, 2).tolist() for p in contours]})
     return semantic, descriptions
 
 
 def consensus(a, b, comparison, descriptions, roi, valid_background=None):
     accepted = {m["a"]: m["b"] for m in comparison["matches"] if m["iou"] >= .7}
-    eligible = {d["id"] for d in descriptions if d["semantic"] == 2 and not d["partial"]}
+    eligible = {d["id"] for d in descriptions if d["semantic"] == 1 and not d["partial"]
+                and d["circularity_2d"] >= .72 and d["aspect_bbox"] >= .75}
     reliable = np.zeros(a.shape, np.uint8)
     instances = np.zeros(a.shape, np.uint16)
     for i, j in accepted.items():
@@ -226,12 +243,13 @@ def consensus(a, b, comparison, descriptions, roi, valid_background=None):
             overlap = (a == i) & (b == j)
             instances[overlap] = i
             reliable[overlap] = 255
-    bg = (a == 0) & (b == 0) & (roi > 0)
+    # Nunca promove fundo por concordancia. valid_background pode conter
+    # SOMENTE anotacao humana explicita, nao limiarizacao automatica.
     if valid_background is not None:
-        bg &= valid_background
-    # Ignora fundo junto aos objetos e todo o exterior da ROI.
-    bg = cv2.erode(bg.astype(np.uint8), np.ones((7, 7), np.uint8)) > 0
-    reliable[bg] = 255
+        if valid_background.shape != a.shape:
+            raise ValueError("Fundo anotado em grade diferente")
+        bg = (a == 0) & (b == 0) & (roi > 0) & valid_background.astype(bool)
+        reliable[bg] = 255
     uncertain = (255 - reliable).astype(np.uint8)
     return instances, reliable, uncertain
 
@@ -278,11 +296,10 @@ def process_image(source, out, args):
     a = watershed_instances(bgr, fg_a, args.min_area, args.seed_radius)
     b = watershed_instances(bgr, fg_b, args.min_area, args.seed_radius)
     comparison = compare_instances(a, b)
-    semantic, descriptions = describe_instances(a, roi, args.min_area)
+    semantic, descriptions = describe_instances(a, roi, args.min_area, bgr)
     # Primeiro plano descartado por área/semente não pode virar fundo confiável.
     semantic[(fg_a > 0) & (a == 0)] = 3
-    agreed, weight, uncertainty = consensus(a, b, comparison, descriptions, roi,
-                                            valid_background=(fg_a == 0) & (fg_b == 0))
+    agreed, weight, uncertainty = consensus(a, b, comparison, descriptions, roi)
     cracks, cracks_info = possible_cracks(gray, a)
     for name, image in (("instances_uint16.png", a), ("instances_clahe_uint16.png", b),
                         ("semantic_uint8.png", semantic), ("boundary_uint8.png", boundary(a)*255),
@@ -333,7 +350,23 @@ def run(args):
     if args.max_side < 64 or args.min_area < 1 or args.seed_radius < 1 or args.limit < 1:
         raise ValueError("Parametros de tamanho/limite devem ser positivos")
     source = Path(args.source).resolve()
-    if source.is_file():
+    paths_file = getattr(args, 'paths_file', None)
+    if paths_file:
+        if not source.is_dir():
+            raise ValueError("--paths-file requer diretorio fonte")
+        candidates = []
+        for line in Path(paths_file).read_text(encoding='utf-8-sig').splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            relative = Path(line)
+            path = (source / relative).resolve(strict=True)
+            if relative.is_absolute() or not path.is_relative_to(source) or not path.is_file():
+                raise ValueError("Caminho selecionado fora da fonte ou invalido")
+            if 'original' not in path.stem.lower() or path.suffix.lower() not in {'.jpg', '.jpeg', '.png', '.tif', '.tiff'}:
+                raise ValueError("Selecao aceita somente candidatos originais de imagem")
+            candidates.append(path)
+    elif source.is_file():
         candidates = [source]
     else:
         candidates = sorted(p for p in source.rglob("*") if p.is_file() and not p.is_symlink()
@@ -375,6 +408,7 @@ def run(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", required=True, help="Arquivo ou árvore; diretórios selecionam somente *original*")
+    parser.add_argument("--paths-file", type=Path, help="Lista UTF-8 de caminhos relativos da fonte; selecao explicita")
     parser.add_argument("--output-root", type=Path, default=PRIVATE)
     parser.add_argument("--limit", type=int, default=3)
     parser.add_argument("--max-side", type=int, default=1024)
