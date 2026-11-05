@@ -46,6 +46,12 @@ public final class ExperimentalMultitask {
         public final double scaleX, scaleY;
         public final String warning = WARNING;
 
+        /** Isola a saída já limiarizada sem interpretar escore como confiança ou dimensão. */
+        public BufferedImage channelOverlay(int channel) {
+            if (channel != 1 && channel != 2) throw new IllegalArgumentException("Canal deve ser borda (1) ou separacao (2)");
+            return isolateChannel(overlay, channel == 1 ? 0xff0000 : 0x0000ff);
+        }
+
         private Result(Accumulator a, int analyzedWidth, int analyzedHeight) {
             this.analyzedWidth = analyzedWidth; this.analyzedHeight = analyzedHeight;
             processingWidth = a.overlay.getWidth(); processingHeight = a.overlay.getHeight();
@@ -55,6 +61,17 @@ public final class ExperimentalMultitask {
             interiorPixels = a.counts[0]; boundaryPixels = a.counts[1]; separationPixels = a.counts[2];
             meanEntropy = a.entropySum / ((long) processingWidth * processingHeight);
         }
+    }
+
+    static BufferedImage isolateChannel(BufferedImage source, int mask) {
+        BufferedImage out = new BufferedImage(source.getWidth(), source.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        int[] src = ((DataBufferInt) source.getRaster().getDataBuffer()).getData();
+        int[] dst = ((DataBufferInt) out.getRaster().getDataBuffer()).getData();
+        for (int i = 0; i < src.length; i++) {
+            int color = src[i] & mask;
+            dst[i] = color == 0 ? 0 : (src[i] & 0xff000000) | color;
+        }
+        return out;
     }
 
     /**

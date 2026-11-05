@@ -18,6 +18,22 @@ import static org.junit.Assume.assumeTrue;
 public class ExperimentalMultitaskTest {
     @BeforeClass public static void loadNative() { System.loadLibrary(Core.NATIVE_LIBRARY_NAME); }
 
+    @Test public void individualBoundaryChannelsPreserveAlphaAndHideOtherOutputs() {
+        BufferedImage source = new BufferedImage(3, 1, BufferedImage.TYPE_INT_ARGB);
+        source.setRGB(0, 0, 0xa000ff00); // interior somente
+        source.setRGB(1, 0, 0xa0ff00ff); // borda e separacao
+        source.setRGB(2, 0, 0xa00000ff); // separacao somente
+        BufferedImage edge = ExperimentalMultitask.isolateChannel(source, 0xff0000);
+        BufferedImage split = ExperimentalMultitask.isolateChannel(source, 0x0000ff);
+        assertEquals(0, edge.getRGB(0, 0));
+        assertEquals(0xa0ff0000, edge.getRGB(1, 0));
+        assertEquals(0, edge.getRGB(2, 0));
+        assertEquals(0, split.getRGB(0, 0));
+        assertEquals(0xa00000ff, split.getRGB(1, 0));
+        assertEquals(0xa00000ff, split.getRGB(2, 0));
+        assertEquals(0xa0ff00ff, source.getRGB(1, 0));
+    }
+
     @Test public void reflectAndTileMatchNumpyPadding() {
         int[] expected = {0, 1, 2, 1, 0, 1, 2, 1, 0};
         for (int i = -4; i <= 4; i++) assertEquals(expected[i + 4], ExperimentalMultitask.reflect(i, 3));

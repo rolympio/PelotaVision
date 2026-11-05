@@ -96,6 +96,22 @@ final class StudioSmoke {
                 if (doc.getNumberOfPages() < 1) throw new IllegalStateException("PDF vazio");
                 report.put("pdf_pages", doc.getNumberOfPages());
             }
+            SwingUtilities.invokeAndWait(() -> ref.get().showReport(pdf));
+            long previewEnd = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(60);
+            int[] shown = {0};
+            do {
+                Thread.sleep(250);
+                SwingUtilities.invokeAndWait(() -> shown[0] = ref.get().reportPreview.pageCount());
+            } while (shown[0] == 0 && System.nanoTime() < previewEnd);
+            if (shown[0] < 1) throw new IllegalStateException("Prévia do PDF não apareceu na etapa Relatório");
+            SwingUtilities.invokeAndWait(() -> {
+                MainFrame f = ref.get(); f.validate();
+                BufferedImage shot = new BufferedImage(f.getWidth(), f.getHeight(), BufferedImage.TYPE_INT_RGB);
+                Graphics2D g = shot.createGraphics(); f.getRootPane().printAll(g); g.dispose();
+                try { ImageIO.write(shot, "png", new File(output, "relatorio-pdf-na-tela.png")); }
+                catch (Exception e) { throw new RuntimeException(e); }
+            });
+            report.put("pdf_preview_pages", shown[0]);
             report.put("pdf_bytes", pdf.length()).put("exported_files", files.size()).put("stages_rendered", 6)
                     .put("extra_layout", "1280x800; captura exige revisao visual")
                     .put("title_bar_request", StudioWindowChrome.status());

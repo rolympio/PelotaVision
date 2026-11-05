@@ -19,14 +19,15 @@ ExperimentalMultitask.Result result = ExperimentalMultitask.infer(arquivoOnnx, i
 `imagemBgr` é `Mat` CV_8UC3 na grade analisada e continua pertencendo ao chamador;
 não é alterada. O usuário seleciona o arquivo local, cuja SHA-256 obrigatória é
 `eaf79162c6693b3e502613254c47a0ea016faae8212604a36625faf0f9488c31`.
-O arquivo não é baixado, copiado ou incluído no pacote. Os mesmos bytes verificados
-são carregados em memória pelo DNN, evitando reabrir um caminho alterado após o hash.
+O arquivo não é baixado, copiado ou incluído no pacote. Os bytes verificados
+alimentam o DNN; em chamadas posteriores a
+mesma rede já verificada é reutilizada após nova checagem do arquivo selecionado.
 Arquivo >10 MiB é rejeitado. Exceções indicam falha; não há retorno parcial.
 
 `result.overlay` contém ARGB na grade analisada, com verde = interior, vermelho =
 borda, azul = separação e cores combinadas para canais simultâneos. Canais são
-sigmoides independentes; cada cor indica probabilidade **estritamente maior que
-0,5**, limiar heurístico, não calibrado. `entropyOverlay` é magenta com opacidade
+sigmoides independentes; cada cor indica saída sigmoid **estritamente maior que
+0,5**, limiar heurístico, sem calibração probabilística. `entropyOverlay` é magenta com opacidade
 proporcional à média das três entropias Bernoulli normalizadas, também não calibrada.
 `interiorPixels`, `boundaryPixels`, `separationPixels` e `meanEntropy` são calculados
 na **grade de processamento**, sem correção de área, e não são contagens de objetos.
