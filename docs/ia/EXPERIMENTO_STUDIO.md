@@ -1,5 +1,7 @@
 # Experimento Studio: instâncias, confiança e multitarefa
 
+Integração posterior: [SAM 2.1 Hiera Tiny e revisão separada por prompting](../studio-sam2.md).
+
 ## Estado e isolamento
 
 Pipeline **offline e executável**, iniciado em 03/11/2026 em `tools/studio_ml/`.

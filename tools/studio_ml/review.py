@@ -60,7 +60,10 @@ class Review:
         self.gray, self.labels = gray.copy(), labels.copy()
         self.background = np.zeros(gray.shape, np.uint8)
         self.cracks = np.zeros(gray.shape, np.uint8)
-        self.meta = {int(i): defaults("pipeline_candidata") for i in np.unique(labels) if i}
+        origin = "pipeline_candidata"
+        if record and record.get("candidate_model") and record.get("candidate_method"):
+            origin = f"{record['candidate_model']}:{record['candidate_method']}"
+        self.meta = {int(i): defaults(origin) for i in np.unique(labels) if i}
         self.history = []
         self.source_hashes = source_hashes or {}
         self.record = record or {}
@@ -210,7 +213,8 @@ def export_review(review, reviewer, output_root=None):
                 "hashes_entrada_sha256": review.source_hashes,
                 "codigo_review_sha256": sha256(Path(__file__)),
                 "origem_pipeline": {k: review.record.get(k) for k in
-                                     ("source", "source_sha256", "source_shape_hw", "mask_shape_hw", "transform")},
+                                     ("source", "source_sha256", "source_shape_hw", "mask_shape_hw", "transform",
+                                      "candidate_model", "candidate_method", "watershed_record_sha256")},
                 "coordenadas": "xy em pixels da grade processada; origem superior esquerda",
                 "classes_instancia": list(KINDS), "zero_instancia": "sem proposta; nao significa fundo",
                 "fundo": "255 somente pincel humano; 0 desconhecido ou objeto; nao derivado do pipeline",
@@ -378,7 +382,7 @@ class Editor:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("candidata", type=Path, help="Pasta image-* gerada por pipeline.py")
+    parser.add_argument("candidata", type=Path, help="Pasta image-* do pipeline ou subpasta grid/stardist_centers do SAM")
     parser.add_argument("--revisor", required=True, help="Identificador local do revisor")
     parser.add_argument("--output-root", type=Path, default=PRIVATE)
     args = parser.parse_args()

@@ -50,6 +50,18 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual(self.model.background[8, 8], 0)
         self.assertEqual(self.model.background[29, 39], 0)
 
+    def test_sam_prompt_provenance_survives_review(self):
+        path = self.candidate / 'record.json'
+        record = json.loads(path.read_text(encoding='utf-8'))
+        record.update(candidate_model='sam2.1_hiera_tiny', candidate_method='stardist_centers')
+        path.write_text(json.dumps(record), encoding='utf-8')
+        model = review.load_candidate(self.candidate)
+        self.assertEqual(model.meta[1]['origem'], 'sam2.1_hiera_tiny:stardist_centers')
+        out = review.export_review(model, 'teste_sintetico')
+        manifest = json.loads((out / 'revisao.json').read_text(encoding='utf-8'))
+        self.assertEqual(manifest['origem_pipeline']['candidate_method'], 'stardist_centers')
+        self.assertEqual(manifest['origem_pipeline']['candidate_model'], 'sam2.1_hiera_tiny')
+
     def test_brush_avoids_other_ids_and_background_collision(self):
         self.model.paint("fundo", None, [(19, 10)], 1)
         self.model.paint("pintar", 1, [(18, 10), (23, 10)], 1)
