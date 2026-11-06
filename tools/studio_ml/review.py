@@ -215,6 +215,11 @@ def export_review(review, reviewer, output_root=None):
                 "origem_pipeline": {k: review.record.get(k) for k in
                                      ("source", "source_sha256", "source_shape_hw", "mask_shape_hw", "transform",
                                       "candidate_model", "candidate_method", "watershed_record_sha256")},
+                "proveniencia_fila": {k: review.record.get(k) for k in
+                                      ("queue_candidate", "queue_source", "queue_input_hashes", "roi_sha256")},
+                "excluir_granulometria_ids": [i for i in review.meta if np.any(review.labels == i)
+                    and review.meta[i]['classe'] in ('esfera_11mm_confirmada_sem_medicao', 'ignorar', 'excluir')],
+                "calibracao_fisica": "nao_derivada_da_classificacao; exige registro rastreavel separado",
                 "coordenadas": "xy em pixels da grade processada; origem superior esquerda",
                 "classes_instancia": list(KINDS), "zero_instancia": "sem proposta; nao significa fundo",
                 "fundo": "255 somente pincel humano; 0 desconhecido ou objeto; nao derivado do pipeline",

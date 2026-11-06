@@ -1,5 +1,7 @@
 # SAM 2.1 Hiera Tiny no Studio de Máscaras
 
+Etapa seguinte: [qualidade, ROI poligonal e fila de revisão](studio-sam2-qualidade.md).
+
 Integração experimental CPU em `tools/studio_ml/sam2_candidates.py`. As propostas
 não são ground truth. Concordância com watershed/StarDist não mede acurácia.
 

@@ -62,6 +62,14 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual(manifest['origem_pipeline']['candidate_method'], 'stardist_centers')
         self.assertEqual(manifest['origem_pipeline']['candidate_model'], 'sam2.1_hiera_tiny')
 
+    def test_reference_excluded_without_inventing_scale(self):
+        self.model.set_metadata(1, {'classe':'esfera_11mm_confirmada_sem_medicao',
+            'confianca':'alta','oclusao':'nao','estado':'revisada_leiga'})
+        out=review.export_review(self.model,'teste_sintetico')
+        manifest=json.loads((out/'revisao.json').read_text(encoding='utf-8'))
+        self.assertIn(1,manifest['excluir_granulometria_ids'])
+        self.assertIn('registro rastreavel',manifest['calibracao_fisica'])
+
     def test_brush_avoids_other_ids_and_background_collision(self):
         self.model.paint("fundo", None, [(19, 10)], 1)
         self.model.paint("pintar", 1, [(18, 10), (23, 10)], 1)
