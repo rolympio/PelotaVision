@@ -54,7 +54,8 @@ public class MobileNetParityTest {
             log.append(r.getString("id")).append(';').append(r.getDouble("p_cracked")).append(';').append(p).append(';')
                .append(r.getDouble("input_sum")).append(';').append(sum).append('\n');
         }
-        File out = new File(root, "verification/mobilenet-cracks-20261025/paridade_java_windows.csv");
+        File out = TestPaths.artifacts("mobilenet-cracks-20261025/paridade_java_windows.csv");
+        out.getParentFile().mkdirs();
         Files.write(out.toPath(), (log + "max_abs_diff_score=" + worstScore + "\nmax_rel_diff_input_sum=" + worstSum + "\n").getBytes(StandardCharsets.UTF_8));
         assertTrue("entrada idêntica (soma relativa) " + worstSum, worstSum < 1e-6);
         assertTrue("escore Java x Python " + worstScore, worstScore < 1e-3);

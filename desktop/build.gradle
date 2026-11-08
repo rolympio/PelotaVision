@@ -35,7 +35,9 @@ jar {
 
 test {
     systemProperty 'java.library.path', "${opencvJava}/x64"
+    // Fixtures somente leitura (verification/) separadas da saida gravavel dos testes (build/test-artifacts).
     systemProperty 'pelotavision.validationDir', file('../verification').absolutePath
+    systemProperty 'pelotavision.outputDir', layout.buildDirectory.dir('test-artifacts').get().asFile.absolutePath
     systemProperty 'pelotavision.modelDir', file('../app/src/main/assets').absolutePath
     systemProperty 'java.awt.headless', 'true'
     testLogging { events 'passed', 'failed'; showStandardStreams = true; exceptionFormat = 'full' }

@@ -17,7 +17,7 @@ import org.junit.Test;
 /**
  * Componentes Swing do Windows (sem OpenCV nativo): grafico todas × trincadas e mapa granulometrico
  * sobre a foto real crack_example.png, em pixels (a fixture nao tem escala fisica).
- * Grava em verification/visuals-0.14.0/windows_*.png.
+ * Grava em build/test-artifacts/visuals-0.14.0/windows_*.png.
  */
 public class DesktopVisualsTest {
     @Test public void histogramAndMapComponentsRenderOnRealPhoto() throws Exception {
@@ -38,7 +38,7 @@ public class DesktopVisualsTest {
         Granulometry.Distribution d = ReportTables.pixelHistogram(r);
         CrackHistogram h = CrackHistogram.compute(d, PhotoSession.items(r), cracks);
         assertTrue(h.available);
-        File dir = new File(root, "visuals-0.14.0");
+        File dir = TestPaths.artifacts("visuals-0.14.0");
         dir.mkdirs();
         for (CrackHistogram.Normalization n : CrackHistogram.Normalization.values()) {
             BufferedImage img = new BufferedImage(520, 260, BufferedImage.TYPE_INT_RGB);
