@@ -1,4 +1,4 @@
-PelotaVision Studio Windows 0.7.0 - previa experimental
+PelotaVision Studio Windows 0.8.0 - previa experimental
 ======================================
 
 Nucleo de analise: o MESMO codigo do PelotaVision Android 0.16.0 (deteccao por bordas,
@@ -27,6 +27,19 @@ As camadas Instancias e Classes visiveis sao PROJECOES DAS ELIPSES do metodo atu
 nao mascaras neurais verdade-terreno. A camada de trincas mostra apenas os tracos
 efetivamente propostos. Ausencia de traco nao significa ausencia de trinca.
 Correcao livre de contornos/split/merge ainda nao foi integrada ao aplicativo.
+
+IA MULTITAREFA (PREVIA EXPERIMENTAL, opcional)
+- Na etapa Analise, escolha "Testar IA multitarefa...", leia o aviso e selecione
+  explicitamente o arquivo ONNX experimental local. O modelo nao acompanha o pacote.
+- O arquivo precisa ter o SHA-256 indicado no manual tecnico da versao. Outros
+  pesos ou arquivos alterados sao recusados. A inferencia roda em CPU e pode ser
+  cancelada; imagens maiores que 4.194.304 pixels nao sao aceitas nesta previa.
+- Em Resultados, "IA multitarefa experimental" mostra verde (interior), vermelho
+  (borda) e azul (separacao) com limiares 0,5 nao calibrados. "Incerteza IA" e
+  entropia nao calibrada. Cores e entropia nao sao contagens, medidas ou diagnostico.
+- A previa NAO modifica segmentacao cientifica, calibracao, granulometria,
+  classificacao de trincas, JSON, CSV ou PDF. A rede foi treinada com poucas fotos
+  e pseudo-rotulos; pode marcar fundo como pelota. Nao use para decisao industrial.
 
 1. Duas formas, mesmo programa:
    - Instalador: execute PelotaVision_Windows_<versao>_instalador.exe. Instala so para o

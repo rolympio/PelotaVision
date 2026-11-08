@@ -22,6 +22,7 @@ final class StudioShell extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(12, 14, 8, 14));
         setBackground(StudioTheme.BACKGROUND);
         JPanel header = new JPanel(new BorderLayout(12, 12));
+        header.setBackground(StudioTheme.BACKGROUND);
         JLabel brand = new JLabel("PELOTAVISION STUDIO");
         brand.setFont(new Font("Segoe UI", Font.BOLD, 21));
         brand.setForeground(StudioTheme.TEXT);
@@ -31,10 +32,12 @@ final class StudioShell extends JPanel {
         JLabel badge = new JLabel("P&D · medidas 2D · IA experimental");
         badge.setForeground(new Color(245, 184, 75));
         JPanel identity = new JPanel(new BorderLayout());
+        identity.setBackground(StudioTheme.BACKGROUND);
         identity.add(brand, BorderLayout.WEST);
         identity.add(badge, BorderLayout.EAST);
         header.add(identity, BorderLayout.NORTH);
         JPanel steps = new JPanel(new GridLayout(1, 6, 6, 0));
+        steps.setBackground(StudioTheme.BACKGROUND);
         ButtonGroup group = new ButtonGroup();
         for (int i = 0; i < STAGES.length; i++) {
             final int index = i;
