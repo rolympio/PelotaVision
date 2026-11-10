@@ -96,6 +96,17 @@ function Invoke-Gradle([string[]]$Arguments) {
     } finally { Pop-Location }
 }
 
+# SHA-256 por .NET: nao depende do Get-FileHash, que some quando o Windows PowerShell 5.1 e aberto
+# a partir do PowerShell 7 (PSModulePath herdado aponta para o modulo Utility do 7).
+function Get-Sha256([string]$Path) {
+    $stream = [IO.File]::OpenRead((Resolve-Path -LiteralPath $Path).ProviderPath)
+    try {
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try { return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-', '') }
+        finally { $sha.Dispose() }
+    } finally { $stream.Dispose() }
+}
+
 # ---------------------------------------------------------------- SAM 2.1 (0.17.0 / Windows 0.9.0)
 $Sam2Files = @('sam2_encoder.onnx','sam2_decoder.onnx','sam2.json')
 $Sam2CheckpointUrl = 'https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt'
@@ -107,14 +118,14 @@ function Test-Sam2Dir([string]$Dir) {
     $meta = Get-Content -LiteralPath (Join-Path $Dir 'sam2.json') -Raw | ConvertFrom-Json
     if ($meta.random_weights) { return $false }
     foreach ($pair in @(@('sam2_encoder.onnx', $meta.encoder_sha256), @('sam2_decoder.onnx', $meta.decoder_sha256))) {
-        $h = (Get-FileHash -LiteralPath (Join-Path $Dir $pair[0]) -Algorithm SHA256).Hash
+        $h = Get-Sha256 (Join-Path $Dir $pair[0])
         if ($h -ne ([string]$pair[1]).ToUpperInvariant()) { throw "SAM 2: SHA-256 de $($pair[0]) em $Dir nao confere com sam2.json." }
     }
     return $true
 }
 
 function Find-Python {
-    foreach ($v in @('3.12','3.11','3.10')) {
+    foreach ($v in @('3.12','3.11','3.13','3.10')) {
         $py = Get-Command py -ErrorAction SilentlyContinue
         if ($py) { $exe = & py "-$v" -c 'import sys;print(sys.executable)' 2>$null; if ($LASTEXITCODE -eq 0 -and $exe) { return [string]$exe } }
     }
@@ -141,7 +152,7 @@ function Export-Sam2([string]$SamDir) {
         # Reaproveita um download manual (Downloads, pasta privada antiga ou worktrees), conferido pelo SHA-256.
         foreach ($dir in @($SamDir, "$env:USERPROFILE\Downloads", (Join-Path (Split-Path $repo -Parent) 'worktrees\PelotaVision-local\models\sam2'))) {
             $alt = Get-ChildItem -LiteralPath $dir -Filter 'sam2.1_hiera_tiny*.pt' -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($alt -and (Get-FileHash -LiteralPath $alt.FullName -Algorithm SHA256).Hash -eq $Sam2CheckpointSha) {
+            if ($alt -and (Get-Sha256 $alt.FullName) -eq $Sam2CheckpointSha) {
                 Copy-Item -LiteralPath $alt.FullName -Destination $ckpt; Write-Output "SAM 2: checkpoint reaproveitado de $($alt.FullName)"; break
             }
         }
@@ -153,10 +164,10 @@ function Export-Sam2([string]$SamDir) {
         Invoke-WebRequest -Uri $Sam2CheckpointUrl -OutFile "$ckpt.part" -UseBasicParsing
         Move-Item -LiteralPath "$ckpt.part" -Destination $ckpt
     }
-    $sha = (Get-FileHash -LiteralPath $ckpt -Algorithm SHA256).Hash
+    $sha = Get-Sha256 $ckpt
     if ($sha -ne $Sam2CheckpointSha) { throw "SAM 2: SHA-256 do checkpoint nao confere ($sha). Apague o arquivo e repita." }
     $python = Find-Python
-    if (!$python) { throw 'SAM 2: instale Python 3.10-3.12 (python.org) para exportar o modelo uma unica vez.' }
+    if (!$python) { throw 'SAM 2: instale Python 3.10-3.13 (python.org) para exportar o modelo uma unica vez.' }
     $venv = Join-Path $LocalRoot 'envs\sam2-export'
     $vpy = Join-Path $venv 'Scripts\python.exe'
     if (!(Test-Path -LiteralPath $vpy)) { Invoke-Checked $python @('-m','venv',$venv) 'Criacao da venv SAM 2' }
@@ -199,7 +210,7 @@ function Copy-AndroidArtifacts {
     $lines = @()
     foreach ($apk in @(Get-ChildItem "$repo\app\build\outputs\apk\debug\*.apk")) {
         Copy-Item -LiteralPath $apk.FullName -Destination $out
-        $lines += "$((Get-FileHash $apk.FullName -Algorithm SHA256).Hash)  $($apk.Name)"
+        $lines += "$(Get-Sha256 $apk.FullName)  $($apk.Name)"
     }
     $lines | Set-Content -Encoding ASCII (Join-Path $out 'SHA256.txt')
     Write-Output "APKs Android: $out (celular: app-arm64-v8a-debug.apk)"
@@ -238,7 +249,7 @@ function Invoke-Build-One {
     if ($files.Count -eq 0) { throw 'Nenhum artefato gerado.' }
     $record = [ordered]@{ commit = [string](Invoke-Git @('rev-parse','HEAD')); platform = $Platform
         created_utc = [DateTime]::UtcNow.ToString('o'); dirty = (@(Invoke-Git @('status','--porcelain')).Count -gt 0)
-        artifacts = @($files | ForEach-Object { @{ name=$_.Name; sha256=(Get-FileHash $_.FullName -Algorithm SHA256).Hash } }) }
+        artifacts = @($files | ForEach-Object { @{ name=$_.Name; sha256=(Get-Sha256 $_.FullName) } }) }
     $record | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $LocalRoot "logs\build-$Platform-$runId.json")
 }
 
@@ -318,8 +329,10 @@ rem Atualizacoes sao distribuidas apenas apos aprovacao. Nunca sobrescreve esta 
 start "" "https://github.com/rolympio/PelotaVision/releases"
 '@ | Set-Content -Encoding ASCII "$out\dist\PelotaVision\VERIFICAR_ATUALIZACOES.bat"
     $zip = "$out\PelotaVision_Studio_Windows_$version.zip"
-    Compress-Archive -Path "$out\dist\PelotaVision" -DestinationPath $zip -CompressionLevel Optimal
-    $hash = Get-FileHash $zip -Algorithm SHA256
+    # .NET em vez de Compress-Archive (mesmo motivo do Get-Sha256); inclui a pasta PelotaVision no zip.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::CreateFromDirectory("$out\dist\PelotaVision", $zip, [IO.Compression.CompressionLevel]::Optimal, $true)
+    $hash = [pscustomobject]@{ Hash = (Get-Sha256 $zip) }
     "$($hash.Hash)  $([IO.Path]::GetFileName($zip))" | Set-Content -Encoding ASCII "$out\SHA256.txt"
     $metadata | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $LocalRoot 'latest-package.json')
     $desktop = [Environment]::GetFolderPath('Desktop')
