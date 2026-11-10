@@ -5,7 +5,9 @@ param(
     [string]$LocalRoot,
     [string]$DataSource,
     [string]$OpenCvJava,
-    [ValidateSet('Windows','Android')][string]$Platform = 'Windows',
+    [ValidateSet('Windows','Android','Ambos')][string]$Platform = 'Windows',
+    [switch]$PrepararSam2,
+    [switch]$SemSam2,
     [switch]$PrepareOnly,
     [switch]$CheckRemote,
     [switch]$CopyData,
@@ -61,7 +63,7 @@ function Assert-Repo {
 
 function Find-OpenCv {
     $candidates = @($OpenCvJava, $env:OPENCV_JAVA_DIR, "$repo\desktop\opencv-java",
-        'C:\opencv-4.12.0\opencv\build\java', 'C:\opencv\build\java')
+        'C:\opencv-4.12.0\opencv\build\java', 'C:\opencv\build\java', 'C:\Projetos\tools\opencv-4.12.0\opencv\build\java')
     foreach ($dir in $candidates) {
         if ($dir -and (Test-Path -LiteralPath "$dir\opencv-4120.jar") -and
             (Test-Path -LiteralPath "$dir\x64\opencv_java4120.dll")) { return [IO.Path]::GetFullPath($dir) }
@@ -79,7 +81,7 @@ function Get-Jdk {
 }
 
 function Find-AndroidSdk {
-    foreach ($sdk in @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT, "$env:LOCALAPPDATA\Android\Sdk")) {
+    foreach ($sdk in @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT, "$env:LOCALAPPDATA\Android\Sdk", 'C:\Projetos\tools\android-sdk')) {
         if ($sdk -and (Test-Path -LiteralPath "$sdk\platforms\android-35\android.jar") -and
             (Test-Path -LiteralPath "$sdk\build-tools\35.0.0\aapt2.exe")) { return $sdk }
     }
@@ -94,8 +96,119 @@ function Invoke-Gradle([string[]]$Arguments) {
     } finally { Pop-Location }
 }
 
+# ---------------------------------------------------------------- SAM 2.1 (0.17.0 / Windows 0.9.0)
+$Sam2Files = @('sam2_encoder.onnx','sam2_decoder.onnx','sam2.json')
+$Sam2CheckpointUrl = 'https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt'
+$Sam2CheckpointSha = '7402E0D864FA82708A20FBD15BC84245C2F26DFF0EB43A4B5B93452DEB34BE69'
+$Sam2Commit = '2b90b9f5ceec907a1c18123530e92e794ad901a4'
+
+function Test-Sam2Dir([string]$Dir) {
+    foreach ($f in $Sam2Files) { if (!(Test-Path -LiteralPath (Join-Path $Dir $f))) { return $false } }
+    $meta = Get-Content -LiteralPath (Join-Path $Dir 'sam2.json') -Raw | ConvertFrom-Json
+    if ($meta.random_weights) { return $false }
+    foreach ($pair in @(@('sam2_encoder.onnx', $meta.encoder_sha256), @('sam2_decoder.onnx', $meta.decoder_sha256))) {
+        $h = (Get-FileHash -LiteralPath (Join-Path $Dir $pair[0]) -Algorithm SHA256).Hash
+        if ($h -ne ([string]$pair[1]).ToUpperInvariant()) { throw "SAM 2: SHA-256 de $($pair[0]) em $Dir nao confere com sam2.json." }
+    }
+    return $true
+}
+
+function Find-Python {
+    foreach ($v in @('3.12','3.11','3.10')) {
+        $py = Get-Command py -ErrorAction SilentlyContinue
+        if ($py) { $exe = & py "-$v" -c 'import sys;print(sys.executable)' 2>$null; if ($LASTEXITCODE -eq 0 -and $exe) { return [string]$exe } }
+    }
+    foreach ($name in @('python','python3')) {
+        $cmd = Get-Command $name -ErrorAction SilentlyContinue
+        if ($cmd) { $ok = & $cmd.Source -c 'import sys;print(sys.version_info[:2]>=(3,10))' 2>$null; if ("$ok" -eq 'True') { return $cmd.Source } }
+    }
+    return $null
+}
+
+function Invoke-Checked([string]$Exe, [string[]]$Arguments, [string]$What) {
+    $old = $ErrorActionPreference
+    try { $ErrorActionPreference = 'Continue'; & $Exe @Arguments 2>&1 | ForEach-Object { "$_" } | Write-Output; $code = $LASTEXITCODE }
+    finally { $ErrorActionPreference = $old }
+    if ($code -ne 0) { throw "$What falhou (codigo $code)." }
+}
+
+# Exporta o SAM 2.1 Tiny oficial para ONNX numa venv isolada em PelotaVision-local (nada global).
+# Downloads: checkpoint ~156 MB (Meta, Apache-2.0), PyTorch CPU ~200 MB, codigo SAM 2 (GitHub) ~5 MB.
+function Export-Sam2([string]$SamDir) {
+    New-Item -ItemType Directory -Path $SamDir -Force | Out-Null
+    $ckpt = Join-Path $SamDir 'sam2.1_hiera_tiny.pt'
+    $alt = Get-ChildItem -LiteralPath $SamDir -Filter 'sam2.1_hiera_tiny*.pt' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (!(Test-Path -LiteralPath $ckpt) -and $alt) { $ckpt = $alt.FullName }
+    if (!(Test-Path -LiteralPath $ckpt)) {
+        Write-Output "SAM 2: baixando o checkpoint oficial (~156 MB) de $Sam2CheckpointUrl"
+        $ProgressPreference = 'SilentlyContinue'
+        Invoke-WebRequest -Uri $Sam2CheckpointUrl -OutFile "$ckpt.part" -UseBasicParsing
+        Move-Item -LiteralPath "$ckpt.part" -Destination $ckpt
+    }
+    $sha = (Get-FileHash -LiteralPath $ckpt -Algorithm SHA256).Hash
+    if ($sha -ne $Sam2CheckpointSha) { throw "SAM 2: SHA-256 do checkpoint nao confere ($sha). Apague o arquivo e repita." }
+    $python = Find-Python
+    if (!$python) { throw 'SAM 2: instale Python 3.10-3.12 (python.org) para exportar o modelo uma unica vez.' }
+    $venv = Join-Path $LocalRoot 'envs\sam2-export'
+    $vpy = Join-Path $venv 'Scripts\python.exe'
+    if (!(Test-Path -LiteralPath $vpy)) { Invoke-Checked $python @('-m','venv',$venv) 'Criacao da venv SAM 2' }
+    Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','-q','torch','torchvision','--index-url','https://download.pytorch.org/whl/cpu') 'Instalacao do PyTorch CPU'
+    Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','-q','onnx','onnxruntime','hydra-core>=1.3.2','iopath>=0.1.10','numpy','pillow','tqdm') 'Instalacao das dependencias SAM 2'
+    $src = Join-Path $LocalRoot 'envs\sam2-src'
+    if (!(Test-Path -LiteralPath (Join-Path $src '.git'))) { Invoke-Checked 'git' @('clone','-q','https://github.com/facebookresearch/sam2',$src) 'Download do codigo SAM 2' }
+    Invoke-Checked 'git' @('-C',$src,'-c','advice.detachedHead=false','checkout','-q',$Sam2Commit) 'Checkout da revisao SAM 2'
+    $env:SAM2_BUILD_CUDA = '0'
+    Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','-q','--no-deps','--no-build-isolation','-e',$src) 'Instalacao do pacote SAM 2'
+    Invoke-Checked $vpy @("$repo\tools\sam2\exportar_sam2_onnx.py",'--checkpoint',$ckpt,'--saida',$SamDir) 'Exportacao ONNX do SAM 2'
+    Invoke-Checked $vpy @("$repo\tools\sam2\verificar_sam2_onnx.py",'--modelo',$SamDir,'--checkpoint',$ckpt) 'Verificacao ONNX x PyTorch do SAM 2'
+}
+
+# Garante sam2_*.onnx + sam2.json em app\src\main\assets (fora do Git): Android embute; Windows copia para modelos\.
+function Prepare-Sam2 {
+    $assets = "$repo\app\src\main\assets"
+    $samDir = Join-Path $LocalRoot 'models\sam2'
+    if ($SemSam2) {
+        foreach ($f in $Sam2Files) { $p = Join-Path $assets $f; if (Test-Path -LiteralPath $p) { Move-Item -LiteralPath $p -Destination (Join-Path $samDir $f) -Force } }
+        Write-Output 'SAM 2: desativado (-SemSam2); pacote sem o modelo.'; return
+    }
+    if (!(Test-Sam2Dir $samDir)) {
+        if (Test-Sam2Dir $assets) { Write-Output "SAM 2: usando o modelo ja presente em $assets."; return }
+        if (!$PrepararSam2) {
+            Write-Warning "SAM 2 ausente em $samDir. O pacote sai SEM o refino SAM 2. Rode com -PrepararSam2 (ou COMPILAR_PELOTAVISION_COMPLETO.bat) para baixar e exportar automaticamente."
+            return
+        }
+        Export-Sam2 $samDir
+        if (!(Test-Sam2Dir $samDir)) { throw 'SAM 2: exportacao nao gerou os tres arquivos.' }
+    }
+    foreach ($f in $Sam2Files) { Copy-Item -LiteralPath (Join-Path $samDir $f) -Destination $assets -Force }
+    Write-Output "SAM 2: modelo copiado de $samDir para $assets (fora do Git)."
+}
+
+function Copy-AndroidArtifacts {
+    $out = Join-Path $LocalRoot "results\android-$runId"
+    New-Item -ItemType Directory -Path $out -Force | Out-Null
+    $lines = @()
+    foreach ($apk in @(Get-ChildItem "$repo\app\build\outputs\apk\debug\*.apk")) {
+        Copy-Item -LiteralPath $apk.FullName -Destination $out
+        $lines += "$((Get-FileHash $apk.FullName -Algorithm SHA256).Hash)  $($apk.Name)"
+    }
+    $lines | Set-Content -Encoding ASCII (Join-Path $out 'SHA256.txt')
+    Write-Output "APKs Android: $out (celular: app-arm64-v8a-debug.apk)"
+}
+
 function Invoke-Build {
     Write-Output (Get-Jdk)
+    Prepare-Sam2
+    if ($Platform -eq 'Ambos') {
+        $script:Platform = 'Windows'; Invoke-Build-One
+        $script:Platform = 'Android'; Invoke-Build-One
+        $script:Platform = 'Ambos'
+        return
+    }
+    Invoke-Build-One
+}
+
+function Invoke-Build-One {
     if ($Platform -eq 'Windows') {
         $ocv = Find-OpenCv
         if (!$ocv) { throw 'Falta OpenCV Java 4.12.0 (jar + DLL x64). Use -OpenCvJava ou OPENCV_JAVA_DIR. Consulte docs/ambiente-windows.md.' }
@@ -108,6 +221,7 @@ function Invoke-Build {
         }
         $env:ANDROID_HOME = $sdk
         Invoke-Gradle @('--init-script', "$repo\tools\windows\isolar-testes.gradle", ':app:testDebugUnitTest', ':app:lintDebug', ':app:assembleDebug')
+        Copy-AndroidArtifacts
     }
     $files = @()
     if ($Platform -eq 'Windows') { $files = @(Get-Item "$repo\desktop\build\libs\pelotavision-desktop.jar") }
@@ -116,7 +230,7 @@ function Invoke-Build {
     $record = [ordered]@{ commit = [string](Invoke-Git @('rev-parse','HEAD')); platform = $Platform
         created_utc = [DateTime]::UtcNow.ToString('o'); dirty = (@(Invoke-Git @('status','--porcelain')).Count -gt 0)
         artifacts = @($files | ForEach-Object { @{ name=$_.Name; sha256=(Get-FileHash $_.FullName -Algorithm SHA256).Hash } }) }
-    $record | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $LocalRoot "logs\build-$runId.json")
+    $record | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $LocalRoot "logs\build-$Platform-$runId.json")
 }
 
 function New-WindowsPackage([string]$Ocv) {
@@ -145,6 +259,10 @@ function New-WindowsPackage([string]$Ocv) {
     if ($process.ExitCode -ne 0 -or !(Test-Path "$out\autoteste\autoteste.txt") -or
         !(Select-String -LiteralPath "$out\autoteste\autoteste.txt" -Pattern '^exit=0$' -Quiet)) {
         throw 'Autoteste do executavel falhou; pacote nao aprovado.'
+    }
+    if ((Test-Path "$inputDir\modelos\sam2_encoder.onnx") -and
+        !(Select-String -LiteralPath "$out\autoteste\autoteste.txt" -Pattern '^sam2_run=' -Quiet)) {
+        throw 'SAM 2 empacotado, mas o autoteste nao o executou (veja sam2= no autoteste.txt); pacote nao aprovado.'
     }
     # Janela real e exportacao completa SEM Python/JDK no PATH e com cwd independente.
     $oldPath = $env:PATH; $oldJava = $env:JAVA_HOME; $oldPython = $env:PYTHONHOME

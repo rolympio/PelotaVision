@@ -130,6 +130,8 @@ final class MainFrame extends JFrame {
     // 0.5.6: aceleracao por hardware das redes (ONNX Runtime: CUDA, depois CPU). Desligada por padrao.
     private final JCheckBox accelBox = new JCheckBox("Aceleracao GPU");
     private final JButton accelInfo = new JButton("Estado…");
+    // 0.9.0: refino por mascaras SAM 2.1 (mesmo codigo e modelo do Android). Ligado por padrao quando o modelo esta no pacote.
+    private final JCheckBox sam2Box = new JCheckBox("Mascaras SAM 2 (tamanho pela area)");
     private final JButton previewAiButton = new JButton("Testar IA multitarefa…");
     ReportVisuals visuals = HistogramView.DEFAULTS;
 
@@ -185,6 +187,17 @@ final class MainFrame extends JFrame {
         accelInfo.setToolTipText("Mostra em que motor cada rede esta rodando e os tempos medidos na sonda.");
         accelBox.addActionListener(e -> toggleAcceleration(accelBox.isSelected()));
         accelInfo.addActionListener(e -> JOptionPane.showMessageDialog(this, accelerationReport(), "Aceleracao por hardware", JOptionPane.INFORMATION_MESSAGE));
+        sam2Box.setSelected(Sam2Refiner.enabled() && Sam2Refiner.available());
+        sam2Box.setEnabled(Sam2Refiner.available());
+        sam2Box.setToolTipText("<html>Cada pelota encontrada pelo metodo escolhido vira um prompt (caixa + centro) para o SAM 2.1 Tiny;<br>"
+                + "o tamanho passa a ser a area da mascara (elipse de mesmos momentos). Mascaras ruins mantem a elipse do detector.<br>"
+                + "Mesmo modelo e mesmo motor (ONNX Runtime) do Android. Sem ajuste fino em pelotas: compare antes de usar.<br>"
+                + Sam2Refiner.status().replace("<", "&lt;") + "</html>");
+        sam2Box.addActionListener(e -> {
+            Sam2Refiner.setEnabled(sam2Box.isSelected());
+            prefs.putBoolean(DesktopAnalysis.SAM2_PREF, sam2Box.isSelected());
+            setStatus(sam2Box.isSelected() ? "SAM 2 ligado: vale a partir da proxima analise." : "SAM 2 desligado: tamanhos pelas elipses do detector.");
+        });
 
         JPanel side = new StudioScrollablePanel();
         side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
@@ -256,7 +269,7 @@ final class MainFrame extends JFrame {
                 calibrate, StudioShell.note("Clique numa pelota na imagem para revisar a referência e sua exclusão das estatísticas. Sem escala confiável, os valores permanecem em pixels."));
         JPanel segmentation = StudioShell.stack(new JLabel("Cena"), sceneBox, new JLabel("Perfil de tamanho"), profileBox,
                 new JLabel("Método de segmentação"), methodBox, new JLabel("Sensibilidade (%)"), sensitivity,
-                autoSuggest, roiButton, analyzeButton, detailButton, lightButton);
+                sam2Box, autoSuggest, roiButton, analyzeButton, detailButton, lightButton);
         previewAiButton.setToolTipText("Carrega ONNX experimental por SHA-256 e gera apenas prévia; não altera medições nem PDF.");
         previewAiButton.addActionListener(e -> runExperimentalPreview());
         JPanel analysis = StudioShell.stack(new JLabel("Revisão e comparação"), extraToolbar,
@@ -849,7 +862,8 @@ final class MainFrame extends JFrame {
                     refreshPhoto();
                     CrackClassifierChoice.Resolution cr = DesktopAnalysis.lastResolution;
                     setStatus("Analise concluida: " + s.active().circles.size() + " propostas" + (out.suggestions != null && out.suggestions.cancelled ? " (busca cancelada; ajuste atual)" : "") + "."
-                            + (cr == null ? "" : " Trincas: " + cr.effective.label + (cr.message != null ? " — " + cr.message : "") + "."));
+                            + (cr == null ? "" : " Trincas: " + cr.effective.label + (cr.message != null ? " — " + cr.message : "") + ".")
+                            + (out.result.method.contains("+sam2_") && Sam2Refiner.lastReport() != null ? " " + Sam2Refiner.lastReport().summary() + "." : ""));
                     if (cr != null && cr.fellBack()) JOptionPane.showMessageDialog(this, cr.message, "Classificador de trincas", JOptionPane.WARNING_MESSAGE);
                     if (warning != null) JOptionPane.showMessageDialog(this, warning, "Escala", JOptionPane.WARNING_MESSAGE);
                 });
@@ -1379,6 +1393,9 @@ final class MainFrame extends JFrame {
 
     private String accelerationReport() {
         StringBuilder s = new StringBuilder(HardwareAcceleration.status());
+        s.append("\n").append(Sam2Refiner.status());
+        Sam2Refiner.Report sr = Sam2Refiner.lastReport();
+        if (sr != null) s.append("\nUltima analise: ").append(sr.summary());
         s.append("\n\nCUDA requer GPU NVIDIA, driver atualizado e CUDA + cuDNN instalados no Windows (nao vao no pacote).");
         s.append("\nSem CUDA, o ONNX Runtime roda na CPU. Sem paridade com o OpenCV DNN, a rede continua no OpenCV.");
         return s.toString();

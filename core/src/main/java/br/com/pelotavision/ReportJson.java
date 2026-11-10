@@ -46,6 +46,15 @@ public final class ReportJson {
         if(applied.belt){j.put("ellipse_fit_upsampling_max",2);j.put("crack_screening","inconclusive when crop radius < 20 px; belt pellets are usually smaller, so no crack indication is expected");j.put("occlusion_note","pellets partly covered by others are fitted from their visible boundary only; the apparent size distribution may be biased and is not a sieve result");j.put("detailed_mode_available",false);}
         return j;
     }
+    /** Rastreabilidade do refino SAM 2 (null quando o resultado não passou pelo SAM 2). */
+    public static Object sam2Json(PelletDetector.Result result)throws Exception {
+        if(result==null||result.method==null||!result.method.contains("+sam2_"))return JSONObject.NULL;Sam2Refiner s=Sam2Refiner.get();JSONObject j=new JSONObject();
+        j.put("role","masks from SAM 2.1 Hiera Tiny prompted by each detection (box + center); size = moment ellipse with the mask area; detections whose mask fails the quality gates keep the detector ellipse");
+        j.put("method",result.method);
+        if(s!=null){j.put("model_id",s.id);j.put("checkpoint_sha256",s.metadata.opt("checkpoint_sha256"));j.put("encoder_sha256",s.metadata.opt("encoder_sha256"));j.put("decoder_sha256",s.metadata.opt("decoder_sha256"));j.put("license",s.metadata.opt("license"));}
+        Sam2Refiner.Report r=Sam2Refiner.lastReport();if(r!=null)j.put("last_run",r.json());
+        j.put("fine_tuned_on_pellets",false);j.put("validated_on_plant_photos",false);return j;
+    }
     /** Rastreabilidade do modelo quando a localização aplicada for a rede neural. */
     public static Object neuralModelJson(DetectionTuner.Option applied)throws Exception {
         if(applied==null||!applied.neural())return JSONObject.NULL;NeuralPelletDetector nn=NeuralPelletDetector.forScene(applied.belt);if(nn==null)return JSONObject.NULL;JSONObject j=new JSONObject();

@@ -1,6 +1,6 @@
 plugins { id 'java' }
 
-version = '0.8.0'
+version = '0.9.0'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -42,5 +42,7 @@ test {
     systemProperty 'pelotavision.outputDir', layout.buildDirectory.dir('test-artifacts').get().asFile.absolutePath
     systemProperty 'pelotavision.modelDir', file('../app/src/main/assets').absolutePath
     systemProperty 'java.awt.headless', 'true'
+    // SAM 2 desligado por padrao nos testes antigos (valores de referencia); Sam2ModelTest liga explicitamente.
+    systemProperty 'pelotavision.sam2', 'false'
     testLogging { events 'passed', 'failed'; showStandardStreams = true; exceptionFormat = 'full' }
 }

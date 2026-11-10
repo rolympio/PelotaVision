@@ -112,6 +112,7 @@ final class DesktopAnalysis {
         NeuralPelletDetector.install(onnx, readOrEmpty(meta));
         File beltOnnx = DesktopApp.model(NeuralPelletDetector.BELT_MODEL), beltMeta = DesktopApp.model(NeuralPelletDetector.BELT_METADATA);
         if (beltOnnx.isFile()) NeuralPelletDetector.installBelt(beltOnnx, readOrEmpty(beltMeta));
+        installSam2(); // CUDA só com a aceleração ligada
         if (network != null) {
             network.close();
             network = null;
@@ -132,6 +133,24 @@ final class DesktopAnalysis {
             File onnx = DesktopApp.model(NeuralPelletDetector.BELT_MODEL), meta = DesktopApp.model(NeuralPelletDetector.BELT_METADATA);
             NeuralPelletDetector.installBelt(onnx, readOrEmpty(meta)); // ausente: correia + rede usa o modelo de bancada (com aviso)
         }
+        if (!Sam2Refiner.available()) installSam2();
+    }
+
+    /** Preferência do refino SAM 2 (ligado por padrão quando o modelo está no pacote). */
+    static final String SAM2_PREF = "sam2Refinement", SAM2_PROPERTY = "pelotavision.sam2";
+
+    /** Instala o SAM 2 da pasta modelos (ONNX Runtime; CUDA só com a aceleração ligada). Ausente: refino indisponível. */
+    static synchronized void installSam2() {
+        File enc = DesktopApp.model(Sam2Refiner.ENCODER), dec = DesktopApp.model(Sam2Refiner.DECODER), meta = DesktopApp.model(Sam2Refiner.METADATA);
+        Sam2Refiner.install(enc, dec, meta.isFile() ? readOrEmpty(meta) : "{}", OrtEngine.factory(HardwareAcceleration.enabled()));
+        String forced = System.getProperty(SAM2_PROPERTY);
+        boolean on = true;
+        if (forced != null) on = Boolean.parseBoolean(forced);
+        else {
+            try { on = java.util.prefs.Preferences.userNodeForPackage(MainFrame.class).getBoolean(SAM2_PREF, true); }
+            catch (Throwable ignored) {}
+        }
+        Sam2Refiner.setEnabled(on);
     }
 
     private static String readOrEmpty(File f) {
@@ -213,6 +232,8 @@ final class DesktopAnalysis {
                     }
                 }
             }
+            // 0.9.0: máscaras SAM 2 guiadas pelas detecções (tamanho pela área da máscara); igual ao Android.
+            local = Sam2Refiner.applyIfEnabled(gray, local, cancelled);
             CrackAnalysis cracks = window.toGlobal(crackDetector(cfg.crackChoice).detect(gray, local, cfg.crackSensitivity));
             PelletDetector.Result result = window.toGlobal(local);
             return new Output(result, cracks, selected, suggestions, window, ow, oh, sample, System.currentTimeMillis() - start, crackModelNote(),
@@ -265,9 +286,10 @@ final class DesktopAnalysis {
         Mat gray = null;
         try {
             gray = window.region == null ? full : window.cropGray(full);
-            CrackAnalysis cracks = window.toGlobal(crackDetector(lastResolution == null ? CrackClassifierChoice.RANDOM_FOREST : lastResolution.requested).detect(gray, trial.result, crackSensitivity));
+            PelletDetector.Result local = Sam2Refiner.applyIfEnabled(gray, trial.result, null);
+            CrackAnalysis cracks = window.toGlobal(crackDetector(lastResolution == null ? CrackClassifierChoice.RANDOM_FOREST : lastResolution.requested).detect(gray, local, crackSensitivity));
             LowLightInfo light = LowLightInfo.notApplied(LowLightPreprocessor.assess(gray), "result reused from suggestion search");
-            return new Output(window.toGlobal(trial.result), cracks, trial.option, report, window, ow, oh, sample, System.currentTimeMillis() - start, crackModelNote(), light, null);
+            return new Output(window.toGlobal(local), cracks, trial.option, report, window, ow, oh, sample, System.currentTimeMillis() - start, crackModelNote(), light, null);
         } finally {
             if (gray != null && gray != full) gray.release();
             full.release();
