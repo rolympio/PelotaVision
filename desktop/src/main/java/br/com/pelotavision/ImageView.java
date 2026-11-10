@@ -45,6 +45,7 @@ final class ImageView extends JPanel {
     private Point2D measureA, measureB;
     private Consumer<Point2D> clickListener;
     private String banner;
+    private ExperimentalMultitask.Result experimental;
 
     ImageView() {
         setBackground(new Color(30, 30, 30));
@@ -90,6 +91,8 @@ final class ImageView extends JPanel {
     }
 
     void setOverlay(PelletDetector.Result result, CrackAnalysis cracks) { this.result = result; this.cracks = cracks; repaint(); }
+    void setExperimental(ExperimentalMultitask.Result value) { experimental = value; repaint(); }
+    boolean experimentalAvailable() { return experimental != null; }
     /** 0 original (so a foto), 1 segmentacao (marcacoes), 2 mapa granulometrico. */
     private int viewMode = 1;
     private Granulometry.Distribution mapDistribution;
@@ -152,7 +155,14 @@ final class ImageView extends JPanel {
         }
         float w = (float) (2 / zoom);
         GranulometryColorScale mapScale = viewMode == 2 && result != null ? mapVisuals.scale(mapDistribution) : null;
-        if (mapScale != null) drawMap(gi, result, mapDistribution, mapScale, mapVisuals.mapOpacity);
+        if (viewMode == 6 || viewMode == 7) {
+            if (experimental != null) {
+                gi.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, (float) mapVisuals.mapOpacity));
+                gi.drawImage(viewMode == 6 ? experimental.overlay : experimental.entropyOverlay, 0, 0, null);
+                gi.setComposite(java.awt.AlphaComposite.SrcOver);
+            }
+        }
+        else if (mapScale != null) drawMap(gi, result, mapDistribution, mapScale, mapVisuals.mapOpacity);
         else if (result != null && viewMode == 1) drawDetections(gi, result, cracks, w, numbers);
         else if (result != null && (viewMode == 3 || viewMode == 4)) {
             drawInstanceProjection(gi, result, cracks, viewMode == 4, mapVisuals.mapOpacity, w);
@@ -192,6 +202,16 @@ final class ImageView extends JPanel {
             g.fillRoundRect(8, 8, tw + 16, 26, 8, 8);
             g.setColor(Color.WHITE);
             g.drawString(banner, 16, 26);
+        }
+        if (viewMode == 6 || viewMode == 7) {
+            String note = experimental == null ? "IA experimental: nenhuma prévia disponível"
+                    : "IA experimental · não altera estatísticas/PDF · não validada";
+            g.setFont(getFont().deriveFont(Font.BOLD, 13f));
+            int width = g.getFontMetrics().stringWidth(note);
+            g.setColor(new Color(25, 18, 8, 225));
+            g.fillRoundRect(8, Math.max(8, getHeight() - 34), width + 16, 26, 8, 8);
+            g.setColor(new Color(255, 195, 91));
+            g.drawString(note, 16, Math.max(27, getHeight() - 16));
         }
         g.dispose();
     }

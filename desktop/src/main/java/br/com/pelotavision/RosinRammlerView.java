@@ -51,12 +51,17 @@ final class RosinRammlerView extends JPanel {
         g.setFont(body.deriveFont(Font.BOLD));
         g.drawString("Rosin–Rammler · " + f.basis.label, 8 * s, lineH);
         g.setFont(compact ? small : body);
-        int headerLines = compact ? 2 : 4;
         String[] header = compact
                 ? new String[]{f.formula(), f.available ? f.quality() : ""}
                 : new String[]{f.formula(), f.parameters(), f.quality(), f.basis == RosinRammler.Basis.MASS ? "Massa estimada = esferas de mesma densidade (∝ d³); não é peneiramento." : "Base número: não comparável a parâmetros RR de peneiramento (massa)."};
-        for (int i = 0; i < header.length; i++) g.drawString(header[i], 8 * s, lineH + (i + 1) * g.getFontMetrics().getHeight());
-        float top = lineH + (headerLines + .6f) * g.getFontMetrics().getHeight();
+        float currentY = lineH;
+        for (String text : header) {
+            for (String line : ChartText.wrap(text, g.getFontMetrics(), Math.max(1, w - Math.round(16 * s)))) {
+                currentY += g.getFontMetrics().getHeight();
+                g.drawString(line, 8 * s, currentY);
+            }
+        }
+        float top = currentY + .6f * g.getFontMetrics().getHeight();
         float left = 46 * s, right = w - 14 * s, bottom = h - 34 * s;
         if (f.points.isEmpty() || bottom - top < 40) return;
         RosinRammler.Chart c = new RosinRammler.Chart(f, left, top, right, bottom);

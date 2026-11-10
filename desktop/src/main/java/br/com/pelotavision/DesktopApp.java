@@ -10,7 +10,7 @@ import java.io.File;
 /** PelotaVision para Windows: ponto de entrada. Usa o mesmo nucleo de analise do Android. */
 public final class DesktopApp {
     public static final String NAME = "PelotaVision Studio";
-    public static final String VERSION = "0.7.0";
+    public static final String VERSION = "0.8.0";
     /** Versao do nucleo de analise compartilhado com o Android. */
     public static final String CORE_VERSION = "0.16.0";
 
@@ -18,6 +18,7 @@ public final class DesktopApp {
 
     public static void main(String[] args) {
         StudioLog.install();
+        if (args.length >= 4 && "--studio-ai-smoke".equals(args[0])) { System.exit(StudioSmoke.run(new File(args[1]), new File(args[2]), new File(args[3]))); return; }
         if (args.length >= 3 && "--studio-smoke".equals(args[0])) { System.exit(StudioSmoke.run(new File(args[1]), new File(args[2]))); return; }
         if (args.length >= 3 && "--autoteste".equals(args[0])) {
             // --aceleracao: o mesmo autoteste com a aceleração por hardware ligada (CI: prova que o ONNX Runtime carrega no pacote)
