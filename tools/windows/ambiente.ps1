@@ -174,14 +174,18 @@ function Export-Sam2([string]$SamDir) {
     $venv = Join-Path $LocalRoot 'envs\sam2-export'
     $vpy = Join-Path $venv 'Scripts\python.exe'
     if (!(Test-Path -LiteralPath $vpy)) { Invoke-Checked $python @('-m','venv',$venv) 'Criacao da venv SAM 2' }
-    Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','-q','torch','torchvision','--index-url','https://download.pytorch.org/whl/cpu') 'Instalacao do PyTorch CPU'
+    Write-Output 'SAM 2: instalando PyTorch CPU na venv isolada (~200 MB, so na primeira vez; pode levar varios minutos)...'
+    Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','--progress-bar','off','torch','torchvision','--index-url','https://download.pytorch.org/whl/cpu') 'Instalacao do PyTorch CPU'
+    Write-Output 'SAM 2: instalando dependencias (onnx, onnxruntime, hydra)...'
     Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','-q','onnx','onnxruntime','hydra-core>=1.3.2','iopath>=0.1.10','numpy','pillow','tqdm') 'Instalacao das dependencias SAM 2'
     $src = Join-Path $LocalRoot 'envs\sam2-src'
     if (!(Test-Path -LiteralPath (Join-Path $src '.git'))) { Invoke-Checked 'git' @('clone','-q','https://github.com/facebookresearch/sam2',$src) 'Download do codigo SAM 2' }
     Invoke-Checked 'git' @('-C',$src,'-c','advice.detachedHead=false','checkout','-q',$Sam2Commit) 'Checkout da revisao SAM 2'
     $env:SAM2_BUILD_CUDA = '0'
     Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','-q','--no-deps','--no-build-isolation','-e',$src) 'Instalacao do pacote SAM 2'
+    Write-Output 'SAM 2: exportando o modelo para ONNX (1-3 min)...'
     Invoke-Checked $vpy @("$repo\tools\sam2\exportar_sam2_onnx.py",'--checkpoint',$ckpt,'--saida',$SamDir) 'Exportacao ONNX do SAM 2'
+    Write-Output 'SAM 2: conferindo ONNX x PyTorch oficial...'
     Invoke-Checked $vpy @("$repo\tools\sam2\verificar_sam2_onnx.py",'--modelo',$SamDir,'--checkpoint',$ckpt) 'Verificacao ONNX x PyTorch do SAM 2'
 }
 
