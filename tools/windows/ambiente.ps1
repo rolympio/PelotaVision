@@ -137,11 +137,19 @@ function Invoke-Checked([string]$Exe, [string[]]$Arguments, [string]$What) {
 function Export-Sam2([string]$SamDir) {
     New-Item -ItemType Directory -Path $SamDir -Force | Out-Null
     $ckpt = Join-Path $SamDir 'sam2.1_hiera_tiny.pt'
-    $alt = Get-ChildItem -LiteralPath $SamDir -Filter 'sam2.1_hiera_tiny*.pt' -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (!(Test-Path -LiteralPath $ckpt) -and $alt) { $ckpt = $alt.FullName }
+    if (!(Test-Path -LiteralPath $ckpt)) {
+        # Reaproveita um download manual (Downloads, pasta privada antiga ou worktrees), conferido pelo SHA-256.
+        foreach ($dir in @($SamDir, "$env:USERPROFILE\Downloads", (Join-Path (Split-Path $repo -Parent) 'worktrees\PelotaVision-local\models\sam2'))) {
+            $alt = Get-ChildItem -LiteralPath $dir -Filter 'sam2.1_hiera_tiny*.pt' -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($alt -and (Get-FileHash -LiteralPath $alt.FullName -Algorithm SHA256).Hash -eq $Sam2CheckpointSha) {
+                Copy-Item -LiteralPath $alt.FullName -Destination $ckpt; Write-Output "SAM 2: checkpoint reaproveitado de $($alt.FullName)"; break
+            }
+        }
+    }
     if (!(Test-Path -LiteralPath $ckpt)) {
         Write-Output "SAM 2: baixando o checkpoint oficial (~156 MB) de $Sam2CheckpointUrl"
         $ProgressPreference = 'SilentlyContinue'
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri $Sam2CheckpointUrl -OutFile "$ckpt.part" -UseBasicParsing
         Move-Item -LiteralPath "$ckpt.part" -Destination $ckpt
     }
@@ -168,6 +176,7 @@ function Prepare-Sam2 {
     $assets = "$repo\app\src\main\assets"
     $samDir = Join-Path $LocalRoot 'models\sam2'
     if ($SemSam2) {
+        New-Item -ItemType Directory -Path $samDir -Force | Out-Null
         foreach ($f in $Sam2Files) { $p = Join-Path $assets $f; if (Test-Path -LiteralPath $p) { Move-Item -LiteralPath $p -Destination (Join-Path $samDir $f) -Force } }
         Write-Output 'SAM 2: desativado (-SemSam2); pacote sem o modelo.'; return
     }

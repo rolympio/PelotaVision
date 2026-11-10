@@ -27,6 +27,9 @@ public final class OrtEngine implements Sam2Refiner.Engine {
         OrtSession.SessionOptions options = new OrtSession.SessionOptions();
         options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
         options.setIntraOpNumThreads(Math.max(1, Math.min(8, Runtime.getRuntime().availableProcessors())));
+        // Sem arena nem padrão de memória: pico do encoder SAM 2 cai de ~1,6 GB para ~1,1 GB (medido em x86).
+        options.setCPUArenaAllocator(false);
+        options.setMemoryPatternOptimization(false);
         String device = "CPU";
         if (gpu) {
             try { options.addCUDA(0); device = "CUDA"; } catch (Throwable e) { device = "CPU (CUDA indisponível)"; }
@@ -37,6 +40,8 @@ public final class OrtEngine implements Sam2Refiner.Engine {
             if (!device.equals("CUDA")) throw e;
             OrtSession.SessionOptions cpu = new OrtSession.SessionOptions();
             cpu.setIntraOpNumThreads(Math.max(1, Math.min(8, Runtime.getRuntime().availableProcessors())));
+            cpu.setCPUArenaAllocator(false);
+            cpu.setMemoryPatternOptimization(false);
             s = env.createSession(onnx.getAbsolutePath(), cpu);
             device = "CPU (CUDA falhou)";
         }
