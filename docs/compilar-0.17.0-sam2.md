@@ -38,7 +38,8 @@ COMPILAR_PELOTAVISION_COMPLETO.bat
 
 Na primeira execução o script:
 - baixa o checkpoint oficial `sam2.1_hiera_tiny.pt` (~156 MB) e confere o SHA-256
-  `7402e0d8…be69`. Se você já baixou, ele reaproveita de `Downloads`;
+  `7402e0d8…be69`. Se o arquivo já estiver em `..\PelotaVision-local\models\sam2\` (local padrão), não baixa de novo;
+  também reaproveita uma cópia em `Downloads` ou em `worktrees\PelotaVision-mascaras`;
 - cria uma venv isolada em `..\PelotaVision-local\envs\sam2-export` (PyTorch CPU ~200 MB, nada global);
 - exporta `sam2_encoder.onnx` (~109 MB), `sam2_decoder.onnx` (~16 MB) e `sam2.json` para `..\PelotaVision-local\models\sam2\`;
 - confere os ONNX contra o PyTorch oficial e copia os três arquivos para `app\src\main\assets\` (ignorado pelo Git).

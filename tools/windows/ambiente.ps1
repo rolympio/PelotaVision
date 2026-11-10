@@ -150,7 +150,9 @@ function Export-Sam2([string]$SamDir) {
     $ckpt = Join-Path $SamDir 'sam2.1_hiera_tiny.pt'
     if (!(Test-Path -LiteralPath $ckpt)) {
         # Reaproveita um download manual (Downloads, pasta privada antiga ou worktrees), conferido pelo SHA-256.
-        foreach ($dir in @($SamDir, "$env:USERPROFILE\Downloads", (Join-Path (Split-Path $repo -Parent) 'worktrees\PelotaVision-local\models\sam2'))) {
+        $projetos = Split-Path $repo -Parent
+        foreach ($dir in @($SamDir, "$env:USERPROFILE\Downloads", (Join-Path $projetos 'worktrees\PelotaVision-local\models\sam2'),
+                           (Join-Path $projetos 'worktrees\PelotaVision-mascaras'), $LocalRoot)) {
             $alt = Get-ChildItem -LiteralPath $dir -Filter 'sam2.1_hiera_tiny*.pt' -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($alt -and (Get-Sha256 $alt.FullName) -eq $Sam2CheckpointSha) {
                 Copy-Item -LiteralPath $alt.FullName -Destination $ckpt; Write-Output "SAM 2: checkpoint reaproveitado de $($alt.FullName)"; break
@@ -158,12 +160,13 @@ function Export-Sam2([string]$SamDir) {
         }
     }
     if (!(Test-Path -LiteralPath $ckpt)) {
-        Write-Output "SAM 2: baixando o checkpoint oficial (~156 MB) de $Sam2CheckpointUrl"
+        Write-Output "SAM 2: checkpoint nao encontrado em $SamDir; baixando o oficial (~156 MB) de $Sam2CheckpointUrl"
         $ProgressPreference = 'SilentlyContinue'
         [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri $Sam2CheckpointUrl -OutFile "$ckpt.part" -UseBasicParsing
         Move-Item -LiteralPath "$ckpt.part" -Destination $ckpt
     }
+    Write-Output "SAM 2: usando o checkpoint $ckpt (sem novo download)"
     $sha = Get-Sha256 $ckpt
     if ($sha -ne $Sam2CheckpointSha) { throw "SAM 2: SHA-256 do checkpoint nao confere ($sha). Apague o arquivo e repita." }
     $python = Find-Python
