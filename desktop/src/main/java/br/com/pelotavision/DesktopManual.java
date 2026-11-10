@@ -45,7 +45,7 @@ final class DesktopManual {
         try {
             DesktopApp.loadOpenCv();
             onEdt(() -> {
-                try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); } catch (Exception ignored) {}
+                StudioTheme.install();
                 frame = new MainFrame();
                 frame.setSize(SHOT_W, SHOT_H);
                 frame.setLocation(0, 0);

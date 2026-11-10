@@ -154,6 +154,17 @@ final class ImageView extends JPanel {
         GranulometryColorScale mapScale = viewMode == 2 && result != null ? mapVisuals.scale(mapDistribution) : null;
         if (mapScale != null) drawMap(gi, result, mapDistribution, mapScale, mapVisuals.mapOpacity);
         else if (result != null && viewMode == 1) drawDetections(gi, result, cracks, w, numbers);
+        else if (result != null && (viewMode == 3 || viewMode == 4)) {
+            drawInstanceProjection(gi, result, cracks, viewMode == 4, mapVisuals.mapOpacity, w);
+            drawDetections(gi, result, cracks, w, numbers);
+        } else if (result != null && viewMode == 5 && cracks != null) {
+            for (CrackAnalysis.Entry entry : cracks.entries) {
+                if (entry.status != CrackAnalysis.Status.POSSIBLE) continue;
+                gi.setColor(CRACK); gi.setStroke(new BasicStroke(w * 1.5f));
+                float[] runs = entry.markedRuns();
+                for (int i = 0; i + 3 < runs.length; i += 4) gi.draw(new Line2D.Float(runs[i], runs[i + 1], runs[i + 2], runs[i + 3]));
+            }
+        }
         if (reference != null) drawReference(gi, reference, w);
         gi.dispose();
         if (measureA != null) {
@@ -183,6 +194,22 @@ final class ImageView extends JPanel {
             g.drawString(banner, 16, 26);
         }
         g.dispose();
+    }
+
+    /** Projecoes de elipses existentes, nao mascaras neurais nem reconstrucao de partes ocultas. */
+    static void drawInstanceProjection(Graphics2D g, PelletDetector.Result result, CrackAnalysis cracks,
+                                       boolean semantic, double opacity, float lineWidth) {
+        int alpha = GranulometryColorScale.alpha(opacity);
+        for (int i = 0; i < result.circles.size(); i++) {
+            PelletDetector.Detection d = result.circles.get(i);
+            Color color = Color.getHSBColor((float) ((i * .61803398875) % 1), .65f, .95f);
+            if (semantic) {
+                CrackAnalysis.Entry c = cracks != null && i < cracks.entries.size() ? cracks.entries.get(i) : null;
+                color = c != null && c.status == CrackAnalysis.Status.POSSIBLE ? CRACK : REVIEW;
+            }
+            g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha));
+            g.fill(outline(d));
+        }
     }
 
     /** Cor por diametro dentro da elipse de cada pelota incluida no histograma (mesma regra e escala). */

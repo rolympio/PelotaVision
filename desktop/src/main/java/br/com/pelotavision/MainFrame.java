@@ -67,6 +67,8 @@ final class MainFrame extends JFrame {
     private final JTextArea summary = new JTextArea(10, 30);
     private final JLabel status = new JLabel(" ");
     private final JProgressBar progress = new JProgressBar();
+    private StudioShell studio;
+    private final javax.swing.DefaultListModel<String> historyModel = new javax.swing.DefaultListModel<>();
 
     private final JComboBox<String> cameraBox = new JComboBox<>();
     private final JComboBox<String> resolutionBox = new JComboBox<>();
@@ -116,7 +118,7 @@ final class MainFrame extends JFrame {
     private final JButton clearScaleButton = new JButton("Sem escala (px)");
     private final JLabel scaleLabel = new JLabel("Sem escala fisica · valores em px");
     // ---- Modelos de analise (0.5.0): visualizacao, mapa, classificador de trincas e grafico ----
-    private final JComboBox<String> viewBox = new JComboBox<>(new String[]{"Original", "Segmentacao", "Mapa granulometrico"});
+    private final JComboBox<String> viewBox = new JComboBox<>(new String[]{"Original", "Segmentacao", "Mapa granulometrico", "Instâncias (elipses)", "Classes visíveis (elipses)", "Possíveis trincas"});
     private final javax.swing.JSlider opacitySlider = new javax.swing.JSlider(0, 90, 55);
     private final JCheckBox mapLabels = new JCheckBox("Diametros");
     private final JCheckBox mapFixed = new JCheckBox("Escala fixa");
@@ -167,22 +169,13 @@ final class MainFrame extends JFrame {
         lockExposure.setSelected(prefs.getBoolean("lockExposure", true));
         cameraBox.addItem("Procurando cameras…");
 
-        JPanel top = new JPanel();
-        top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
-        top.add(row(new JLabel("Camera:"), cameraBox, resolutionBox, lockFocus, lockExposure, cameraButton, driverButton, liveBox, liveTuneBox, liveSearchBox, liveScaleButton,
-                Box.createHorizontalStrut(12), captureButton, openButton, backLiveButton));
-        top.add(row(new JLabel("Cena:"), sceneBox, new JLabel("Perfil:"), profileBox, new JLabel("Metodo:"), methodBox, new JLabel("Sensibilidade %:"), sensitivity, autoSuggest,
-                numbers, Box.createHorizontalStrut(12), roiButton, analyzeButton, detailButton, lightButton, cancelButton, saveButton));
-        extraToolbar = row();
-        top.add(extraToolbar);
+        extraToolbar = new JPanel(new java.awt.GridLayout(0, 1, 0, 8));
+        extraToolbar.setPreferredSize(new Dimension(260, 280));
         segExtra.setEnabled(false);
         segExtra.setToolTipText("<html>YOLO11-seg: sem mascaras de instancia com rotulo humano; codigo e pesos Ultralytics sao AGPL-3.0 (revisao de licenca antes de distribuir).<br>Hibrida: sem regra de fusao validada.</html>");
         crackBox.setToolTipText("<html>MobileNetV3 e o padrao: acertou mais que o Random Forest em dois testes independentes (foto de 7 trincas; 57 fotos de bancada nunca vistas).<br>RF fica como reserva. Ainda sem validacao em producao.<br>Recortes dos pixels originais (nunca da super-resolucao). Escore nao calibrado. U-Net de trincas: indisponivel (sem mascaras reais).</html>");
         opacitySlider.setPreferredSize(new Dimension(110, 24));
         opacitySlider.setToolTipText("Opacidade da cor no mapa (0-90%; padrao 55%)");
-        top.add(row(new JLabel("Modelos de analise ·"), new JLabel("Segmentacao neural extra:"), segExtra, new JLabel("Trincas:"), crackBox,
-                new JLabel("Visualizacao:"), viewBox, new JLabel("Opacidade:"), opacitySlider, mapLabels, mapFixed, mapMin, new JLabel("a"), mapMax, chartButton,
-                Box.createHorizontalStrut(12), accelBox, accelInfo));
         accelBox.setSelected(HardwareAcceleration.enabled());
         accelBox.setToolTipText("<html>Executa as redes neurais (StarDist e MobileNetV3) no ONNX Runtime: GPU NVIDIA com CUDA; sem CUDA, CPU.<br>"
                 + "Cada rede so passa a usar o motor novo se der o mesmo resultado do OpenCV DNN numa sonda de paridade; senao continua no OpenCV.<br>"
@@ -239,14 +232,40 @@ final class MainFrame extends JFrame {
         bottom.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
         bottom.add(status, BorderLayout.CENTER);
         progress.setPreferredSize(new Dimension(220, 16));
-        bottom.add(progress, BorderLayout.EAST);
+        bottom.add(row(cancelButton, progress), BorderLayout.EAST);
 
         getContentPane().setLayout(new BorderLayout());
-        getContentPane().add(top, BorderLayout.NORTH);
-        getContentPane().add(view, BorderLayout.CENTER);
-        getContentPane().add(side, BorderLayout.EAST);
+        JPanel acquisition = StudioShell.stack(openButton, new JLabel("Câmera e resolução"), cameraBox, resolutionBox,
+                cameraButton, captureButton, backLiveButton, driverButton, lockFocus, lockExposure,
+                liveBox, liveTuneBox, liveSearchBox, liveScaleButton);
+        JButton calibrate = new JButton("Referências e escala…");
+        calibrate.addActionListener(e -> showScaleDialog());
+        JPanel calibration = StudioShell.stack(StudioShell.note("Prefira a esfera branca de 11 mm quando identificada com confiança. Referências fora do plano não corrigem perspectiva monocular perfeitamente."),
+                calibrate, StudioShell.note("Clique numa pelota na imagem para revisar a referência e sua exclusão das estatísticas. Sem escala confiável, os valores permanecem em pixels."));
+        JPanel segmentation = StudioShell.stack(new JLabel("Cena"), sceneBox, new JLabel("Perfil de tamanho"), profileBox,
+                new JLabel("Método de segmentação"), methodBox, new JLabel("Sensibilidade (%)"), sensitivity,
+                autoSuggest, roiButton, analyzeButton, detailButton, lightButton);
+        JPanel analysis = StudioShell.stack(new JLabel("Revisão e comparação"), extraToolbar,
+                new JLabel("Classificador de trincas"), crackBox, accelBox, accelInfo,
+                StudioShell.note("Sem indicação de trinca não comprova integridade estrutural. Escores de rede não são probabilidades calibradas."), segExtra);
+        JPanel results = StudioShell.stack(new JLabel("Camada de visualização"), viewBox, numbers,
+                new JLabel("Transparência da sobreposição"), opacitySlider, mapLabels, mapFixed,
+                new JLabel("Faixa fixa (mm)"), mapMin, mapMax, chartButton,
+                StudioShell.note("Histogramas por número e massa estimada não substituem peneiramento. Objetos incertos devem ser revisados."));
+        javax.swing.JList<String> history = new javax.swing.JList<>(historyModel);
+        history.setVisibleRowCount(7);
+        for (int i = 0; i < 15; i++) { String path = prefs.get("history." + i, ""); if (!path.isEmpty()) historyModel.addElement(path); }
+        JButton openHistory = new JButton("Abrir pasta selecionada");
+        openHistory.addActionListener(e -> { String path = history.getSelectedValue(); if (path != null) {
+            try { java.awt.Desktop.getDesktop().open(new File(path)); } catch (Exception ex) { error("Histórico", ex); }
+        } });
+        JPanel report = StudioShell.stack(StudioShell.note("Exporta imagem original, segmentação, mapa, CSV, JSON e relatório PDF. Revise calibração, contornos e advertências antes de salvar."),
+                saveButton, new JLabel("Histórico local de exportações"), new JScrollPane(history), openHistory);
+        studio = new StudioShell(view, new JScrollPane(side), new JPanel[]{acquisition, calibration, segmentation, analysis, results, report});
+        getContentPane().add(studio, BorderLayout.CENTER);
         getContentPane().add(bottom, BorderLayout.SOUTH);
         pack();
+        setMinimumSize(new Dimension(1100, 740));
         setLocationRelativeTo(null);
         setExtendedState(MAXIMIZED_BOTH);
 
@@ -298,7 +317,7 @@ final class MainFrame extends JFrame {
         installExtensions();
         updateControls();
         setStatus("Pronto. Abra a camera ou uma imagem.");
-        probeCameras();
+        if (!Boolean.getBoolean("pelotavision.smoke")) probeCameras();
     }
 
     /** Ícone da janela e da barra de tarefas (mesmo desenho do .ico do instalador e do Android). */
@@ -1000,6 +1019,7 @@ final class MainFrame extends JFrame {
         }
     }
     void manualLoad(PhotoSession s) { loadPhoto(s); }
+    void studioStage(int index) { studio.select(index); }
 
     private void editRegion() {
         if (mode == Mode.LIVE) { editLiveRegion(); return; }
@@ -1159,9 +1179,18 @@ final class MainFrame extends JFrame {
             for (File f : files) t.append(f.getName()).append('\n');
             JOptionPane.showMessageDialog(this, t.toString(), "Resultado salvo", JOptionPane.INFORMATION_MESSAGE);
             setStatus("Resultados salvos em " + folder);
+            rememberExport(folder);
         } catch (Exception ex) {
             error("Salvar", ex);
         }
+    }
+
+    void rememberExport(File folder) {
+        String path = folder.getAbsolutePath();
+        historyModel.removeElement(path);
+        historyModel.add(0, path);
+        while (historyModel.size() > 15) historyModel.remove(historyModel.size() - 1);
+        for (int i = 0; i < 15; i++) prefs.put("history." + i, i < historyModel.size() ? historyModel.get(i) : "");
     }
 
     // ---------------- Utilidades ----------------
