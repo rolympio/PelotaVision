@@ -21,7 +21,7 @@ final class RosinRammlerView extends JPanel {
             DATA_LINE = new Color(25, 25, 25), FIT = new Color(32, 160, 220), GRID = new Color(205, 205, 205);
     private RosinRammler.Fit fit;
 
-    RosinRammlerView() { setPreferredSize(new Dimension(360, 250)); setBackground(Color.WHITE); }
+    RosinRammlerView() { setPreferredSize(HistogramView.CHART_SIZE); setBackground(StudioTheme.SURFACE); }
 
     void display(RosinRammler.Fit f) { fit = f; repaint(); }
 
@@ -29,9 +29,15 @@ final class RosinRammlerView extends JPanel {
         super.paintComponent(g0);
         Graphics2D g = (Graphics2D) g0.create();
         java.awt.Insets in = getInsets();
-        g.translate(in.left, in.top);
-        g.clipRect(0, 0, getWidth() - in.left - in.right, getHeight() - in.top - in.bottom);
-        paint(g, fit, getWidth() - in.left - in.right, getHeight() - in.top - in.bottom, 1f, true);
+        int w = getWidth() - in.left - in.right, h = getHeight() - in.top - in.bottom;
+        if (w > 0 && h > 0) {
+            java.awt.image.BufferedImage chart = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            Graphics2D cg = chart.createGraphics();
+            paint(cg, fit, w, h, 1f, true);
+            cg.dispose();
+            StudioChartPalette.apply(chart);
+            g.drawImage(chart, in.left, in.top, null);
+        }
         g.dispose();
     }
 

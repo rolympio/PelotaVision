@@ -93,7 +93,7 @@ final class ImageView extends JPanel {
     void setOverlay(PelletDetector.Result result, CrackAnalysis cracks) { this.result = result; this.cracks = cracks; repaint(); }
     void setExperimental(ExperimentalMultitask.Result value) { experimental = value; repaint(); }
     boolean experimentalAvailable() { return experimental != null; }
-    /** 0 original (so a foto), 1 segmentacao (marcacoes), 2 mapa granulometrico. */
+    /** 0 original, 1 segmentação, 2 mapa; 6-9 prévias experimentais. */
     private int viewMode = 1;
     private Granulometry.Distribution mapDistribution;
     private ReportVisuals mapVisuals = ReportVisuals.defaults();
@@ -155,10 +155,17 @@ final class ImageView extends JPanel {
         }
         float w = (float) (2 / zoom);
         GranulometryColorScale mapScale = viewMode == 2 && result != null ? mapVisuals.scale(mapDistribution) : null;
-        if (viewMode == 6 || viewMode == 7) {
+        if (viewMode >= 6 && viewMode <= 9) {
             if (experimental != null) {
+                // A ROI circular continua visível mas nenhum overlay deve colorir fora dela.
+                if (viewport != null && viewport.region != null && viewport.region.shape == InterestRegion.Shape.CIRCLE) {
+                    InterestRegion r = viewport.region;
+                    gi.clip(new Ellipse2D.Double(r.left, r.top, r.width(), r.height()));
+                }
                 gi.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, (float) mapVisuals.mapOpacity));
-                gi.drawImage(viewMode == 6 ? experimental.overlay : experimental.entropyOverlay, 0, 0, null);
+                BufferedImage layer = viewMode == 7 ? experimental.entropyOverlay : experimental.overlay;
+                if (viewMode == 8 || viewMode == 9) layer = experimental.channelOverlay(viewMode == 8 ? 1 : 2);
+                gi.drawImage(layer, 0, 0, null);
                 gi.setComposite(java.awt.AlphaComposite.SrcOver);
             }
         }
@@ -203,7 +210,7 @@ final class ImageView extends JPanel {
             g.setColor(Color.WHITE);
             g.drawString(banner, 16, 26);
         }
-        if (viewMode == 6 || viewMode == 7) {
+        if (viewMode >= 6 && viewMode <= 9) {
             String note = experimental == null ? "IA experimental: nenhuma prévia disponível"
                     : "IA experimental · não altera estatísticas/PDF · não validada";
             g.setFont(getFont().deriveFont(Font.BOLD, 13f));

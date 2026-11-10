@@ -22,7 +22,9 @@ final class HistogramView extends JPanel {
     static final ReportVisuals DEFAULTS = ReportVisuals.defaults().withHistogram(true, true, false, CrackHistogram.Normalization.ABSOLUTE);
     private ReportVisuals visuals = DEFAULTS;
 
-    HistogramView() { setPreferredSize(new Dimension(360, 240)); setBackground(Color.WHITE); }
+    static final Dimension CHART_SIZE = new Dimension(330, 270);
+
+    HistogramView() { setPreferredSize(CHART_SIZE); setBackground(StudioTheme.SURFACE); }
 
     void display(Granulometry.Distribution d) { display(d, null, visuals); }
     void display(Granulometry.Distribution d, CrackHistogram h, ReportVisuals v) { distribution = d; cracks = h; if (v != null) visuals = v; repaint(); }
@@ -34,9 +36,16 @@ final class HistogramView extends JPanel {
         // A moldura com título ocupa as bordas do componente: desenha só na área interna (antes o texto
         // da 1ª linha ficava por cima do título "Histograma por numero").
         java.awt.Insets in = getInsets();
-        g.translate(in.left, in.top);
-        g.clipRect(0, 0, getWidth() - in.left - in.right, getHeight() - in.top - in.bottom);
-        paint(g, distribution, cracks, visuals, getWidth() - in.left - in.right, getHeight() - in.top - in.bottom);
+        int w = getWidth() - in.left - in.right, h = getHeight() - in.top - in.bottom;
+        if (w > 0 && h > 0) {
+            java.awt.image.BufferedImage chart = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            Graphics2D cg = chart.createGraphics();
+            cg.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            paint(cg, distribution, cracks, visuals, w, h);
+            cg.dispose();
+            StudioChartPalette.apply(chart);
+            g.drawImage(chart, in.left, in.top, null);
+        }
         g.dispose();
     }
 

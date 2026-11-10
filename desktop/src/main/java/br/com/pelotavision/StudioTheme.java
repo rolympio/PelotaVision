@@ -13,6 +13,7 @@ final class StudioTheme {
     static final Color TEXT = new Color(230, 237, 247);
     static final Color MUTED = new Color(142, 163, 196);
     static final Color ACCENT = new Color(47, 128, 255);
+    static final Color BORDER = new Color(38, 58, 92);
 
     private StudioTheme() {}
 
