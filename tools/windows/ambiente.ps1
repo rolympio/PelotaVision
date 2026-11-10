@@ -7,6 +7,7 @@ param(
     [string]$OpenCvJava,
     [ValidateSet('Windows','Android','Ambos')][string]$Platform = 'Windows',
     [switch]$PrepararSam2,
+    [switch]$AvaliarSam2,
     [switch]$SemSam2,
     [switch]$PrepareOnly,
     [switch]$CheckRemote,
@@ -177,7 +178,7 @@ function Export-Sam2([string]$SamDir) {
     Write-Output 'SAM 2: instalando PyTorch CPU na venv isolada (~200 MB, so na primeira vez; pode levar varios minutos)...'
     Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','--progress-bar','off','torch','torchvision','--index-url','https://download.pytorch.org/whl/cpu') 'Instalacao do PyTorch CPU'
     Write-Output 'SAM 2: instalando dependencias (onnx, onnxruntime, hydra)...'
-    Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','-q','onnx','onnxruntime','hydra-core>=1.3.2','iopath>=0.1.10','numpy','pillow','tqdm') 'Instalacao das dependencias SAM 2'
+    Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','-q','onnx','onnxruntime','hydra-core>=1.3.2','iopath>=0.1.10','numpy','pillow','tqdm','opencv-python-headless==4.12.0.88','scipy') 'Instalacao das dependencias SAM 2'
     $src = Join-Path $LocalRoot 'envs\sam2-src'
     if (!(Test-Path -LiteralPath (Join-Path $src '.git'))) { Invoke-Checked 'git' @('clone','-q','https://github.com/facebookresearch/sam2',$src) 'Download do codigo SAM 2' }
     Invoke-Checked 'git' @('-C',$src,'-c','advice.detachedHead=false','checkout','-q',$Sam2Commit) 'Checkout da revisao SAM 2'
@@ -187,12 +188,29 @@ function Export-Sam2([string]$SamDir) {
     Invoke-Checked $vpy @("$repo\tools\sam2\exportar_sam2_onnx.py",'--checkpoint',$ckpt,'--saida',$SamDir) 'Exportacao ONNX do SAM 2'
     Write-Output 'SAM 2: conferindo ONNX x PyTorch oficial...'
     Invoke-Checked $vpy @("$repo\tools\sam2\verificar_sam2_onnx.py",'--modelo',$SamDir,'--checkpoint',$ckpt) 'Verificacao ONNX x PyTorch do SAM 2'
+    Invoke-Sam2Evaluation $vpy $SamDir
+}
+
+# Fotos de referencia do repositorio: StarDist x StarDist + SAM 2 (imagens lado a lado + resumo.json). Nao bloqueia o build.
+function Invoke-Sam2Evaluation([string]$Vpy, [string]$SamDir) {
+    $out = Join-Path $LocalRoot "results\sam2-avaliacao-$runId"
+    Write-Output "SAM 2: avaliando nas fotos de referencia (alguns minutos) -> $out"
+    $fotos = @(Get-ChildItem "$repo\verification\fixtures\*.jpg" | ForEach-Object { $_.FullName })
+    try { Invoke-Checked $Vpy (@("$repo\tools\sam2\avaliar_sam2.py",'--modelo',$SamDir,'--saida',$out,'--cenas',"$repo\ml_training\data",'--fotos') + $fotos) 'Avaliacao SAM 2' }
+    catch { Write-Warning "Avaliacao SAM 2 falhou (o build continua): $($_.Exception.Message)" }
 }
 
 # Garante sam2_*.onnx + sam2.json em app\src\main\assets (fora do Git): Android embute; Windows copia para modelos\.
 function Prepare-Sam2 {
     $assets = "$repo\app\src\main\assets"
     $samDir = Join-Path $LocalRoot 'models\sam2'
+    if ($AvaliarSam2) {
+        $vpy = Join-Path $LocalRoot 'envs\sam2-export\Scripts\python.exe'
+        if ((Test-Path -LiteralPath $vpy) -and (Test-Sam2Dir $samDir)) {
+            Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','-q','opencv-python-headless==4.12.0.88','scipy') 'Dependencias da avaliacao'
+            Invoke-Sam2Evaluation $vpy $samDir
+        } else { Write-Warning 'SAM 2: -AvaliarSam2 exige o modelo exportado e a venv (rode COMPILAR_PELOTAVISION_COMPLETO.bat antes).' }
+    }
     if ($SemSam2) {
         New-Item -ItemType Directory -Path $samDir -Force | Out-Null
         foreach ($f in $Sam2Files) { $p = Join-Path $assets $f; if (Test-Path -LiteralPath $p) { Move-Item -LiteralPath $p -Destination (Join-Path $samDir $f) -Force } }
@@ -386,6 +404,7 @@ try {
     switch ($Action) {
         'Verificar' {
             Write-Output (Get-Jdk)
+            if ($AvaliarSam2) { Prepare-Sam2 }
             Write-Output "OpenCV Java: $(Find-OpenCv)"
             Write-Output "Fonte de dados existe: $(Test-Path -LiteralPath $DataSource)"
             Write-Output "SDK Android 35/build-tools 35.0.0: $(Find-AndroidSdk)"
