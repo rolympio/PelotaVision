@@ -8,6 +8,9 @@ ao longo da foto). Cada esfera usa a escala no ponto da régua mais próximo del
 escala, então o teste não é circular. Limite: o equador da esfera fica alguns mm acima da régua (mais perto
 da câmera), o que aumenta o diâmetro aparente em ~2–4% a 10–15 cm de distância.
 
+Também calibra como o app: uma esfera da foto (medida pelo mesmo método) vale --diametro e as outras são
+medidas (bloco escala_pela_esfera do resumo). Esse bloco não depende do plano da régua.
+
 Métodos comparados por esfera (diâmetro equivalente de área, mm):
   limiar  – contorno por limiar de Otsu (referência simples de silhueta)
   stardist – rede StarDist do app (common.detect)
@@ -175,7 +178,9 @@ def main():
             lp = local_ppm(tk, t['x'], t['y'])
             row = dict(foto=f.name, esfera=i + 1, px_por_mm=round(lp, 4), x=round(t['x']), y=round(t['y']),
                        circularidade=round(t['circ'], 3), d_limiar_mm=round(t['d_px'] / lp, 3),
-                       d_stardist_mm=round(2 * s['radius'] / lp, 3) if s else None, d_sam2_mm=None)
+                       d_stardist_mm=round(2 * s['radius'] / lp, 3) if s else None, d_sam2_mm=None,
+                       d_limiar_px=round(t['d_px'], 2), d_stardist_px=round(2 * s['radius'], 2) if s else None, d_sam2_px=None,
+                       dist_centro=round(math.hypot(t['x'] - gray.shape[1] / 2, t['y'] - gray.shape[0] / 2) / math.hypot(*gray.shape) * 2, 3))
             cv2.drawContours(vis, [t['contour']], -1, (255, 200, 0), 2)
             if s:
                 cv2.circle(vis, (int(s['x']), int(s['y'])), int(s['radius']), (0, 165, 255), 2)
@@ -183,6 +188,7 @@ def main():
                 rr = refined[seeds.index(s)]
                 if rr.get('sam2'):
                     row['d_sam2_mm'] = round(2 * rr['radius'] / lp, 3)
+                    row['d_sam2_px'] = round(2 * rr['radius'], 2)
                     pts = np.round(rr['mask']).astype(int)
                     mm = np.zeros(gray.shape, np.uint8); ok = (pts[:, 0] >= 0) & (pts[:, 1] >= 0) & (pts[:, 0] < gray.shape[1]) & (pts[:, 1] < gray.shape[0])
                     mm[pts[ok, 1], pts[ok, 0]] = 255
@@ -198,11 +204,31 @@ def main():
     with open(a.saida / 'esferas.csv', 'w', newline='', encoding='utf-8') as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0].keys())); w.writeheader(); w.writerows(rows)
     summary = {}
+    # Calibração como no app: uma esfera da própria foto (mesmo método) vale --diametro; as outras são medidas.
+    # 'centro' = referência mais perto do centro da foto; 'todas' = cada esfera como referência, uma por vez.
+    esf = {}
+    for k in ('limiar', 'stardist', 'sam2'):
+        cen, todas = [], []
+        for foto in sorted({r['foto'] for r in rows}):
+            rs = [r for r in rows if r['foto'] == foto and r[f'd_{k}_px']]
+            if len(rs) < 3:
+                continue
+            ref = min(rs, key=lambda r: r['dist_centro'])
+            cen += [a.diametro * r[f'd_{k}_px'] / ref[f'd_{k}_px'] for r in rs if r is not ref]
+            for ref in rs:
+                todas += [a.diametro * r[f'd_{k}_px'] / ref[f'd_{k}_px'] for r in rs if r is not ref]
+        for nome, v in (('referencia_no_centro', cen), ('cada_esfera_como_referencia', todas)):
+            v = np.array(v, float)
+            if len(v):
+                esf.setdefault(k, {})[nome] = dict(n=int(len(v)), media_mm=round(float(v.mean()), 3), desvio_mm=round(float(v.std(ddof=1)), 3),
+                    erro_abs_medio_mm=round(float(np.abs(v - a.diametro).mean()), 3), p10_p90_mm=[round(float(x), 3) for x in np.percentile(v, [10, 90])])
+    summary['escala_pela_esfera'] = esf
     for k in ('d_limiar_mm', 'd_stardist_mm', 'd_sam2_mm'):
         v = np.array([r[k] for r in rows if r[k] is not None], float)
         if len(v):
             summary[k] = dict(n=int(len(v)), media=round(float(v.mean()), 3), desvio=round(float(v.std(ddof=1)), 3) if len(v) > 1 else None,
                               vies_pct=round(100 * (v.mean() / a.diametro - 1), 2))
+    summary['escala_pela_regua_nota'] = 'd_*_mm usam a régua; se ela não estiver no plano do equador das esferas, o valor absoluto sai deslocado (perspectiva). Compare pelos blocos escala_pela_esfera.'
     (a.saida / 'resumo.json').write_text(json.dumps(dict(diametro_nominal_mm=a.diametro, metodos=summary, fotos=per_photo), indent=2, ensure_ascii=False), encoding='utf-8')
     print(json.dumps(summary, indent=2, ensure_ascii=False))
 
