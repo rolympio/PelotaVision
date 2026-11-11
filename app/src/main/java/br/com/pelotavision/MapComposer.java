@@ -54,7 +54,7 @@ final class MapComposer {
     static final int MAX_LABELED = 250;
     static int coloredCount(PelletDetector.Result r, Granulometry.Distribution d) {
         int n = 0;
-        for (PelletDetector.Detection p : r.circles) if (GranulometryColorScale.colored(d, new Granulometry.Item(2 * p.radius, p.partial, p.needsReview))) n++;
+        for (PelletDetector.Detection p : r.circles) if (GranulometryColorScale.colored(d, Granulometry.Item.of(p))) n++;
         return n;
     }
 
@@ -66,9 +66,9 @@ final class MapComposer {
         halo.setStyle(Paint.Style.STROKE); halo.setStrokeWidth(size / 4);
         java.util.List<android.graphics.RectF> used = new java.util.ArrayList<>();
         for (PelletDetector.Detection p : result.circles) {
-            Granulometry.Item item = new Granulometry.Item(2 * p.radius, p.partial, p.needsReview);
+            Granulometry.Item item = Granulometry.Item.of(p);
             if (!GranulometryColorScale.colored(d, item) || p.radius * scale < 9) continue;
-            String label = HistogramView.number(d.diameterMm(item.diameterPx));
+            String label = HistogramView.number(d.diameterMm(item));
             float x = (float) p.x, y = (float) p.y + size / 3, half = t.measureText(label) / 2;
             android.graphics.RectF r = new android.graphics.RectF(x - half, y - size, x + half, y + size / 4);
             boolean free = true;

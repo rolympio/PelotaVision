@@ -922,13 +922,13 @@ public final class MainActivity extends ComponentActivity {
     }
     private java.util.List<Granulometry.Item> measurementItems() {
         java.util.List<Granulometry.Item> items=new java.util.ArrayList<>();
-        for(PelletDetector.Detection d:photoResult.circles)items.add(new Granulometry.Item(d.radius*2,d.partial,d.needsReview));
+        for(PelletDetector.Detection d:photoResult.circles)items.add(Granulometry.Item.of(d));
         return items;
     }
     private java.util.List<Granulometry.Item> measurementItems(Granulometry.Settings prospective) {
         if(photoAllResult==null)return measurementItems();
         java.util.List<Granulometry.Item> items=new java.util.ArrayList<>();
-        for(int i:ObjectCalibration.sampleIndices(photoAllResult,interestRegion,prospective.selectedObject)){PelletDetector.Detection d=photoAllResult.circles.get(i);items.add(new Granulometry.Item(d.radius*2,d.partial,d.needsReview));}
+        for(int i:ObjectCalibration.sampleIndices(photoAllResult,interestRegion,prospective.selectedObject)){PelletDetector.Detection d=photoAllResult.circles.get(i);items.add(Granulometry.Item.of(d));}
         return items;
     }
     private void refreshDistribution() {
@@ -1071,28 +1071,38 @@ public final class MainActivity extends ComponentActivity {
         content.addView(text("A esfera padrão fica fora da contagem, das trincas, da forma média e do histograma por padrão. A pelota medida pode continuar na amostra. A marca REF continua visível.",12,Color.LTGRAY));
         TextView note=text("",12,Color.LTGRAY);content.addView(note);
         content.addView(text("Largura de cada classe (mm)",14,Color.WHITE));EditText bin=new EditText(this);bin.setTag("reference_bin_mm");bin.setSingleLine();bin.setTextColor(Color.WHITE);bin.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);bin.setText(Double.toString(scaleSettings==null?1:scaleSettings.binWidthMm));content.addView(bin);
+        // 0.17.0: várias esferas padrão e correção de perspectiva (1 + k·ρ²), iguais ao Windows.
+        boolean canAdd=previous!=null&&!editing&&previous.measure==ObjectCalibration.Measure.STANDARD_SPHERE&&!previous.covers(selected);
+        CheckBox addSphere=new CheckBox(this);addSphere.setTag("add_reference_sphere");addSphere.setTextColor(Color.WHITE);addSphere.setText(canAdd?"Somar às "+previous.spheres().size()+" esfera(s) já marcada(s) (média + ajuste de perspectiva)":"Somar às esferas já marcadas");addSphere.setChecked(canAdd);addSphere.setVisibility(canAdd?View.VISIBLE:View.GONE);content.addView(addSphere);
+        content.addView(text("Correção de perspectiva k (0 = desligada)",14,Color.WHITE));EditText kField=new EditText(this);kField.setTag("perspective_k");kField.setSingleLine();kField.setTextColor(Color.WHITE);kField.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
+        kField.setText(String.format(java.util.Locale.ROOT,"%.3f",editing?previous.perspectiveK:(double)getPreferences(MODE_PRIVATE).getFloat("perspective_k",.07f)));content.addView(kField);
+        content.addView(text("O tamanho aparente cresce (1 + k·ρ²) do centro (ρ=0) ao canto (ρ=1) da foto. Com 3+ esferas espalhadas (ou 2, uma no centro e outra na borda) o k é ajustado pelas próprias esferas. Teste de 11/11/2026 com o celular a ~12 cm: k entre 0,06 e 0,09.",12,Color.LTGRAY));
         TextView preview=text("",13,Color.rgb(82,216,190));preview.setTag("reference_scale_preview");content.addView(preview);TextView error=text("",13,Color.rgb(255,146,146));error.setTag("reference_error");error.setVisibility(View.GONE);content.addView(error);
         java.util.function.Supplier<ObjectCalibration.Measure> chosen=()->{for(int i=0;i<ids.length;i++)if(measures.getCheckedRadioButtonId()==ids[i])return ObjectCalibration.Measure.values()[i];return ObjectCalibration.Measure.MAJOR_AXIS;};
         java.util.function.Supplier<Granulometry.Settings> input=()->{
-            ObjectCalibration.Reference reference=ObjectCalibration.select(selected,fullId,displayId,chosen.get(),parsePositive(real.getText().toString()),exclude.isChecked(),originalWidth,originalHeight,snapshot.width,snapshot.height);
+            double k;try{k=Double.parseDouble(kField.getText().toString().trim().replace(',','.'));}catch(NumberFormatException e){throw new IllegalArgumentException("k inválido.");}
+            ObjectCalibration.Reference reference;
+            if(canAdd&&addSphere.isChecked()&&chosen.get()==ObjectCalibration.Measure.STANDARD_SPHERE){java.util.List<PelletDetector.Detection> extras=new java.util.ArrayList<>(previous.extraSpheres);extras.add(selected);
+                reference=ObjectCalibration.select(previous.geometry,previous.fullImageId,previous.displayIdAtSelection,previous.measure,parsePositive(real.getText().toString()),exclude.isChecked(),originalWidth,originalHeight,snapshot.width,snapshot.height,extras,k);}
+            else reference=ObjectCalibration.select(selected,fullId,displayId,chosen.get(),parsePositive(real.getText().toString()),exclude.isChecked(),originalWidth,originalHeight,snapshot.width,snapshot.height,editing?previous.extraSpheres:null,k);
             return Granulometry.Settings.selectedObject(reference,parsePositive(bin.getText().toString()),scaleSettings==null||scaleSettings.excludePartial,scaleSettings!=null&&scaleSettings.excludeReview);
         };
         Runnable update=()->{try{
             Granulometry.Settings cfg=input.get();ObjectCalibration.Reference ref=cfg.selectedObject;
-            java.util.List<Integer> sample=ObjectCalibration.sampleIndices(snapshot,interestRegion,ref);java.util.List<Granulometry.Item> items=new java.util.ArrayList<>();for(int i:sample){PelletDetector.Detection d=snapshot.circles.get(i);items.add(new Granulometry.Item(2*d.radius,d.partial,d.needsReview));}
+            java.util.List<Integer> sample=ObjectCalibration.sampleIndices(snapshot,interestRegion,ref);java.util.List<Granulometry.Item> items=new java.util.ArrayList<>();for(int i:sample){PelletDetector.Detection d=snapshot.circles.get(i);items.add(Granulometry.Item.of(d));}
             Granulometry.Distribution measured=Granulometry.compute(items,cfg,originalWidth,originalHeight,snapshot.width,snapshot.height);
-            preview.setText("Escala calculada: "+HistogramView.number(cfg.originalPixelsPerMm)+" px/mm na foto original.\nReferência: maior "+HistogramView.number(ref.majorMm())+" mm · menor "+HistogramView.number(ref.minorMm())+" mm · equivalente "+HistogramView.number(ref.equivalentMm())+" mm.\n"+(measured.included==0?"Nenhuma pelota incluída na distribuição.":"Histograma: média "+HistogramView.number(measured.meanMm)+" mm · n="+measured.included+" · "+measured.binCount()+" classes."));
+            preview.setText("Escala calculada: "+HistogramView.number(cfg.originalPixelsPerMm)+" px/mm na foto original.\nReferência: maior "+HistogramView.number(ref.majorMm())+" mm · menor "+HistogramView.number(ref.minorMm())+" mm · equivalente "+HistogramView.number(ref.equivalentMm())+" mm.\n"+(measured.included==0?"Nenhuma pelota incluída na distribuição.":"Histograma: média "+HistogramView.number(measured.meanMm)+" mm · n="+measured.included+" · "+measured.binCount()+" classes.")+"\n"+ref.perspectiveSummary());
         }catch(IllegalArgumentException e){preview.setText("Informe a medida real e a classe para conferir a escala.");}};
         measures.setOnCheckedChangeListener((g,checked)->{ObjectCalibration.Measure measure=chosen.get();referenceImage.measure(measure);dimensionLabel.setText(measure==ObjectCalibration.Measure.STANDARD_SPHERE?"Diâmetro conhecido da esfera (mm)":measure==ObjectCalibration.Measure.MAJOR_AXIS?"Eixo maior medido com paquímetro (mm)":"Eixo menor medido com paquímetro (mm)");exclude.setChecked(editing&&measure==previous.measure?previous.excludeFromStatistics:measure==ObjectCalibration.Measure.STANDARD_SPHERE);
             note.setText(measure==ObjectCalibration.Measure.STANDARD_SPHERE?"Esfera: usa o diâmetro equivalente à área da elipse. Confira se o contorno corresponde ao padrão conhecido."+(selected.aspectRatio()<.9?" A projeção está alongada; isso pode enviesar a escala.":""):"Meça a mesma dimensão destacada pela linha amarela. O diâmetro equivalente do histograma pode diferir do eixo medido.");update.run();});
-        android.text.TextWatcher watcher=new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int f){}public void onTextChanged(CharSequence s,int a,int b,int c){update.run();}public void afterTextChanged(android.text.Editable e){}};real.addTextChangedListener(watcher);bin.addTextChangedListener(watcher);exclude.setOnCheckedChangeListener((v,c)->update.run());
+        android.text.TextWatcher watcher=new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int f){}public void onTextChanged(CharSequence s,int a,int b,int c){update.run();}public void afterTextChanged(android.text.Editable e){}};real.addTextChangedListener(watcher);bin.addTextChangedListener(watcher);exclude.setOnCheckedChangeListener((v,c)->update.run());kField.addTextChangedListener(watcher);addSphere.setOnCheckedChangeListener((v,c)->update.run());
         measures.check(ids[editing?previous.measure.ordinal():0]);update.run();
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle(editing?"Editar referência de escala":"Calibrar pela pelota "+displayId).setView(scroll).setNegativeButton("Cancelar",null).setPositiveButton("Aplicar escala",null).setOnDismissListener(d->referenceImage.detach()).create();
         dialog.setOnShowListener(ignored->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             if(mode!=Mode.PHOTO||photoAllResult!=snapshot||photoBitmap!=snapshotPhoto){dialog.dismiss();toast("A foto mudou. Selecione a referência novamente.");return;}
             try{Granulometry.Settings settings=input.get();ObjectCalibration.Reference reference=settings.selectedObject;
-                java.util.List<Granulometry.Item> items=new java.util.ArrayList<>();for(int i:ObjectCalibration.sampleIndices(snapshot,interestRegion,reference)){PelletDetector.Detection d=snapshot.circles.get(i);items.add(new Granulometry.Item(2*d.radius,d.partial,d.needsReview));}
-                Granulometry.compute(items,settings,originalWidth,originalHeight,snapshot.width,snapshot.height);commitScale(settings);dialog.dismiss();toast("Escala aplicada à foto pela referência escolhida.");
+                java.util.List<Granulometry.Item> items=new java.util.ArrayList<>();for(int i:ObjectCalibration.sampleIndices(snapshot,interestRegion,reference)){PelletDetector.Detection d=snapshot.circles.get(i);items.add(Granulometry.Item.of(d));}
+                Granulometry.compute(items,settings,originalWidth,originalHeight,snapshot.width,snapshot.height);getPreferences(MODE_PRIVATE).edit().putFloat("perspective_k",(float)Double.parseDouble(kField.getText().toString().trim().replace(',','.'))).apply();commitScale(settings);dialog.dismiss();toast("Escala aplicada. "+reference.perspectiveSummary());
             }catch(IllegalArgumentException e){error.setText(e.getMessage());error.setVisibility(View.VISIBLE);}
         }));dialog.show();
     }

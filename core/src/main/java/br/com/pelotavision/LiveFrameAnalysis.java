@@ -227,7 +227,7 @@ public final class LiveFrameAnalysis {
     /** Distribuição na escala transferida para o quadro; sem escala válida, em pixels (classe de 10 px). */
     public static Granulometry.Distribution distribution(PelletDetector.Result r, ScaleTransfer scale) {
         List<Granulometry.Item> items = new ArrayList<>();
-        for (PelletDetector.Detection d : r.circles) items.add(new Granulometry.Item(2 * d.radius, d.partial, d.needsReview));
+        for (PelletDetector.Detection d : r.circles) items.add(Granulometry.Item.of(d));
         try {
             Granulometry.Settings s = scale == null ? null : scale.forFrame(r.width, r.height);
             if (s != null) return Granulometry.compute(items, s, r.width, r.height, r.width, r.height);

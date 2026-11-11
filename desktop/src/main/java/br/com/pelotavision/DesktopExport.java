@@ -464,8 +464,8 @@ final class DesktopExport {
             item.put("id", id); item.put("x_px", d.x); item.put("y_px", d.y); item.put("radius_px", d.radius);
             item.put("equivalent_diameter_px", d.radius * 2); item.put("area_px2", d.area); item.put("roundness", d.roundness);
             item.put("partial_edge", d.partial); item.put("needs_review", d.needsReview);
-            double diameter = !physical ? Double.NaN : distribution.diameterMm(2 * d.radius);
-            double area = !physical ? Double.NaN : d.area / (distribution.analyzedPixelsPerMm * distribution.analyzedPixelsPerMm);
+            double diameter = !physical ? Double.NaN : distribution.diameterMm(d);
+            double area = !physical ? Double.NaN : distribution.areaMm2(d);
             CrackAnalysis.Entry crack = cracks == null ? null : cracks.entries.get(id - 1);
             item.put("crack_status", crack == null ? "not_analyzed" : crack.status.name()); item.put("crack_manually_reviewed", crack != null && crack.manuallyReviewed);
             item.put("ellipse_major_axis_px", d.ellipseFitted ? 2 * d.semiMajor : JSONObject.NULL); item.put("ellipse_minor_axis_px", d.ellipseFitted ? 2 * d.semiMinor : JSONObject.NULL);
@@ -480,7 +480,7 @@ final class DesktopExport {
             item.put("crack_score", crack != null && Double.isFinite(crack.modelScore) ? crack.modelScore : JSONObject.NULL);
             item.put("crack_method", crack == null ? "not_analyzed" : crack.method);
             item.put("equivalent_diameter_mm", finite(diameter)); item.put("area_mm2", finite(area));
-            item.put("included_in_histogram", distribution.includes(new Granulometry.Item(2 * d.radius, d.partial, d.needsReview)));
+            item.put("included_in_histogram", distribution.includes(Granulometry.Item.of(d)));
             detections.put(item);
         }
         json.put("detections", detections);

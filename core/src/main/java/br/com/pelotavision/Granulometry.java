@@ -71,18 +71,30 @@ public final class Granulometry {
     public static final class Item {
         public final double diameterPx;
         public final boolean partial,review;
-        public Item(double diameter,boolean partial,boolean review) {diameterPx=diameter;this.partial=partial;this.review=review;}
+        /** Posição na imagem analisada (para a correção de perspectiva); NaN = desconhecida (sem correção). */
+        public final double x,y;
+        public Item(double diameter,boolean partial,boolean review) {this(diameter,partial,review,Double.NaN,Double.NaN);}
+        public Item(double diameter,boolean partial,boolean review,double x,double y) {diameterPx=diameter;this.partial=partial;this.review=review;this.x=x;this.y=y;}
+        public static Item of(PelletDetector.Detection d){return new Item(2*d.radius,d.partial,d.needsReview,d.x,d.y);}
+    }
+    /** Fator de perspectiva da escala de referência (1 sem correção ou sem posição). */
+    static double perspectiveFactor(Settings s,double x,double y,int width,int height){
+        double k=s.selectedObject==null?0:s.selectedObject.perspectiveK;
+        if(k==0||!Double.isFinite(x)||!Double.isFinite(y)||width<=0||height<=0)return 1;
+        return 1+k*ObjectCalibration.rho2(x,y,width,height);
     }
     public static final class Distribution {
         public final Settings settings;
         public final double analyzedPixelsPerMm,d10,d50,d90,requestedBinWidthMm,meanMm,minMm,maxMm;
         public final int included,excluded,originalWidth,originalHeight;
+        /** Dimensões da imagem analisada (posição das pelotas para a correção de perspectiva). */
+        public final int analyzedWidth,analyzedHeight;
         private final int[] counts;
         private final double firstIndex;
         /** Diâmetros incluídos, ordenados (mesma unidade de d10/d50). Base do ajuste Rosin–Rammler. */
         private final double[] sizes;
-        private Distribution(Settings cfg,double scale,double first,int[] bins,List<Double> diameters,int excluded,int ow,int oh) {
-            settings=cfg;analyzedPixelsPerMm=scale;counts=bins.clone();included=diameters.size();this.excluded=excluded;
+        private Distribution(Settings cfg,double scale,double first,int[] bins,List<Double> diameters,int excluded,int ow,int oh,int w,int h) {
+            analyzedWidth=w;analyzedHeight=h;settings=cfg;analyzedPixelsPerMm=scale;counts=bins.clone();included=diameters.size();this.excluded=excluded;
             requestedBinWidthMm=cfg.binWidthMm;firstIndex=first;
             originalWidth=ow;originalHeight=oh;Collections.sort(diameters);
             sizes=new double[diameters.size()];for(int i=0;i<sizes.length;i++)sizes[i]=diameters.get(i);
@@ -98,7 +110,13 @@ public final class Granulometry {
         public double upper(int index){return lower(index+1);}
         public double percent(int index){return included==0?0:100.*counts[index]/included;}
         public boolean includes(Item item) {return accepted(item,settings);}
+        /** Sem posição: escala do centro (sem correção de perspectiva). Prefira {@link #diameterMm(Item)}. */
         public double diameterMm(double pixels){return pixels/analyzedPixelsPerMm;}
+        /** Diâmetro em mm com a escala local (perspectiva) na posição da pelota. */
+        public double diameterMm(Item item){return item.diameterPx/(analyzedPixelsPerMm*perspectiveFactor(settings,item.x,item.y,analyzedWidth,analyzedHeight));}
+        public double diameterMm(PelletDetector.Detection d){return diameterMm(Item.of(d));}
+        /** Área em mm² com a escala local. */
+        public double areaMm2(PelletDetector.Detection d){double s=analyzedPixelsPerMm*perspectiveFactor(settings,d.x,d.y,analyzedWidth,analyzedHeight);return d.area/(s*s);}
         /** Class of an included diameter, with exactly the rule used to fill {@link #count(int)}; -1 if outside. */
         public int binIndex(double mm) {
             if(!Double.isFinite(mm)||mm<=0||counts.length==0)return -1;
@@ -112,8 +130,8 @@ public final class Granulometry {
     }
     public static Distribution compute(List<Item> items,Settings settings,int ow,int oh,int width,int height) {
         double ratio=resizeRatio(ow,oh,width,height);
-        List<Double> pixels=new ArrayList<>();int excluded=0;
-        for(Item item:items){if(accepted(item,settings))pixels.add(item.diameterPx);else excluded++;}
+        List<Double> pixels=new ArrayList<>();List<Item> kept=new ArrayList<>();int excluded=0;
+        for(Item item:items){if(accepted(item,settings)){pixels.add(item.diameterPx);kept.add(item);}else excluded++;}
         if("assumed_mean".equals(settings.calibrationSource)) {
             if(pixels.isEmpty())throw new IllegalArgumentException("Não há pelotas incluídas para estimar a escala pela média.");
             double meanPixels=0;for(double v:pixels)meanPixels+=v/pixels.size();
@@ -122,7 +140,7 @@ public final class Granulometry {
         }
         double scale=settings.analyzedPixelsPerMm(ow,oh,width,height),min=Double.POSITIVE_INFINITY,max=0;
         List<Double> diameters=new ArrayList<>();
-        for(double px:pixels){double mm=px/scale;positive(mm);diameters.add(mm);min=Math.min(min,mm);max=Math.max(max,mm);}
+        for(Item it:kept){double mm=it.diameterPx/(scale*perspectiveFactor(settings,it.x,it.y,width,height));positive(mm);diameters.add(mm);min=Math.min(min,mm);max=Math.max(max,mm);}
         double first=diameters.isEmpty()?0:classIndex(min,settings.binWidthMm);
         double last=diameters.isEmpty()?-1:Math.max(first,Math.ceil(boundaryQuotient(max,settings.binWidthMm))-1),number=last-first+1;
         if(!Double.isFinite(first)||!Double.isFinite(last)||number>MAX_BINS||number<0||
@@ -131,7 +149,7 @@ public final class Granulometry {
         int[] bins=new int[(int)number];
         // The final upper edge is inclusive, as in standard numeric histograms.
         for(double mm:diameters)bins[Math.min(bins.length-1,(int)(classIndex(mm,settings.binWidthMm)-first))]++;
-        return new Distribution(settings,scale,first,bins,diameters,excluded,ow,oh);
+        return new Distribution(settings,scale,first,bins,diameters,excluded,ow,oh,width,height);
     }
     private static double boundaryQuotient(double diameter,double width) {
         double quotient=diameter/width,nearest=Math.rint(quotient);

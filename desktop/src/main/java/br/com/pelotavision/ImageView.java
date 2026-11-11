@@ -243,9 +243,9 @@ final class ImageView extends JPanel {
     static void drawMap(Graphics2D o, PelletDetector.Result result, Granulometry.Distribution d, GranulometryColorScale scale, double opacity) {
         int a = GranulometryColorScale.alpha(opacity);
         for (PelletDetector.Detection p : result.circles) {
-            Granulometry.Item item = new Granulometry.Item(2 * p.radius, p.partial, p.needsReview);
+            Granulometry.Item item = Granulometry.Item.of(p);
             if (!GranulometryColorScale.colored(d, item)) continue;
-            int c = scale.rgb(d.diameterMm(item.diameterPx));
+            int c = scale.rgb(d.diameterMm(item));
             o.setColor(new Color((c >> 16) & 255, (c >> 8) & 255, c & 255, a));
             double sa = p.semiMajor > 0 ? p.semiMajor : p.radius, sb = p.semiMinor > 0 ? p.semiMinor : p.radius;
             Shape e = new Ellipse2D.Double(-sa, -sb, 2 * sa, 2 * sb);
@@ -261,10 +261,10 @@ final class ImageView extends JPanel {
         java.util.List<java.awt.Rectangle> used = new java.util.ArrayList<>();
         double k = Math.sqrt(Math.abs(at.getDeterminant()));
         for (PelletDetector.Detection p : result.circles) {
-            Granulometry.Item item = new Granulometry.Item(2 * p.radius, p.partial, p.needsReview);
+            Granulometry.Item item = Granulometry.Item.of(p);
             if (!GranulometryColorScale.colored(d, item) || p.radius * k < 9) continue;
             Point2D c = at.transform(new Point2D.Double(p.x, p.y), null);
-            String s = HistogramView.fmt2(d.diameterMm(item.diameterPx));
+            String s = HistogramView.fmt2(d.diameterMm(item));
             int sw = g.getFontMetrics().stringWidth(s);
             java.awt.Rectangle r = new java.awt.Rectangle((int) c.getX() - sw / 2 - 2, (int) c.getY() - 10, sw + 4, 14);
             boolean free = true;
