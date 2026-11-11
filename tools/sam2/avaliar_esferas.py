@@ -179,7 +179,7 @@ def main():
             row = dict(foto=f.name, esfera=i + 1, px_por_mm=round(lp, 4), x=round(t['x']), y=round(t['y']),
                        circularidade=round(t['circ'], 3), d_limiar_mm=round(t['d_px'] / lp, 3),
                        d_stardist_mm=round(2 * s['radius'] / lp, 3) if s else None, d_sam2_mm=None,
-                       d_limiar_px=round(t['d_px'], 2), d_stardist_px=round(2 * s['radius'], 2) if s else None, d_sam2_px=None,
+                       d_limiar_px=round(t['d_px'], 2), d_stardist_px=round(2 * s['radius'], 2) if s else None, d_sam2_px=None, d_sam2bruto_px=None,
                        dist_centro=round(math.hypot(t['x'] - gray.shape[1] / 2, t['y'] - gray.shape[0] / 2) / math.hypot(*gray.shape) * 2, 3))
             cv2.drawContours(vis, [t['contour']], -1, (255, 200, 0), 2)
             if s:
@@ -189,6 +189,7 @@ def main():
                 if rr.get('sam2'):
                     row['d_sam2_mm'] = round(2 * rr['radius'] / lp, 3)
                     row['d_sam2_px'] = round(2 * rr['radius'], 2)
+                    row['d_sam2bruto_px'] = round(2 * rr['radius_raw'], 2)
                     pts = np.round(rr['mask']).astype(int)
                     mm = np.zeros(gray.shape, np.uint8); ok = (pts[:, 0] >= 0) & (pts[:, 1] >= 0) & (pts[:, 0] < gray.shape[1]) & (pts[:, 1] < gray.shape[0])
                     mm[pts[ok, 1], pts[ok, 0]] = 255
@@ -207,7 +208,7 @@ def main():
     # Calibração como no app: uma esfera da própria foto (mesmo método) vale --diametro; as outras são medidas.
     # 'centro' = referência mais perto do centro da foto; 'todas' = cada esfera como referência, uma por vez.
     esf = {}
-    for k in ('limiar', 'stardist', 'sam2'):
+    for k in ('limiar', 'stardist', 'sam2bruto', 'sam2'):
         cen, todas = [], []
         for foto in sorted({r['foto'] for r in rows}):
             rs = [r for r in rows if r['foto'] == foto and r[f'd_{k}_px']]

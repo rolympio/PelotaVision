@@ -94,8 +94,37 @@ public class Sam2RefinerTest {
                 assertEquals(a.y, b.y, .03 * radius + .35);
                 assertTrue(b.ellipseFitted);
             }
-            assertTrue(out.method.endsWith("+sam2_teste"));
+            assertTrue(out.method.contains("+sam2_teste"));
         }
+    }
+
+    /** Pelotas claras (200) em fundo 60 com halo de 4 px que cai de 150 a 60; a máscara pega o halo. */
+    static byte[] haloImage(int w, int h, PelletDetector.Result seeds, double trueR, double halo) {
+        byte[] pix = new byte[w * h];
+        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
+            double best = 1e9;
+            for (PelletDetector.Detection d : seeds.circles) best = Math.min(best, Math.hypot(x - d.x, y - d.y) - trueR);
+            double v = best <= 0 ? 200 : best < halo ? 150 - 90 * best / halo : 60;
+            pix[y * w + x] = (byte) Math.round(v);
+        }
+        return pix;
+    }
+
+    @Test public void edgeSnapRemovesHaloIncludedByMask() throws Exception {
+        int w = 1100, h = 800; double trueR = 40, halo = 4;
+        PelletDetector.Result seeds = grid(w, h, trueR, 130);
+        byte[] pix = haloImage(w, h, seeds, trueR, halo);
+        // escala 1 (raio = alvo): a máscara sintética cobre o halo (raio 43,5)
+        Sam2Refiner r = Sam2Refiner.forTest(new FakeEncoder(), new DiskDecoder(43.5 / trueR, .95f), meta());
+        PelletDetector.Result out = r.refinePixels(pix, w, h, 1, 1, 1, 256, seeds, () -> false, System.nanoTime());
+        Sam2Refiner.Report rep = Sam2Refiner.lastReport();
+        assertEquals(rep.summary(), seeds.circles.size(), rep.edgeSnapped);
+        for (PelletDetector.Detection d : out.circles) assertEquals(trueR + .5, d.radius, 1.0);  // borda no degrau 200→150
+        Sam2Refiner.edgeSnap = false;
+        try {
+            PelletDetector.Result raw = r.refinePixels(pix, w, h, 1, 1, 1, 256, seeds, () -> false, System.nanoTime());
+            for (PelletDetector.Detection d : raw.circles) assertEquals(43.5, d.radius, 1.0);
+        } finally { Sam2Refiner.edgeSnap = true; }
     }
 
     @Test public void keepsDetectorResultWhenMaskIsRejected() throws Exception {

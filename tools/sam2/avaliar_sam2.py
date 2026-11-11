@@ -30,6 +30,67 @@ import common  # noqa: E402
 TARGET_RADIUS, MIN_SCALE, MAX_SCALE, MAX_SCALED_PIXELS = 40, .2, 2.5, 40_000_000
 BOX, WINDOW = 1.15, 1.6
 MIN_IOU, MIN_AREA_RATIO, MAX_AREA_RATIO, REVIEW_IOU = .5, .35, 2.8, .8
+EDGE_RAYS, EDGE_IN, EDGE_OUT, EDGE_MIN_GRADIENT, EDGE_MIN_VALID, EDGE_MIN_AREA, EDGE_MAX_AREA = 72, .80, 1.15, 3, .6, .78, 1.06
+
+
+def bilinear(img, x, y):
+    h, w = img.shape
+    out = np.full(np.shape(x), np.nan)
+    ok = (x >= 0) & (y >= 0) & (x <= w - 1) & (y <= h - 1)
+    xx, yy = x[ok], y[ok]
+    ix, iy = np.floor(xx).astype(int), np.floor(yy).astype(int)
+    jx, jy = np.minimum(w - 1, ix + 1), np.minimum(h - 1, iy + 1)
+    fx, fy = xx - ix, yy - iy
+    I = img.astype(np.float64)
+    out[ok] = (I[iy, ix] * (1 - fx) + I[iy, jx] * fx) * (1 - fy) + (I[jy, ix] * (1 - fx) + I[jy, jx] * fx) * fy
+    return out
+
+
+def snap_edge(img, cx, cy, req):
+    """Espelho de Sam2Refiner.snapEdge (Java): borda de maior degrau em 72 raios, mediana móvel de 5."""
+    if req < 4:
+        return None
+    step = .25
+    ns = int(math.ceil((EDGE_OUT - EDGE_IN) * req / step)) + 1
+    th = 2 * math.pi * np.arange(EDGE_RAYS) / EDGE_RAYS
+    r = EDGE_IN * req + (np.arange(ns + 2) - 1) * step
+    X = cx + np.outer(np.cos(th), r); Y = cy + np.outer(np.sin(th), r)
+    prof = bilinear(img, X, Y)
+    g = (prof[:, 2:] - prof[:, :-2]) / (2 * step)
+    g = np.nan_to_num(g)
+    sign = -1 if g.sum() < 0 else 1
+    radii = np.full(EDGE_RAYS, np.nan)
+    for t in range(EDGE_RAYS):
+        v = sign * g[t]
+        inner = v[1:ns - 1]
+        if inner.size == 0:
+            continue
+        best = 1 + int(np.argmax(inner)); bv = v[best]
+        if bv <= 0 or bv < EDGE_MIN_GRADIENT:
+            continue
+        ym, yp = v[best - 1], v[best + 1]
+        den = ym - 2 * bv + yp
+        d = .5 * (ym - yp) / den if den < 0 else 0
+        radii[t] = EDGE_IN * req + (best + max(-.5, min(.5, d))) * step
+    if np.isfinite(radii).sum() < EDGE_MIN_VALID * EDGE_RAYS:
+        return None
+    filled = np.empty(EDGE_RAYS)
+    for t in range(EDGE_RAYS):
+        win = [radii[(t + j) % EDGE_RAYS] for j in range(-2, 3)]
+        win = sorted(v for v in win if np.isfinite(v))
+        if not win:
+            return None
+        filled[t] = win[len(win) // 2]
+    x = filled * np.cos(th); y = filled * np.sin(th)
+    x1, y1 = np.roll(x, -1), np.roll(y, -1)
+    cr = x * y1 - x1 * y
+    area = cr.sum() / 2
+    if not area > 0:
+        return None
+    ratio = area / (math.pi * req * req)
+    if not EDGE_MIN_AREA <= ratio <= EDGE_MAX_AREA:
+        return None
+    return area, cx + ((x + x1) * cr).sum() / (6 * area), cy + ((y + y1) * cr).sum() / (6 * area)
 
 
 def starts(length, tile, overlap):
@@ -104,7 +165,7 @@ class Sam2:
                                                   'point_coords': coords, 'point_labels': labels})
                 for k in range(n):
                     i = ids[b0 + k]
-                    m = self.measure(dets[i], logits[k, 0], float(iou[k, 0]), x0, y0, sw, sh, sx, sy)
+                    m = self.measure(dets[i], logits[k, 0], float(iou[k, 0]), x0, y0, sw, sh, sx, sy, scaled)
                     if m is None:
                         kept += 1
                     else:
@@ -113,7 +174,7 @@ class Sam2:
                       seconds=round(time.time() - t0, 2))
         return out, report
 
-    def measure(self, seed, logits, iou, x0, y0, sw, sh, sx, sy):
+    def measure(self, seed, logits, iou, x0, y0, sw, sh, sx, sy, scaled=None):
         if not iou >= MIN_IOU:
             return None
         sm, ratio = math.sqrt(sx * sy), self.size / self.ms
@@ -157,11 +218,15 @@ class Sam2:
         disc = math.sqrt(max(0, tr * tr / 4 - det))
         a, b = 2 * math.sqrt(tr / 2 + disc), 2 * math.sqrt(max(1e-9, tr / 2 - disc))
         k = math.sqrt(n / (math.pi * a * b)); a *= k; b *= k
+        raw_radius = math.sqrt(a * b) / sm
+        edge = snap_edge(scaled, mx, my, math.sqrt(n / math.pi)) if scaled is not None else None
+        if edge is not None:
+            f = math.sqrt(edge[0] / n); a *= f; b *= f; mx, my = edge[1], edge[2]
         partial = seed.get('partial', False) or X.min() <= 0 or Y.min() <= 0 or X.max() >= sw - 1 or Y.max() >= sh - 1
         mask_pts = np.stack([(X + .5) / sx - .5, (Y + .5) / sy - .5], 1)
         return dict(seed, x=(mx + .5) / sx - .5, y=(my + .5) / sy - .5, radius=math.sqrt(a * b) / sm, area=n / (sx * sy),
                     semi_major=a / sm, semi_minor=b / sm, partial=bool(partial), review=iou < REVIEW_IOU,
-                    sam2=True, iou=iou, mask=mask_pts)
+                    sam2=True, iou=iou, mask=mask_pts, radius_raw=raw_radius, edge=edge is not None)
 
 
 def draw(gray, dets, title):

@@ -56,18 +56,21 @@ public final class Sam2Refiner {
     public static final class Report {
         public final int tiles, prompts, refined, kept, review; public final long encoderMs, decoderMs, totalMs; public final double scale;
         public final String engine;
-        Report(int tiles, int prompts, int refined, int kept, int review, long enc, long dec, long total, double scale, String engine) {
+        /** Pelotas cuja máscara foi recortada pela borda real (halo/sombra removidos). */
+        public final int edgeSnapped;
+        Report(int tiles, int prompts, int refined, int kept, int review, long enc, long dec, long total, double scale, String engine, int edgeSnapped) {
+            this.edgeSnapped = edgeSnapped;
             this.tiles = tiles; this.prompts = prompts; this.refined = refined; this.kept = kept; this.review = review;
             encoderMs = enc; decoderMs = dec; totalMs = total; this.scale = scale; this.engine = engine;
         }
         public String summary() {
-            return String.format(Locale.ROOT, "SAM 2: %d de %d pelotas com máscara (%d mantidas do detector, %d para revisão) · %d blocos · escala %.2f · %.1f s · %s",
-                    refined, prompts, kept, review, tiles, scale, totalMs / 1000.0, engine);
+            return String.format(Locale.ROOT, "SAM 2: %d de %d pelotas com máscara (%d recortadas na borda real, %d mantidas do detector, %d para revisão) · %d blocos · escala %.2f · %.1f s · %s",
+                    refined, prompts, edgeSnapped, kept, review, tiles, scale, totalMs / 1000.0, engine);
         }
         public JSONObject json() throws Exception {
             JSONObject j = new JSONObject();
             j.put("tiles", tiles); j.put("prompts", prompts); j.put("refined", refined); j.put("kept_from_detector", kept);
-            j.put("review", review); j.put("encoder_ms", encoderMs); j.put("decoder_ms", decoderMs); j.put("total_ms", totalMs);
+            j.put("review", review); j.put("edge_snapped", edgeSnapped); j.put("encoder_ms", encoderMs); j.put("decoder_ms", decoderMs); j.put("total_ms", totalMs);
             j.put("scale", scale); j.put("engine", engine);
             return j;
         }
@@ -198,6 +201,7 @@ public final class Sam2Refiner {
         List<PelletDetector.Detection> in = seeds.circles;
         PelletDetector.Detection[] out = in.toArray(new PelletDetector.Detection[0]);
         int refined = 0, kept = 0, review = 0, tiles = 0; long encNs = 0, decNs = 0;
+        snapped = 0;
         double sm = Math.sqrt(sx * sy);
         {
             int pad = meanByte(pix);
@@ -244,7 +248,7 @@ public final class Sam2Refiner {
                     float[] logits = dec.get("low_res_masks"), iou = dec.get("iou_predictions");
                     for (int k = 0; k < n; k++) {
                         int idx = ids.get(b0 + k);
-                        PelletDetector.Detection r = measure(out[idx], logits, k * maskSize * maskSize, iou[k], x0, y0, sw, sh, sx, sy);
+                        PelletDetector.Detection r = measure(out[idx], logits, k * maskSize * maskSize, iou[k], x0, y0, sw, sh, sx, sy, pix);
                         if (r == null) { kept++; if (out[idx].needsReview) review++; continue; }
                         out[idx] = r; refined++; if (r.needsReview) review++;
                     }
@@ -252,9 +256,9 @@ public final class Sam2Refiner {
             }
         }
         long total = (System.nanoTime() - t0) / 1_000_000;
-        last = new Report(tiles, in.size(), refined, kept, review, encNs / 1_000_000, decNs / 1_000_000, total, s, encoder.description());
+        last = new Report(tiles, in.size(), refined, kept, review, encNs / 1_000_000, decNs / 1_000_000, total, s, encoder.description(), snapped);
         return new PelletDetector.Result(Arrays.asList(out), seeds.width, seeds.height, seeds.candidates, seeds.durationMs + total,
-                seeds.candidateLimit, seeds.method + "+sam2_" + id);
+                seeds.candidateLimit, seeds.method + "+sam2_" + id + (edgeSnap ? "+edge_v1" : ""));
     }
 
     private static Map<String, float[]> run(Engine e, Map<String, float[]> in, Map<String, long[]> shapes, String[] outs) {
@@ -296,7 +300,7 @@ public final class Sam2Refiner {
      * conexa que contém o centro (ou a mais próxima dele) e devolve a elipse de mesmos momentos e mesma área,
      * em px da imagem original. Null quando a máscara não passa nos critérios.
      */
-    PelletDetector.Detection measure(PelletDetector.Detection seed, float[] logits, int off, float iou, int x0, int y0, int sw, int sh, double sx, double sy) {
+    PelletDetector.Detection measure(PelletDetector.Detection seed, float[] logits, int off, float iou, int x0, int y0, int sw, int sh, double sx, double sy, byte[] pix) {
         if (!(iou >= MIN_IOU)) return null;
         double sm = Math.sqrt(sx * sy), ratio = size / (double) maskSize;
         double cx = (seed.x + .5) * sx - .5, cy = (seed.y + .5) * sy - .5, rw = Math.max(seed.radius, seed.semiMajor) * sm * WINDOW;
@@ -341,6 +345,14 @@ public final class Sam2Refiner {
         double l1 = tr / 2 + disc, l2 = Math.max(1e-9, tr / 2 - disc);
         double a = 2 * Math.sqrt(l1), b = 2 * Math.sqrt(l2), k = Math.sqrt(n / (Math.PI * a * b));
         a *= k; b *= k;                                   // mesma área da máscara
+        // 0.17.0: a máscara do SAM 2 tende a incluir o halo do processamento do celular e a sombra de contato
+        // (+3,8% no diâmetro das esferas de 11 mm). Recorta pela borda real: maior degrau de brilho em cada raio.
+        double[] edge = pix == null ? null : snapEdge(pix, sw, sh, mx, my, Math.sqrt(n / Math.PI));
+        if (edge != null) {
+            double f = Math.sqrt(edge[0] / n);
+            a *= f; b *= f; mx = edge[1]; my = edge[2];
+            snapped++;
+        }
         double angle = Math.toDegrees(.5 * Math.atan2(2 * cxy, cxx - cyy));
         double ox = (mx + .5) / sx - .5, oy = (my + .5) / sy - .5;
         // anisotropia do reescalonamento (< 0,1%) tratada pela média geométrica
@@ -351,6 +363,85 @@ public final class Sam2Refiner {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    /** Recorte da máscara pela borda de maior gradiente (ligado por padrão). */
+    static volatile boolean edgeSnap = true;
+    static final int EDGE_RAYS = 72;
+    static final double EDGE_IN = .80, EDGE_OUT = 1.15, EDGE_MIN_GRADIENT = 3, EDGE_MIN_VALID = .6, EDGE_MIN_AREA = .78, EDGE_MAX_AREA = 1.06;
+    private int snapped;
+
+    static double bilinear(byte[] pix, int w, int h, double x, double y) {
+        if (x < 0 || y < 0 || x > w - 1 || y > h - 1) return Double.NaN;
+        int ix = (int) x, iy = (int) y, jx = Math.min(w - 1, ix + 1), jy = Math.min(h - 1, iy + 1);
+        double fx = x - ix, fy = y - iy;
+        double p00 = pix[iy * w + ix] & 255, p10 = pix[iy * w + jx] & 255, p01 = pix[jy * w + ix] & 255, p11 = pix[jy * w + jx] & 255;
+        return (p00 * (1 - fx) + p10 * fx) * (1 - fy) + (p01 * (1 - fx) + p11 * fx) * fy;
+    }
+
+    /**
+     * Borda da pelota por raios a partir do centróide da máscara: em cada um de {@link #EDGE_RAYS} raios, entre
+     * 0,80 e 1,15 do raio equivalente da máscara, acha o maior degrau de brilho (com a polaridade dominante:
+     * pelota clara em fundo escuro ou o contrário) com refinamento sub-pixel. Mediana móvel de 5 raios.
+     * Devolve {área, cx, cy} do polígono ou null se o contraste for fraco, a borda incerta ou o recorte grande
+     * demais (fica a máscara do SAM 2). Coordenadas da imagem reescalada.
+     */
+    static double[] snapEdge(byte[] pix, int w, int h, double cx, double cy, double req) {
+        if (!edgeSnap || req < 4) return null;
+        double step = .25;
+        int ns = (int) Math.ceil((EDGE_OUT - EDGE_IN) * req / step) + 1;
+        double[][] g = new double[EDGE_RAYS][ns];
+        double polarity = 0;
+        for (int t = 0; t < EDGE_RAYS; t++) {
+            double th = 2 * Math.PI * t / EDGE_RAYS, c = Math.cos(th), sn = Math.sin(th);
+            double[] prof = new double[ns + 2];
+            for (int i = 0; i < ns + 2; i++) {
+                double r = EDGE_IN * req + (i - 1) * step;
+                prof[i] = bilinear(pix, w, h, cx + r * c, cy + r * sn);
+            }
+            for (int i = 0; i < ns; i++) {
+                double d = (prof[i + 2] - prof[i]) / (2 * step);          // dI/dr (por px)
+                g[t][i] = Double.isNaN(d) ? 0 : d;
+                polarity += g[t][i];
+            }
+        }
+        double sign = polarity < 0 ? -1 : 1;                             // pelota clara: brilho cai para fora (sign=-1, procura -dI/dr)
+        double[] radii = new double[EDGE_RAYS];
+        int valid = 0;
+        for (int t = 0; t < EDGE_RAYS; t++) {
+            int best = -1; double bv = 0;
+            for (int i = 1; i < ns - 1; i++) {
+                double v = sign * g[t][i];
+                if (v > bv) { bv = v; best = i; }
+            }
+            if (best < 0 || bv < EDGE_MIN_GRADIENT) { radii[t] = Double.NaN; continue; }
+            double ym = sign * g[t][best - 1], y0 = bv, yp = sign * g[t][best + 1];
+            double den = ym - 2 * y0 + yp, d = den < 0 ? .5 * (ym - yp) / den : 0;
+            radii[t] = EDGE_IN * req + (best + Math.max(-.5, Math.min(.5, d))) * step;
+            valid++;
+        }
+        if (valid < EDGE_MIN_VALID * EDGE_RAYS) return null;
+        double[] filled = new double[EDGE_RAYS];
+        for (int t = 0; t < EDGE_RAYS; t++) {                            // mediana móvel de 5 (ignora raios sem borda)
+            double[] win = new double[5]; int m = 0;
+            for (int j = -2; j <= 2; j++) { double v = radii[(t + j + EDGE_RAYS) % EDGE_RAYS]; if (!Double.isNaN(v)) win[m++] = v; }
+            if (m == 0) return null;
+            Arrays.sort(win, 0, m);
+            filled[t] = win[m / 2];
+        }
+        double area = 0, ax = 0, ay = 0;
+        for (int t = 0; t < EDGE_RAYS; t++) {
+            double t0 = 2 * Math.PI * t / EDGE_RAYS, t1 = 2 * Math.PI * (t + 1) / EDGE_RAYS;
+            double x0 = filled[t] * Math.cos(t0), y0 = filled[t] * Math.sin(t0);
+            double x1 = filled[(t + 1) % EDGE_RAYS] * Math.cos(t1), y1 = filled[(t + 1) % EDGE_RAYS] * Math.sin(t1);
+            double cr = x0 * y1 - x1 * y0;
+            area += cr; ax += (x0 + x1) * cr; ay += (y0 + y1) * cr;
+        }
+        area /= 2;
+        if (!(area > 0)) return null;
+        double ratio = area / (Math.PI * req * req);
+        if (ratio < EDGE_MIN_AREA || ratio > EDGE_MAX_AREA) return null;
+        return new double[]{area, cx + ax / (6 * area), cy + ay / (6 * area)};
     }
 
     // ------------------------------------------------------------------ utilidades
