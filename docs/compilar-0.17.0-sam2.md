@@ -46,6 +46,10 @@ Na primeira execução o script:
 
 Depois: testes + pacote Windows (`jpackage`, autoteste exige `sam2_run=` no log) + testes, lint e APK Android.
 
+Instalador: se o Inno Setup 6 estiver instalado (`winget install --id JRSoftware.InnoSetup -e`), a compilação também
+gera `PelotaVision_Windows_<versão>_instalador.exe` a partir da mesma pasta que passou no autoteste. Para gerar só o
+instalador do último pacote testado, sem recompilar: `.\GERAR_INSTALADOR.bat`.
+
 Opções: `-SemSam2` (pacote sem o modelo), `-Platform Windows|Android|Ambos`, `-LocalRoot <pasta>`.
 
 ## Onde ficam os arquivos
@@ -53,6 +57,7 @@ Opções: `-SemSam2` (pacote sem o modelo), `-Platform Windows|Android|Ambos`, `
 | Item | Local |
 |---|---|
 | Executável Windows | `C:\Projetos\PelotaVision-local\results\windows-<data>\dist\PelotaVision\PelotaVision.exe` |
+| Instalador Windows (por usuário, sem admin) | `C:\Projetos\PelotaVision-local\results\windows-<data>\PelotaVision_Windows_0.9.0_instalador.exe` — só se o Inno Setup 6 estiver instalado |
 | Zip portátil + SHA-256 | `C:\Projetos\PelotaVision-local\results\windows-<data>\PelotaVision_Studio_Windows_0.9.0.zip` e `SHA256.txt` |
 | APK celular | `C:\Projetos\PelotaVision-local\results\android-<data>\app-arm64-v8a-debug.apk` (+ `SHA256.txt`) |
 | Modelo SAM 2 | `C:\Projetos\PelotaVision-local\models\sam2\` |

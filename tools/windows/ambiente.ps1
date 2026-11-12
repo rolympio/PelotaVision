@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Instalar','Atualizar','Verificar','Compilar','Sincronizar')]
+    [ValidateSet('Instalar','Atualizar','Verificar','Compilar','Sincronizar','Instalador')]
     [string]$Action = 'Verificar',
     [string]$LocalRoot,
     [string]$DataSource,
@@ -278,6 +278,51 @@ function Invoke-Build-One {
     $record | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $LocalRoot "logs\build-$Platform-$runId.json")
 }
 
+function Find-InnoSetup {
+    $candidates = @()
+    foreach ($base in @(${env:ProgramFiles(x86)}, $env:ProgramFiles, (Join-Path $env:LOCALAPPDATA 'Programs'))) {
+        if ($base) { $candidates += (Join-Path $base 'Inno Setup 6\ISCC.exe') }
+    }
+    $cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($cmd) { $candidates += $cmd.Source }
+    foreach ($c in $candidates) { if (Test-Path -LiteralPath $c -PathType Leaf) { return $c } }
+    return $null
+}
+
+# Instalador por usuario (sem administrador) a partir da MESMA pasta ja testada pelo autoteste.
+# Nao instala para testar: o AppId e fixo e um teste silencioso mexeria na instalacao real do usuario.
+function New-WindowsInstaller([string]$Dist, [string]$Version, [string]$OutDir) {
+    if (!(Test-Path -LiteralPath (Join-Path $Dist 'PelotaVision.exe'))) { throw "Pacote nao encontrado: $Dist" }
+    $iscc = Find-InnoSetup
+    if (!$iscc) {
+        Write-Warning 'Inno Setup 6 nao encontrado: instalador NAO gerado (exe e zip continuam validos).'
+        Write-Warning 'Instale com:  winget install --id JRSoftware.InnoSetup -e   e rode GERAR_INSTALADOR.bat'
+        return $null
+    }
+    Write-Host "Gerando instalador com $iscc (pode levar alguns minutos; o pacote tem ~1 GB)..."
+    & $iscc /Q "/DAppVersion=$Version" "/DSourceDir=$Dist" "/DOutputDir=$OutDir" "$repo\desktop\installer\PelotaVision.iss" | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "Inno Setup falhou (codigo $LASTEXITCODE)." }
+    $setup = Join-Path $OutDir "PelotaVision_Windows_${Version}_instalador.exe"
+    if (!(Test-Path -LiteralPath $setup)) { throw "Instalador nao gerado: $setup" }
+    $h = Get-Sha256 $setup
+    "$h  $([IO.Path]::GetFileName($setup))" | Add-Content -Encoding ASCII (Join-Path $OutDir 'SHA256.txt')
+    Write-Host "Instalador: $setup | SHA256=$h"
+    return $setup
+}
+
+function New-InstallerFromLatest {
+    $latest = Join-Path $LocalRoot 'latest-package.json'
+    if (!(Test-Path -LiteralPath $latest)) { throw 'Nenhum pacote Windows testado ainda. Rode COMPILAR_PELOTAVISION_COMPLETO.bat.' }
+    $meta = Get-Content -LiteralPath $latest -Raw | ConvertFrom-Json
+    if (!$meta.packaged_gui_test) { throw 'O ultimo pacote nao passou no ensaio da janela; instalador nao gerado.' }
+    $dist = Split-Path ([string]$meta.executable) -Parent
+    $out = Split-Path (Split-Path $dist -Parent) -Parent
+    Write-Output "Pacote: $dist | versao $($meta.version) | commit $($meta.commit)"
+    if ([string]$meta.commit -ne $commit) { Write-Warning "O pacote e do commit $($meta.commit); o repositorio esta em $commit. Para incluir as mudancas novas, compile de novo." }
+    $setup = New-WindowsInstaller $dist ([string]$meta.version) $out
+    if (!$setup) { throw 'Instalador nao gerado (Inno Setup ausente).' }
+}
+
 function New-WindowsPackage([string]$Ocv) {
     if (!(Test-Path -LiteralPath "$env:JAVA_HOME\bin\jpackage.exe")) { throw 'JDK sem jpackage.' }
     $out = Join-Path $LocalRoot "results\windows-$runId"
@@ -359,6 +404,7 @@ start "" "https://github.com/rolympio/PelotaVision/releases"
     [IO.Compression.ZipFile]::CreateFromDirectory("$out\dist\PelotaVision", $zip, [IO.Compression.CompressionLevel]::Optimal, $true)
     $hash = [pscustomobject]@{ Hash = (Get-Sha256 $zip) }
     "$($hash.Hash)  $([IO.Path]::GetFileName($zip))" | Set-Content -Encoding ASCII "$out\SHA256.txt"
+    $null = New-WindowsInstaller "$out\dist\PelotaVision" $version $out
     $metadata | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $LocalRoot 'latest-package.json')
     $desktop = [Environment]::GetFolderPath('Desktop')
     if ($desktop -and (Test-Path -LiteralPath $desktop)) {
@@ -435,6 +481,7 @@ try {
             Invoke-Build
         }
         'Compilar' { Invoke-Build }
+        'Instalador' { New-InstallerFromLatest }
         'Sincronizar' {
             $python = Get-Command python3 -ErrorAction SilentlyContinue
             if (!$python) { $python = Get-Command python -ErrorAction Stop }
