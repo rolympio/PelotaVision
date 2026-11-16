@@ -91,7 +91,7 @@ final class ResultSaver {
         Bitmap shown=filtered!=null?filtered:photo;
         if(distribution==null)distribution=PhotoComposer.pixelHistogram(result);
         if(visuals==null)visuals=ReportVisuals.defaults();
-        java.util.List<Granulometry.Item> histogramItems=new ArrayList<>();for(PelletDetector.Detection d:result.circles)histogramItems.add(new Granulometry.Item(2*d.radius,d.partial,d.needsReview));
+        java.util.List<Granulometry.Item> histogramItems=new ArrayList<>();for(PelletDetector.Detection d:result.circles)histogramItems.add(Granulometry.Item.of(d));
         CrackHistogram crackHistogram=CrackHistogram.compute(distribution,histogramItems,cracks);
         boolean physical=!distribution.settings.pixelsOnly();
         ContentResolver resolver=context.getContentResolver();List<Uri> pending=new ArrayList<>();
@@ -126,7 +126,7 @@ final class ResultSaver {
             json.put("crack_histogram",ReportJson.crackHistogramJson(crackHistogram,visuals));
             Object mapJson=ReportJson.mapJson(distribution,visuals);if(mapJson instanceof JSONObject)((JSONObject)mapJson).put("file",mapFile==null?JSONObject.NULL:mapFile);json.put("granulometric_map",mapJson);
             JSONObject display=new JSONObject();display.put("histogram_show_all",visuals.showAll);display.put("histogram_show_cracked",visuals.showCracked);display.put("histogram_values_on_bars",visuals.showValues);display.put("histogram_normalization",visuals.normalization.name());display.put("all_color","#268CAB alpha 0.55");display.put("cracked_color","#FF8C1A alpha 0.65");json.put("visualization",display);
-            json.put("region_of_interest",ReportJson.regionJson(region,excludedByRegion));json.put("detection_suggestion",ReportJson.suggestionJson(suggestions,applied));json.put("neural_model",ReportJson.neuralModelJson(applied));json.put("scene",ReportJson.sceneJson(applied));json.put("low_light",lowLight==null?JSONObject.NULL:lowLight.toJson());
+            json.put("region_of_interest",ReportJson.regionJson(region,excludedByRegion));json.put("detection_suggestion",ReportJson.suggestionJson(suggestions,applied));json.put("neural_model",ReportJson.neuralModelJson(applied));json.put("sam2_refinement",ReportJson.sam2Json(result));json.put("scene",ReportJson.sceneJson(applied));json.put("low_light",lowLight==null?JSONObject.NULL:lowLight.toJson());
             JSONObject imagery=new JSONObject();imagery.put("filtered_file",filteredFile==null?JSONObject.NULL:filteredFile);imagery.put("segmented_base",filtered!=null?"filtered":"original");imagery.put("map_base",filtered!=null?"filtered":"original");
             imagery.put("note","filtered image is for display and object proposal only; ellipses, diameters and crack crops use ORIGINAL pixels");json.put("report_images",imagery);
             JSONObject processing=ReportJson.processingScopeJson(new AnalysisWindow(result.width,result.height,result.method.contains("active_roi_crop_v1")?region:null));
@@ -185,8 +185,8 @@ final class ResultSaver {
             int id=0;for(PelletDetector.Detection d:result.circles) {
                 id++;JSONObject item=new JSONObject();item.put("id",id);item.put("x_px",d.x);item.put("y_px",d.y);item.put("radius_px",d.radius);
                 item.put("equivalent_diameter_px",d.radius*2);item.put("area_px2",d.area);item.put("roundness",d.roundness);item.put("partial_edge",d.partial);item.put("needs_review",d.needsReview);detections.put(item);
-                double diameter=!physical?Double.NaN:distribution.diameterMm(2*d.radius);
-                double area=!physical?Double.NaN:d.area/(distribution.analyzedPixelsPerMm*distribution.analyzedPixelsPerMm);
+                double diameter=!physical?Double.NaN:distribution.diameterMm(d);
+                double area=!physical?Double.NaN:distribution.areaMm2(d);
                 CrackAnalysis.Entry crack=cracks==null?null:cracks.entries.get(id-1);
                 item.put("crack_status",crack==null?"not_analyzed":crack.status.name());item.put("crack_manually_reviewed",crack!=null&&crack.manuallyReviewed);
                 item.put("ellipse_major_axis_px",d.ellipseFitted?2*d.semiMajor:JSONObject.NULL);item.put("ellipse_minor_axis_px",d.ellipseFitted?2*d.semiMinor:JSONObject.NULL);item.put("ellipse_angle_deg",d.ellipseFitted?d.angleDeg:JSONObject.NULL);item.put("apparent_sphericity_2d",finite(d.aspectRatio()));item.put("ellipse_fitted",d.ellipseFitted);item.put("included_in_shape_mean",ShapeStatistics.includes(d));
@@ -194,7 +194,7 @@ final class ResultSaver {
                 ObjectCalibration.Axes originalAxes=physical&&d.ellipseFitted?ObjectCalibration.originalAxes(d,distribution.originalWidth,distribution.originalHeight,result.width,result.height):null;
                 item.put("ellipse_major_axis_mm",originalAxes!=null?originalAxes.major/distribution.settings.originalPixelsPerMm:JSONObject.NULL);item.put("ellipse_minor_axis_mm",originalAxes!=null?originalAxes.minor/distribution.settings.originalPixelsPerMm:JSONObject.NULL);
                 item.put("crack_score",crack!=null&&Double.isFinite(crack.modelScore)?crack.modelScore:JSONObject.NULL);item.put("crack_method",crack==null?"not_analyzed":crack.method);
-                boolean included=distribution!=null&&distribution.includes(new Granulometry.Item(2*d.radius,d.partial,d.needsReview));
+                boolean included=distribution!=null&&distribution.includes(Granulometry.Item.of(d));
                 item.put("equivalent_diameter_mm",Double.isFinite(diameter)?diameter:JSONObject.NULL);
                 item.put("area_mm2",Double.isFinite(area)?area:JSONObject.NULL);item.put("included_in_histogram",included);
             }

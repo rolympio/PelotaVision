@@ -30,6 +30,7 @@ public final class DetailedAnalysis {
    }finally{gray.release();}
   }
   check(cancel,start);List<PelletDetector.Detection> merged=TilePlan.merge(all);String method="detail_original_tiles_v1+ellipse_boundary_v1"+(map.region==null?"":"+active_roi_crop_v1")+(sr==null?"":"+fsrcnn_x2_proposals_original_refine");PelletDetector.Result nativeResult=new PelletDetector.Result(merged,map.width,map.height,candidates,(System.nanoTime()-start)/1000000,limit,method);
+  if(Sam2Refiner.enabled()&&Sam2Refiner.available()){progress.update(tiles.size(),tiles.size(),"Máscaras SAM 2 nos pixels originais…");nativeResult=Sam2Refiner.applyIfEnabled(original,nativeResult,cancel);check(cancel,start);merged=new ArrayList<>(nativeResult.circles);method=nativeResult.method;}
   progress.update(tiles.size(),tiles.size(),"Trincas nos pixels originais…");CrackAnalysis cracks=crackDetector.detect(original,nativeResult,crackSensitivity);check(cancel,start);
   List<PelletDetector.Detection> projected=new ArrayList<>();for(PelletDetector.Detection d:merged)projected.add(map.toPreview(d));PelletDetector.Result mapped=new PelletDetector.Result(projected,map.previewWidth,map.previewHeight,candidates,(System.nanoTime()-start)/1000000,limit,method);
   Report report=new Report(map,tiles.size(),TilePlan.merge(baselineAll).size(),merged.size(),treatments,compare,sr!=null,mapped.durationMs,option.id,scores);return new Output(mapped,map.toPreview(cracks),report);

@@ -57,7 +57,7 @@ public final class CrackHistogram {
         for (int i = 0; i < items.size(); i++) {
             Granulometry.Item item = items.get(i);
             if (!d.includes(item)) continue;
-            int bin = d.binIndex(d.diameterMm(item.diameterPx));
+            int bin = d.binIndex(d.diameterMm(item));
             if (bin < 0) continue;
             included++;
             CrackAnalysis.Status s = cracks.entries.get(i).status;

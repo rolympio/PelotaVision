@@ -1,0 +1,20 @@
+// Os testes historicos escrevem exemplos em verification/. Rodar somente sobre
+// uma COPIA, mantendo as imagens e os resultados versionados intactos.
+gradle.projectsEvaluated {
+    allprojects { p ->
+        if (p.plugins.hasPlugin('java') || p.plugins.hasPlugin('com.android.application')) {
+            def sourceRoot = p.projectDir.parentFile
+            def fixtureRoot = new File(p.buildDir, 'fixtures-locais')
+            def prepareFixtures = p.tasks.register('prepararFixturesLocais', Copy) {
+                from(new File(sourceRoot, 'verification')) { into 'verification' }
+                from(new File(sourceRoot, 'ml_training')) { into 'ml_training' }
+                from(new File(sourceRoot, 'app/src/main/assets')) { into 'app/src/main/assets' }
+                into fixtureRoot
+            }
+            p.tasks.withType(Test).configureEach {
+                dependsOn prepareFixtures
+                systemProperty 'pelotavision.validationDir', new File(fixtureRoot, 'verification').absolutePath
+            }
+        }
+    }
+}

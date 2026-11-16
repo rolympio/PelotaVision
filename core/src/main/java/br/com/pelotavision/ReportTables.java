@@ -17,7 +17,7 @@ public final class ReportTables {
     /** Histograma em pixels (classe de 10 px) usado quando nao ha escala fisica. */
     public static Granulometry.Distribution pixelHistogram(PelletDetector.Result result) {
         List<Granulometry.Item> items = new ArrayList<>();
-        for (PelletDetector.Detection d : result.circles) items.add(new Granulometry.Item(2 * d.radius, d.partial, d.needsReview));
+        for (PelletDetector.Detection d : result.circles) items.add(Granulometry.Item.of(d));
         return Granulometry.compute(items, Granulometry.Settings.pixels(10), result.width, result.height, result.width, result.height);
     }
 
@@ -47,11 +47,11 @@ public final class ReportTables {
         int id = 0;
         for (PelletDetector.Detection d : result.circles) {
             id++;
-            double diameter = !physical ? Double.NaN : distribution.diameterMm(2 * d.radius);
-            double area = !physical ? Double.NaN : d.area / (distribution.analyzedPixelsPerMm * distribution.analyzedPixelsPerMm);
+            double diameter = !physical ? Double.NaN : distribution.diameterMm(d);
+            double area = !physical ? Double.NaN : distribution.areaMm2(d);
             CrackAnalysis.Entry crack = cracks == null ? null : cracks.entries.get(id - 1);
             ObjectCalibration.Axes originalAxes = physical && d.ellipseFitted ? ObjectCalibration.originalAxes(d, distribution.originalWidth, distribution.originalHeight, result.width, result.height) : null;
-            boolean included = distribution.includes(new Granulometry.Item(2 * d.radius, d.partial, d.needsReview));
+            boolean included = distribution.includes(Granulometry.Item.of(d));
             csv.append(String.format(Locale.ROOT, "%d;%.3f;%.3f;%.3f;%.3f;%.3f;%.4f;%s;%s;%s;%s;%s;%s;%s;%s;%s", id, d.x, d.y, d.radius, 2 * d.radius, d.area, d.roundness, d.partial, d.needsReview,
                     Double.isFinite(diameter) ? String.format(Locale.ROOT, "%.6f", diameter) : "", Double.isFinite(area) ? String.format(Locale.ROOT, "%.6f", area) : "", included, crack == null ? "not_analyzed" : crack.status.name(), crack != null && crack.manuallyReviewed, crack != null && Double.isFinite(crack.modelScore) ? String.format(Locale.ROOT, "%.6f", crack.modelScore) : "", crack == null ? "not_analyzed" : crack.method));
             csv.append(String.format(Locale.ROOT, ";%s;%s;%s;%s;%s;%s;%s;%s;%s;%s", number(d.ellipseFitted ? 2 * d.semiMajor : Double.NaN), number(d.ellipseFitted ? 2 * d.semiMinor : Double.NaN), number(d.ellipseFitted ? d.angleDeg : Double.NaN), number(d.aspectRatio()), d.ellipseFitted, ShapeStatistics.includes(d), number(originalAxes != null ? originalAxes.major / distribution.settings.originalPixelsPerMm : Double.NaN), number(originalAxes != null ? originalAxes.minor / distribution.settings.originalPixelsPerMm : Double.NaN), number(d.fitSupport), number(d.fitRms)));

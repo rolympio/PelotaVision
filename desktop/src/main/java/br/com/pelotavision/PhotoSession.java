@@ -228,7 +228,7 @@ final class PhotoSession {
 
     static List<Granulometry.Item> items(PelletDetector.Result r) {
         List<Granulometry.Item> items = new ArrayList<>();
-        for (PelletDetector.Detection d : r.circles) items.add(new Granulometry.Item(2 * d.radius, d.partial, d.needsReview));
+        for (PelletDetector.Detection d : r.circles) items.add(Granulometry.Item.of(d));
         return items;
     }
 }

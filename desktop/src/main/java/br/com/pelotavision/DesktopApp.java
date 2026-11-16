@@ -9,14 +9,17 @@ import java.io.File;
 
 /** PelotaVision para Windows: ponto de entrada. Usa o mesmo nucleo de analise do Android. */
 public final class DesktopApp {
-    public static final String NAME = "PelotaVision Windows";
-    public static final String VERSION = "0.6.0";
+    public static final String NAME = "PelotaVision Studio";
+    public static final String VERSION = "0.9.0";
     /** Versao do nucleo de analise compartilhado com o Android. */
-    public static final String CORE_VERSION = "0.16.0";
+    public static final String CORE_VERSION = "0.17.0";
 
     private DesktopApp() {}
 
     public static void main(String[] args) {
+        StudioLog.install();
+        if (args.length >= 4 && "--studio-ai-smoke".equals(args[0])) { System.exit(StudioSmoke.run(new File(args[1]), new File(args[2]), new File(args[3]))); return; }
+        if (args.length >= 3 && "--studio-smoke".equals(args[0])) { System.exit(StudioSmoke.run(new File(args[1]), new File(args[2]))); return; }
         if (args.length >= 3 && "--autoteste".equals(args[0])) {
             // --aceleracao: o mesmo autoteste com a aceleração por hardware ligada (CI: prova que o ONNX Runtime carrega no pacote)
             if (args.length >= 4 && "--aceleracao".equals(args[3])) System.setProperty(DesktopAnalysis.ACCEL_PROPERTY, "true");
@@ -31,7 +34,7 @@ public final class DesktopApp {
             return;
         }
         SwingUtilities.invokeLater(() -> {
-            try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); } catch (Exception ignored) {}
+            StudioTheme.install();
             new MainFrame().setVisible(true);
         });
     }
@@ -52,6 +55,7 @@ public final class DesktopApp {
             log.append("crackNetworkAsset=").append(model(MobileNetCrackModel.MODEL).isFile()).append('\n');
             log.append("neuralBeltModel=").append(NeuralPelletDetector.status(true)).append('\n');
             log.append("accel=").append(HardwareAcceleration.status().replace("\n", " | ")).append('\n');
+            log.append("sam2=").append(Sam2Refiner.status()).append('\n');
             org.opencv.core.Mat bgr = Mats.readUpright(image);
             PhotoSession session = new PhotoSession(image, null, null, bgr);
             bgr.release();
@@ -60,6 +64,8 @@ public final class DesktopApp {
             session.accept(out);
             log.append("count_full=").append(session.active().circles.size()).append('\n');
             log.append("applied=").append(out.applied.id).append('\n');
+            log.append("method=").append(out.result.method).append('\n');
+            if (out.result.method.contains("+sam2_") && Sam2Refiner.lastReport() != null) log.append("sam2_run=").append(Sam2Refiner.lastReport().summary()).append('\n');
             // ROI retangular central + reanalise com o mesmo ajuste + escala digitada.
             session.setRegion(InterestRegion.initial(InterestRegion.Shape.RECTANGLE, session.width, session.height));
             boolean pending = session.needsAnalysis() && !session.canSave();

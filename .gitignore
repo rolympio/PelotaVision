@@ -15,3 +15,15 @@ __pycache__/
 *.pyc
 artifacts/
 data/external/
+
+# Ambiente pessoal e dados privados nao devem ser publicados
+.pelotavision.local.json
+.opencode/node_modules/
+*.bundle
+/desktop/opencv-java/
+/pkg/
+# SAM 2.1 exportado localmente (≈125 MB): fora do Git, copiado para o pacote pelo script de compilacao
+app/src/main/assets/sam2_encoder.onnx
+app/src/main/assets/sam2_decoder.onnx
+app/src/main/assets/sam2.json
+*.pt

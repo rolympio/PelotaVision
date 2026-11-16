@@ -61,12 +61,15 @@ final class MainFrame extends JFrame {
     private final HistogramView histogram = new HistogramView();
     // 0.5.3: curva acumulada com ajuste Rosin–Rammler (mesmas pelotas e classes do histograma).
     private final RosinRammlerView rrView = new RosinRammlerView();
+    final ReportPreview reportPreview = new ReportPreview();
     private final JComboBox<String> rrBasisBox = new JComboBox<>(new String[]{RosinRammler.Basis.NUMBER.label, RosinRammler.Basis.MASS.label});
     private final JButton scaleButton = new JButton("Escala e histograma…");
     private javax.swing.JDialog scaleDialog;
     private final JTextArea summary = new JTextArea(10, 30);
     private final JLabel status = new JLabel(" ");
     private final JProgressBar progress = new JProgressBar();
+    private StudioShell studio;
+    private final javax.swing.DefaultListModel<String> historyModel = new javax.swing.DefaultListModel<>();
 
     private final JComboBox<String> cameraBox = new JComboBox<>();
     private final JComboBox<String> resolutionBox = new JComboBox<>();
@@ -116,7 +119,7 @@ final class MainFrame extends JFrame {
     private final JButton clearScaleButton = new JButton("Sem escala (px)");
     private final JLabel scaleLabel = new JLabel("Sem escala fisica · valores em px");
     // ---- Modelos de analise (0.5.0): visualizacao, mapa, classificador de trincas e grafico ----
-    private final JComboBox<String> viewBox = new JComboBox<>(new String[]{"Original", "Segmentacao", "Mapa granulometrico"});
+    private final JComboBox<String> viewBox = new JComboBox<>(new String[]{"Original", "Segmentacao", "Mapa granulometrico", "Instâncias (elipses)", "Classes visíveis (elipses)", "Possíveis trincas", "IA multitarefa experimental", "Incerteza IA (não calibrada)", "IA: bordas candidatas", "IA: separação candidata"});
     private final javax.swing.JSlider opacitySlider = new javax.swing.JSlider(0, 90, 55);
     private final JCheckBox mapLabels = new JCheckBox("Diametros");
     private final JCheckBox mapFixed = new JCheckBox("Escala fixa");
@@ -127,6 +130,9 @@ final class MainFrame extends JFrame {
     // 0.5.6: aceleracao por hardware das redes (ONNX Runtime: CUDA, depois CPU). Desligada por padrao.
     private final JCheckBox accelBox = new JCheckBox("Aceleracao GPU");
     private final JButton accelInfo = new JButton("Estado…");
+    // 0.9.0: refino por mascaras SAM 2.1 (mesmo codigo e modelo do Android). Ligado por padrao quando o modelo esta no pacote.
+    private final JCheckBox sam2Box = new JCheckBox("Mascaras SAM 2 (tamanho pela area)");
+    private final JButton previewAiButton = new JButton("Testar IA multitarefa…");
     ReportVisuals visuals = HistogramView.DEFAULTS;
 
     final CameraSource camera = new CameraSource();
@@ -167,22 +173,13 @@ final class MainFrame extends JFrame {
         lockExposure.setSelected(prefs.getBoolean("lockExposure", true));
         cameraBox.addItem("Procurando cameras…");
 
-        JPanel top = new JPanel();
-        top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
-        top.add(row(new JLabel("Camera:"), cameraBox, resolutionBox, lockFocus, lockExposure, cameraButton, driverButton, liveBox, liveTuneBox, liveSearchBox, liveScaleButton,
-                Box.createHorizontalStrut(12), captureButton, openButton, backLiveButton));
-        top.add(row(new JLabel("Cena:"), sceneBox, new JLabel("Perfil:"), profileBox, new JLabel("Metodo:"), methodBox, new JLabel("Sensibilidade %:"), sensitivity, autoSuggest,
-                numbers, Box.createHorizontalStrut(12), roiButton, analyzeButton, detailButton, lightButton, cancelButton, saveButton));
-        extraToolbar = row();
-        top.add(extraToolbar);
+        extraToolbar = new JPanel(new java.awt.GridLayout(0, 1, 0, 8));
+        extraToolbar.setPreferredSize(new Dimension(260, 280));
         segExtra.setEnabled(false);
         segExtra.setToolTipText("<html>YOLO11-seg: sem mascaras de instancia com rotulo humano; codigo e pesos Ultralytics sao AGPL-3.0 (revisao de licenca antes de distribuir).<br>Hibrida: sem regra de fusao validada.</html>");
         crackBox.setToolTipText("<html>MobileNetV3 e o padrao: acertou mais que o Random Forest em dois testes independentes (foto de 7 trincas; 57 fotos de bancada nunca vistas).<br>RF fica como reserva. Ainda sem validacao em producao.<br>Recortes dos pixels originais (nunca da super-resolucao). Escore nao calibrado. U-Net de trincas: indisponivel (sem mascaras reais).</html>");
         opacitySlider.setPreferredSize(new Dimension(110, 24));
         opacitySlider.setToolTipText("Opacidade da cor no mapa (0-90%; padrao 55%)");
-        top.add(row(new JLabel("Modelos de analise ·"), new JLabel("Segmentacao neural extra:"), segExtra, new JLabel("Trincas:"), crackBox,
-                new JLabel("Visualizacao:"), viewBox, new JLabel("Opacidade:"), opacitySlider, mapLabels, mapFixed, mapMin, new JLabel("a"), mapMax, chartButton,
-                Box.createHorizontalStrut(12), accelBox, accelInfo));
         accelBox.setSelected(HardwareAcceleration.enabled());
         accelBox.setToolTipText("<html>Executa as redes neurais (StarDist e MobileNetV3) no ONNX Runtime: GPU NVIDIA com CUDA; sem CUDA, CPU.<br>"
                 + "Cada rede so passa a usar o motor novo se der o mesmo resultado do OpenCV DNN numa sonda de paridade; senao continua no OpenCV.<br>"
@@ -190,10 +187,22 @@ final class MainFrame extends JFrame {
         accelInfo.setToolTipText("Mostra em que motor cada rede esta rodando e os tempos medidos na sonda.");
         accelBox.addActionListener(e -> toggleAcceleration(accelBox.isSelected()));
         accelInfo.addActionListener(e -> JOptionPane.showMessageDialog(this, accelerationReport(), "Aceleracao por hardware", JOptionPane.INFORMATION_MESSAGE));
+        sam2Box.setSelected(Sam2Refiner.enabled() && Sam2Refiner.available());
+        sam2Box.setEnabled(Sam2Refiner.available());
+        sam2Box.setToolTipText("<html>Cada pelota encontrada pelo metodo escolhido vira um prompt (caixa + centro) para o SAM 2.1 Tiny;<br>"
+                + "o tamanho passa a ser a area da mascara (elipse de mesmos momentos). Mascaras ruins mantem a elipse do detector.<br>"
+                + "Mesmo modelo e mesmo motor (ONNX Runtime) do Android. Sem ajuste fino em pelotas: compare antes de usar.<br>"
+                + Sam2Refiner.status().replace("<", "&lt;") + "</html>");
+        sam2Box.addActionListener(e -> {
+            Sam2Refiner.setEnabled(sam2Box.isSelected());
+            prefs.putBoolean(DesktopAnalysis.SAM2_PREF, sam2Box.isSelected());
+            setStatus(sam2Box.isSelected() ? "SAM 2 ligado: vale a partir da proxima analise." : "SAM 2 desligado: tamanhos pelas elipses do detector.");
+        });
 
-        JPanel side = new JPanel();
+        JPanel side = new StudioScrollablePanel();
         side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
-        side.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+        side.setBackground(StudioTheme.BACKGROUND);
+        side.setBorder(BorderFactory.createEmptyBorder(0, 4, 8, 8));
         scalePanel = new JPanel();
         scalePanel.setLayout(new BoxLayout(scalePanel, BoxLayout.Y_AXIS));
         scalePanel.setBorder(BorderFactory.createTitledBorder("Escala e classes do histograma"));
@@ -206,47 +215,103 @@ final class MainFrame extends JFrame {
         // 0.5.3: o painel de escala abre por botão; o espaço lateral fica para histograma + Rosin–Rammler.
         scaleButton.setToolTipText("px/mm, classe, exclusões, referência, correia, recipiente, objeto e média");
         scaleButton.addActionListener(e -> showScaleDialog());
-        JPanel scaleRow = new JPanel(new BorderLayout(6, 0));
-        scaleRow.add(scaleButton, BorderLayout.WEST);
+        JPanel scaleRow = new JPanel(new BorderLayout(4, 6));
+        scaleRow.setOpaque(false);
         scaleRow.add(scaleLabel, BorderLayout.CENTER);
-        scaleRow.setAlignmentX(Component.LEFT_ALIGNMENT);
-        scaleRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
-        side.add(scaleRow);
+        scaleRow.add(scaleButton, BorderLayout.SOUTH);
+        scaleLabel.setForeground(StudioTheme.TEXT);
+        addCard(side, StudioShell.card("Escala", scaleRow));
         summary.setEditable(false);
         summary.setLineWrap(true); summary.setWrapStyleWord(true);
         summary.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        summary.setRows(7);
+        summary.setBackground(StudioTheme.BACKGROUND);
+        summary.setForeground(StudioTheme.TEXT);
+        summary.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
         JScrollPane sp = new JScrollPane(summary);
-        sp.setBorder(BorderFactory.createTitledBorder("Resultado"));
-        side.add(sp);
-        histogram.setBorder(BorderFactory.createTitledBorder("Histograma por numero"));
-        side.add(histogram);
+        sp.setBorder(BorderFactory.createEmptyBorder());
+        addCard(side, StudioShell.card("Resultado", sp));
+        addCard(side, StudioShell.card("Histograma por número", histogram));
+        // Fonte lógica com substituição de glifos: Segoe UI não tem "∝".
+        rrBasisBox.setFont(new Font(Font.DIALOG, Font.PLAIN, 13));
         rrBasisBox.setSelectedIndex(RosinRammler.Basis.fromId(prefs.get("rrBasis", "number")).ordinal());
         rrBasisBox.setToolTipText("<html>Numero: o que a imagem mede (contagem de pelotas).<br>Massa estimada: pondera cada pelota por d³ (esferas de mesma densidade) — aproxima a base das curvas de peneira, sem substituir o peneiramento.</html>");
         rrBasisBox.addActionListener(e -> { prefs.put("rrBasis", rrBasis().id); refreshCharts(session); });
-        JPanel rrPanel = new JPanel(new BorderLayout());
-        rrPanel.setBorder(BorderFactory.createTitledBorder("Curva acumulada · Rosin–Rammler"));
-        rrPanel.add(row(new JLabel("Base:"), rrBasisBox), BorderLayout.NORTH);
+        JPanel rrPanel = new JPanel(new BorderLayout(0, 6));
+        rrPanel.setOpaque(false);
+        JPanel basisRow = new JPanel(new BorderLayout(6, 0));
+        basisRow.setOpaque(false);
+        basisRow.add(new JLabel("Base:"), BorderLayout.WEST);
+        basisRow.add(rrBasisBox, BorderLayout.CENTER);
+        rrPanel.add(basisRow, BorderLayout.NORTH);
         rrPanel.add(rrView, BorderLayout.CENTER);
-        side.add(rrPanel);
-        JLabel legend = new JLabel("<html><b>Legenda:</b> verde = aceita · amarelo = revisar/inconclusivo · vermelho = possivel trinca · "
-                + "cinza = parcial na borda · tracejado = forma sem confianca · ciano = REF.<br>Clique numa pelota para revisar/calibrar. "
-                + "Roda = zoom · arrastar = mover · duplo clique = ajustar.</html>");
-        legend.setBorder(BorderFactory.createEmptyBorder(6, 2, 2, 2));
-        side.add(legend);
-        side.setPreferredSize(new Dimension(440, 600));
+        addCard(side, StudioShell.card("Curva acumulada · Rosin–Rammler", rrPanel));
+        JLabel legend = new JLabel("<html><body style='width:280px'>verde = aceita · amarelo = revisar/inconclusivo · vermelho = possível trinca · "
+                + "cinza = parcial na borda · tracejado = forma sem confiança · ciano = REF.<br>Clique numa pelota para revisar/calibrar.</body></html>");
+        legend.setForeground(StudioTheme.MUTED);
+        addCard(side, StudioShell.card("Legenda", legend));
+        // BoxLayout calcula a altura natural dos graficos; JScrollPane permite rolar.
+        side.setMinimumSize(new Dimension(200, 1));
 
         JPanel bottom = new JPanel(new BorderLayout(8, 0));
         bottom.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
         bottom.add(status, BorderLayout.CENTER);
         progress.setPreferredSize(new Dimension(220, 16));
-        bottom.add(progress, BorderLayout.EAST);
+        bottom.add(row(cancelButton, progress), BorderLayout.EAST);
 
         getContentPane().setLayout(new BorderLayout());
-        getContentPane().add(top, BorderLayout.NORTH);
-        getContentPane().add(view, BorderLayout.CENTER);
-        getContentPane().add(side, BorderLayout.EAST);
+        JPanel acquisition = StudioShell.stack(openButton, new JLabel("Câmera e resolução"), cameraBox, resolutionBox,
+                cameraButton, captureButton, backLiveButton, driverButton, lockFocus, lockExposure,
+                liveBox, liveTuneBox, liveSearchBox, liveScaleButton);
+        JButton calibrate = new JButton("Referências e escala…");
+        calibrate.addActionListener(e -> showScaleDialog());
+        JPanel calibration = StudioShell.stack(StudioShell.note("Prefira a esfera branca de 11 mm quando identificada com confiança. Referências fora do plano não corrigem perspectiva monocular perfeitamente."),
+                calibrate, StudioShell.note("Clique numa pelota na imagem para revisar a referência e sua exclusão das estatísticas. Sem escala confiável, os valores permanecem em pixels."));
+        JPanel segmentation = StudioShell.stack(new JLabel("Cena"), sceneBox, new JLabel("Perfil de tamanho"), profileBox,
+                new JLabel("Método de segmentação"), methodBox, new JLabel("Sensibilidade (%)"), sensitivity,
+                sam2Box, autoSuggest, roiButton, analyzeButton, detailButton, lightButton);
+        previewAiButton.setToolTipText("Carrega ONNX experimental por SHA-256 e gera apenas prévia; não altera medições nem PDF.");
+        previewAiButton.addActionListener(e -> runExperimentalPreview());
+        JPanel analysis = StudioShell.stack(new JLabel("Revisão e comparação"), extraToolbar,
+                new JLabel("Classificador de trincas"), crackBox, accelBox, accelInfo,
+                StudioShell.note("Sem indicação de trinca não comprova integridade estrutural. Escores de rede não são probabilidades calibradas."),
+                new JLabel("Segmentação multitarefa experimental"), previewAiButton,
+                StudioShell.note("Prévia em CPU: verde interior, vermelho borda, azul separação. Não influencia medições ou relatório."), segExtra);
+        JPanel results = StudioShell.stack(new JLabel("Camada de visualização"), viewBox, numbers,
+                new JLabel("Transparência da sobreposição"), opacitySlider, mapLabels, mapFixed,
+                new JLabel("Faixa fixa (mm)"), mapMin, mapMax, chartButton,
+                StudioShell.note("Histogramas por número e massa estimada não substituem peneiramento. Objetos incertos devem ser revisados."));
+        javax.swing.JList<String> history = new javax.swing.JList<>(historyModel);
+        history.setVisibleRowCount(7);
+        // Mostra o nome da pasta; o caminho completo fica na dica.
+        history.setCellRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override public Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index, boolean selected, boolean focus) {
+                super.getListCellRendererComponent(list, value, index, selected, focus);
+                File f = new File(String.valueOf(value));
+                setText(f.getName()); setToolTipText(f.getPath());
+                return this;
+            }
+        });
+        for (int i = 0; i < 15; i++) { String path = prefs.get("history." + i, ""); if (!path.isEmpty()) historyModel.addElement(path); }
+        JButton openHistory = new JButton("Abrir pasta selecionada");
+        openHistory.addActionListener(e -> { String path = history.getSelectedValue(); if (path != null) {
+            try { java.awt.Desktop.getDesktop().open(new File(path)); } catch (Exception ex) { error("Histórico", ex); }
+        } });
+        JButton previewHistory = new JButton("Ver PDF da exportação");
+        previewHistory.addActionListener(e -> { String path = history.getSelectedValue(); if (path != null) previewLatestPdf(new File(path)); });
+        JPanel report = StudioShell.stack(StudioShell.note("Exporta imagem original, segmentação, mapa, CSV, JSON e relatório PDF. Revise calibração, contornos e advertências antes de salvar. O PDF salvo aparece ao lado."),
+                saveButton, new JLabel("Histórico local de exportações"), new JScrollPane(history), previewHistory, openHistory);
+        JScrollPane inspector = new JScrollPane(side);
+        inspector.setBorder(BorderFactory.createEmptyBorder());
+        inspector.getViewport().setBackground(StudioTheme.BACKGROUND);
+        inspector.getVerticalScrollBar().setUnitIncrement(20);
+        inspector.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        studio = new StudioShell(view, inspector, new JPanel[]{acquisition, calibration, segmentation, analysis, results, report}, reportPreview);
+        getContentPane().add(studio, BorderLayout.CENTER);
         getContentPane().add(bottom, BorderLayout.SOUTH);
         pack();
+        StudioWindowChrome.apply(this);
+        setMinimumSize(new Dimension(980, 680));
         setLocationRelativeTo(null);
         setExtendedState(MAXIMIZED_BOTH);
 
@@ -298,7 +363,7 @@ final class MainFrame extends JFrame {
         installExtensions();
         updateControls();
         setStatus("Pronto. Abra a camera ou uma imagem.");
-        probeCameras();
+        if (!Boolean.getBoolean("pelotavision.smoke")) probeCameras();
     }
 
     /** Ícone da janela e da barra de tarefas (mesmo desenho do .ico do instalador e do Android). */
@@ -388,6 +453,11 @@ final class MainFrame extends JFrame {
 
     /** Pontos de extensao para recursos adicionais (calibracoes, trincas, ajustes). */
     private void installExtensions() { Features.install(this); }
+
+    private static void addCard(JPanel side, JPanel card) {
+        side.add(card);
+        side.add(Box.createVerticalStrut(10));
+    }
 
     static JPanel row(Component... cs) {
         JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 3));
@@ -728,6 +798,8 @@ final class MainFrame extends JFrame {
         if (session != null) session.release();
         Granulometry.Settings keep = session == null ? null : session.scale();
         session = s;
+        view.setExperimental(null);
+        if (viewBox.getSelectedIndex() >= 6) viewBox.setSelectedIndex(1);
         // Escala digitada continua valendo; referencias medidas pertencem a foto anterior.
         if (keep != null && "pixels_per_mm".equals(keep.calibrationSource)) session.setScale(keep);
         else if (keep != null) setStatus("Nova imagem: a escala medida na foto anterior foi removida. Calibre de novo ou digite px/mm.");
@@ -790,7 +862,8 @@ final class MainFrame extends JFrame {
                     refreshPhoto();
                     CrackClassifierChoice.Resolution cr = DesktopAnalysis.lastResolution;
                     setStatus("Analise concluida: " + s.active().circles.size() + " propostas" + (out.suggestions != null && out.suggestions.cancelled ? " (busca cancelada; ajuste atual)" : "") + "."
-                            + (cr == null ? "" : " Trincas: " + cr.effective.label + (cr.message != null ? " — " + cr.message : "") + "."));
+                            + (cr == null ? "" : " Trincas: " + cr.effective.label + (cr.message != null ? " — " + cr.message : "") + ".")
+                            + (out.result.method.contains("+sam2_") && Sam2Refiner.lastReport() != null ? " " + Sam2Refiner.lastReport().summary() + "." : ""));
                     if (cr != null && cr.fellBack()) JOptionPane.showMessageDialog(this, cr.message, "Classificador de trincas", JOptionPane.WARNING_MESSAGE);
                     if (warning != null) JOptionPane.showMessageDialog(this, warning, "Escala", JOptionPane.WARNING_MESSAGE);
                 });
@@ -1000,6 +1073,7 @@ final class MainFrame extends JFrame {
         }
     }
     void manualLoad(PhotoSession s) { loadPhoto(s); }
+    void studioStage(int index) { studio.select(index); }
 
     private void editRegion() {
         if (mode == Mode.LIVE) { editLiveRegion(); return; }
@@ -1155,13 +1229,95 @@ final class MainFrame extends JFrame {
         prefs.put("lastTestName", choice.testName == null ? "" : choice.testName);
         try {
             List<File> files = DesktopExport.save(folder, s, config(), choice.testName);
-            StringBuilder t = new StringBuilder((choice.testName == null ? "" : "Teste: " + choice.testName + "\n") + "Arquivos salvos em\n" + folder + "\n\n");
-            for (File f : files) t.append(f.getName()).append('\n');
-            JOptionPane.showMessageDialog(this, t.toString(), "Resultado salvo", JOptionPane.INFORMATION_MESSAGE);
-            setStatus("Resultados salvos em " + folder);
+            rememberExport(folder);
+            File pdf = files.stream().filter(f -> f.getName().endsWith("_relatorio.pdf")).findFirst().orElse(null);
+            if (pdf != null) {
+                showReport(pdf);
+                setStatus("Resultados salvos em " + folder + " · relatório aberto na etapa Relatório");
+            } else {
+                StringBuilder t = new StringBuilder("Arquivos salvos em\n" + folder + "\n\nO PDF não foi gerado; consulte o JSON.\n\n");
+                for (File f : files) t.append(f.getName()).append('\n');
+                JOptionPane.showMessageDialog(this, t.toString(), "Resultado salvo", JOptionPane.WARNING_MESSAGE);
+                setStatus("Resultados salvos em " + folder);
+            }
         } catch (Exception ex) {
             error("Salvar", ex);
         }
+    }
+
+    void showReport(File pdf) {
+        reportPreview.open(pdf);
+        studio.select(StudioShell.STAGES.length - 1);
+    }
+
+    private void previewLatestPdf(File folder) {
+        File[] pdfs = folder.listFiles((dir, name) -> name.endsWith("_relatorio.pdf"));
+        if (pdfs == null || pdfs.length == 0) { info("Nenhum relatório PDF nesta pasta."); return; }
+        java.util.Arrays.sort(pdfs, java.util.Comparator.comparing(File::getName));
+        showReport(pdfs[pdfs.length - 1]);
+    }
+
+    private void runExperimentalPreview() {
+        PhotoSession selected = session;
+        if (selected == null || mode != Mode.PHOTO) { info("Abra uma imagem antes de testar a IA."); return; }
+        String note = "Modelo de pesquisa treinado com poucas imagens e pseudo-rótulos. "
+                + "Pode errar fortemente, inclusive marcar o fundo. Não foi validado.\n\n"
+                + "A prévia não altera contagem, granulometria, trincas, calibração nem relatórios. Continuar?";
+        if (JOptionPane.showConfirmDialog(this, note, "IA multitarefa experimental", JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.WARNING_MESSAGE) != JOptionPane.OK_OPTION) return;
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Selecionar modelo multitarefa experimental ONNX (SHA-256 conferido)");
+        chooser.setFileFilter(new FileNameExtensionFilter("Modelo ONNX", "onnx"));
+        File suggested = new File(System.getProperty("user.home"), "source/repos/PelotaVision-local/experiments/studio-instances-20261103/multitask-20261103T184116Z-71782b5b42/tiny_multitask_cpu_128.onnx");
+        if (suggested.isFile()) chooser.setSelectedFile(suggested);
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        startExperimentalPreview(chooser.getSelectedFile());
+    }
+
+    /** Mesma execução após o seletor/confirmação; usada também em teste do pacote. */
+    void startExperimentalPreview(File model) {
+        PhotoSession selected = session;
+        if (selected == null || mode != Mode.PHOTO) throw new IllegalStateException("Imagem indisponível para prévia");
+        Mat pixels = selected.analyzed.clone();
+        AtomicBoolean request = new AtomicBoolean(false);
+        cancel = request;
+        mode = Mode.BUSY;
+        progress.setIndeterminate(true);
+        setStatus("IA experimental em CPU: processando blocos; sem alterar a análise…");
+        updateControls();
+        worker.execute(() -> {
+            ExperimentalMultitask.Result result = null;
+            Throwable failure = null;
+            try { result = ExperimentalMultitask.infer(model, pixels, request::get); }
+            catch (Exception | OutOfMemoryError ex) { failure = ex; }
+            finally { pixels.release(); }
+            final ExperimentalMultitask.Result completed = result;
+            final Throwable problem = failure;
+            SwingUtilities.invokeLater(() -> {
+                if (session != selected) return;
+                progress.setIndeterminate(false); progress.setValue(0); cancel = null;
+                mode = Mode.PHOTO;
+                if (problem == null && !request.get()) {
+                    view.setExperimental(completed);
+                    viewBox.setSelectedIndex(6);
+                    setStatus(String.format(Locale.ROOT, "IA experimental: grade %d×%d · entropia não calibrada %.3f · sem efeito nas estatísticas.",
+                            completed.processingWidth, completed.processingHeight, completed.meanEntropy));
+                } else if (problem instanceof java.util.concurrent.CancellationException || request.get()) {
+                    setStatus("Prévia de IA cancelada; análise anterior preservada.");
+                } else {
+                    error("IA experimental", problem == null ? new RuntimeException("Nenhum resultado") : problem);
+                }
+                updateControls();
+            });
+        });
+    }
+
+    void rememberExport(File folder) {
+        String path = folder.getAbsolutePath();
+        historyModel.removeElement(path);
+        historyModel.add(0, path);
+        while (historyModel.size() > 15) historyModel.remove(historyModel.size() - 1);
+        for (int i = 0; i < 15; i++) prefs.put("history." + i, i < historyModel.size() ? historyModel.get(i) : "");
     }
 
     // ---------------- Utilidades ----------------
@@ -1189,6 +1345,7 @@ final class MainFrame extends JFrame {
         detailButton.setEnabled(!busy && photo);
         detailButton.setText(session != null && session.output() != null && session.output().detailed != null ? "Detalhada ✓…" : "Detalhada…");
         lightButton.setEnabled(!busy && (photo || (mode == Mode.LIVE && running)));
+        previewAiButton.setEnabled(!busy && photo);
         if (mode == Mode.LIVE) lightButton.setText(liveLight == LiveFrameAnalysis.Light.OFF ? "Luz ao vivo…" : "Luz ao vivo: " + liveLight.label() + "…");
         else lightButton.setText(lowLightMode == null ? "Luz / imagem escura…" : "Luz: " + LowLightInfo.label(lowLightMode) + "…");
         liveScaleButton.setEnabled(!busy && running && mode == Mode.LIVE);
@@ -1236,6 +1393,9 @@ final class MainFrame extends JFrame {
 
     private String accelerationReport() {
         StringBuilder s = new StringBuilder(HardwareAcceleration.status());
+        s.append("\n").append(Sam2Refiner.status());
+        Sam2Refiner.Report sr = Sam2Refiner.lastReport();
+        if (sr != null) s.append("\nUltima analise: ").append(sr.summary());
         s.append("\n\nCUDA requer GPU NVIDIA, driver atualizado e CUDA + cuDNN instalados no Windows (nao vao no pacote).");
         s.append("\nSem CUDA, o ONNX Runtime roda na CPU. Sem paridade com o OpenCV DNN, a rede continua no OpenCV.");
         return s.toString();

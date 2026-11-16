@@ -15,7 +15,7 @@ import org.junit.Test;
 /**
  * 0.5.2: relatório PDF do Windows, sem OpenCV nativo. Mesmo conteúdo do Android (ReportPdfContent),
  * figuras separadas (original, filtrada, segmentada, mapa, resumo) e texto com acentos e símbolos.
- * Grava o exemplo em verification/pdf-windows-0.5.2/.
+ * Grava o exemplo em build/test-artifacts/pdf-windows-0.5.2/.
  */
 public class DesktopPdfReportTest {
     @Test public void pdfHasSharedSectionsAndSeparateFiguresIncludingFiltered() throws Exception {
@@ -74,7 +74,7 @@ public class DesktopPdfReportTest {
                     "AJUSTE ROSIN", "Massa estimada (", "F(d) = 100", "Figura 6 · Distribuição granulométrica · histograma e Rosin"})
                 assertTrue("PDF sem \"" + s + "\"", text.contains(s));
         }
-        File dir = new File(System.getProperty("pelotavision.validationDir", "../verification"), "pdf-windows-0.5.2");
+        File dir = TestPaths.artifacts("pdf-windows-0.5.2");
         dir.mkdirs();
         Files.write(new File(dir, "exemplo_relatorio.pdf").toPath(), pdf);
     }

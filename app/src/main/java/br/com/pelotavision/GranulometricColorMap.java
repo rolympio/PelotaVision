@@ -74,9 +74,9 @@ final class GranulometricColorMap extends View {
         int alpha = GranulometryColorScale.alpha(visuals.mapOpacity), rimAlpha = GranulometryColorScale.alpha(GranulometryColorScale.rimOpacity(visuals.mapOpacity));
         Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);rim.setStyle(Paint.Style.STROKE);
         for (PelletDetector.Detection d : result.circles) {
-            Granulometry.Item item = new Granulometry.Item(d.radius * 2, d.partial, d.needsReview);
+            Granulometry.Item item = Granulometry.Item.of(d);
             if (!GranulometryColorScale.colored(distribution, item)) continue;
-            int c = scale.rgb(distribution.diameterMm(item.diameterPx));
+            int c = scale.rgb(distribution.diameterMm(item));
             fill.setColor(Color.argb(alpha, (c >> 16) & 255, (c >> 8) & 255, c & 255));
             float x = left + (float) d.x * k, y = top + (float) d.y * k;
             float a = (float) (d.semiMajor > 0 ? d.semiMajor : d.radius) * k, b = (float) (d.semiMinor > 0 ? d.semiMinor : d.radius) * k;
@@ -104,10 +104,10 @@ final class GranulometricColorMap extends View {
         halo.setStrokeWidth(3 * density);
         java.util.List<RectF> used = new java.util.ArrayList<>();
         for (PelletDetector.Detection d : result.circles) {
-            Granulometry.Item item = new Granulometry.Item(d.radius * 2, d.partial, d.needsReview);
+            Granulometry.Item item = Granulometry.Item.of(d);
             if (!GranulometryColorScale.colored(distribution, item)) continue;
             if (d.radius * k < 9 * density) continue;
-            String label = HistogramView.number(distribution.diameterMm(item.diameterPx));
+            String label = HistogramView.number(distribution.diameterMm(item));
             float x = left + (float) d.x * k, y = top + (float) d.y * k + size / 3;
             float half = text.measureText(label) / 2 + 2;
             RectF r = new RectF(x - half, y - size, x + half, y + 3);
