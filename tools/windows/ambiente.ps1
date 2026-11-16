@@ -315,7 +315,14 @@ function New-InstallerFromLatest {
     if (!(Test-Path -LiteralPath $latest)) { throw 'Nenhum pacote Windows testado ainda. Rode COMPILAR_PELOTAVISION_COMPLETO.bat.' }
     $meta = Get-Content -LiteralPath $latest -Raw | ConvertFrom-Json
     if (!$meta.packaged_gui_test) { throw 'O ultimo pacote nao passou no ensaio da janela; instalador nao gerado.' }
-    $dist = Split-Path ([string]$meta.executable) -Parent
+    $exePath = [string]$meta.executable
+    if (!(Test-Path -LiteralPath $exePath)) {
+        # Pasta movida (ex.: C: -> D:): reaproveita o trecho apos "results\" sob a area local atual.
+        $i = $exePath.ToLowerInvariant().LastIndexOf('\results\')
+        if ($i -ge 0) { $exePath = Join-Path $LocalRoot $exePath.Substring($i + 1) }
+    }
+    if (!(Test-Path -LiteralPath $exePath)) { throw "Executavel do ultimo pacote nao encontrado: $($meta.executable)" }
+    $dist = Split-Path $exePath -Parent
     $out = Split-Path (Split-Path $dist -Parent) -Parent
     Write-Output "Pacote: $dist | versao $($meta.version) | commit $($meta.commit)"
     if ([string]$meta.commit -ne $commit) { Write-Warning "O pacote e do commit $($meta.commit); o repositorio esta em $commit. Para incluir as mudancas novas, compile de novo." }
