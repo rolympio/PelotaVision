@@ -87,7 +87,11 @@ function Get-Jdk {
 }
 
 function Find-AndroidSdk {
-    foreach ($sdk in @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT, "$env:LOCALAPPDATA\Android\Sdk", 'C:\Projetos\tools\android-sdk')) {
+    # 17/11/2026: também procura ao lado do repositório e em D:\Projetos (migração do C:).
+    $parent = Split-Path -Parent $repo
+    foreach ($sdk in @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT, "$env:LOCALAPPDATA\Android\Sdk",
+            "$parent\tools\android-sdk", "$parent\PelotaVision-local\tools\android-sdk",
+            'D:\Projetos\tools\android-sdk', 'D:\Android\Sdk', 'C:\Projetos\tools\android-sdk')) {
         if ($sdk -and (Test-Path -LiteralPath "$sdk\platforms\android-35\android.jar") -and
             (Test-Path -LiteralPath "$sdk\build-tools\35.0.0\aapt2.exe")) { return $sdk }
     }
