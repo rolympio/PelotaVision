@@ -49,7 +49,10 @@ public final class ReportPdfContent {
     /** Título e legenda de uma figura; a imagem fica com a plataforma. */
     public static final class FigureText {
         public final String title, caption;
-        FigureText(String title, String caption) { this.title = title; this.caption = caption; }
+        /** 0.18.0: papel da imagem no novo layout (ReportLayout.Role) ou null quando não entra nele. */
+        public final ReportLayout.Role role;
+        FigureText(String title, String caption) { this(title, caption, null); }
+        FigureText(String title, String caption, ReportLayout.Role role) { this.title = title; this.caption = caption; this.role = role; }
     }
 
     // ---------- blocos de texto ----------
@@ -201,19 +204,19 @@ public final class ReportPdfContent {
     private static String scope(JSONObject json) { return json.optJSONObject("region_of_interest") != null ? "ROI ampliada. " : ""; }
 
     public static FigureText original(JSONObject json) {
-        return new FigureText("Imagem original", scope(json) + "Pixels originais da foto, sem filtro e sem marcações. Elipses, diâmetros e trincas são medidos nestes pixels.");
+        return new FigureText("Imagem original", scope(json) + "Pixels originais da foto, sem filtro e sem marcações. Elipses, diâmetros e trincas são medidos nestes pixels.", ReportLayout.Role.ORIGINAL);
     }
     public static FigureText filtered(JSONObject json) {
-        return new FigureText("Imagem filtrada · " + treatmentLabel(json), scope(json) + "Tratamento de iluminação usado para propor os objetos. Serve à visualização e à segmentação; não é usado nas medidas.");
+        return new FigureText("Imagem filtrada · " + treatmentLabel(json), scope(json) + "Tratamento de iluminação usado para propor os objetos. Serve à visualização e à segmentação; não é usado nas medidas.", ReportLayout.Role.FILTERED);
     }
     public static FigureText segmented(boolean filtered) {
-        return new FigureText("Imagem segmentada", (filtered ? "Sobre a imagem filtrada. " : "") + "Elipses ajustadas e possíveis trincas. Vermelho: possível trinca · amarelo: revisão · tracejado: forma sem ajuste.");
+        return new FigureText("Imagem segmentada", (filtered ? "Sobre a imagem filtrada. " : "") + "Elipses ajustadas e possíveis trincas. Vermelho: possível trinca · amarelo: revisão · tracejado: forma sem ajuste.", ReportLayout.Role.SEGMENTED);
     }
     public static FigureText composite(boolean filtered) {
         return new FigureText("Resultado da análise", "Original sem marcações, " + (filtered ? "segmentação sobre a imagem filtrada" : "elipses ajustadas") + ", possíveis trincas e histograma (todas × trincadas).");
     }
     public static FigureText map(boolean filtered) {
-        return new FigureText("Mapa granulométrico", (filtered ? "Sobre a imagem filtrada. " : "") + "Cor pela classe de diâmetro equivalente de cada pelota incluída; legenda na própria imagem.");
+        return new FigureText("Mapa granulométrico", (filtered ? "Sobre a imagem filtrada. " : "") + "Cor pela classe de diâmetro equivalente de cada pelota incluída; legenda na própria imagem.", ReportLayout.Role.MAP);
     }
     /** Figura de página inteira: histograma + curva acumulada com o ajuste RR e a fórmula. */
     public static FigureText distributionFigure(JSONObject json) {

@@ -67,12 +67,16 @@ public class DesktopPdfReportTest {
         byte[] pdf = DesktopPdfReport.render(json, figures);
         assertEquals("%PDF", new String(pdf, 0, 4, java.nio.charset.StandardCharsets.US_ASCII));
         assertTrue(DesktopPdfReport.pages(pdf) >= 3);
+        assertTrue("laudo enxuto", DesktopPdfReport.pages(pdf) <= 5);
         try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(pdf)) {
             String text = new org.apache.pdfbox.text.PDFTextStripper().getText(d);
-            for (String s : new String[]{"Relatório de análise de pelotas", "ILUMINAÇÃO E TRATAMENTO DE IMAGEM ESCURA", "Redução de ruído + CLAHE",
-                    "DISTRIBUIÇÃO GRANULOMÉTRICA", "Figura 1 · Imagem original", "Figura 2 · Imagem filtrada", "Figura 3 · Imagem segmentada", "Figura 4 · Mapa granulométrico", "Figura 5 · Resumo", "Disco 3 · umidade 9,2%",
-                    "AJUSTE ROSIN", "Massa estimada (", "F(d) = 100", "Figura 6 · Distribuição granulométrica · histograma e Rosin"})
+            // 0.18.0: laudo da Planta Piloto (layout comum do núcleo) com página final de rastreabilidade.
+            for (String s : new String[]{"Planta Piloto da Pelotização", "Relatório de Análise Granulométrica de Pelotas por Imagem",
+                    "Disco 3 · umidade 9,2%", "Pelotas medidas", "Aspecto geral da amostra", "Segmentação e triagem de trincas",
+                    "Distribuição granulométrica por número", "Histograma", "Curva granulométrica acumulada", "Rosin", "Massa est.",
+                    "F(d) = 100", "Rastreabilidade", "Tratamento de iluminação", "Redução de ruído + CLAHE", "EXPERIMENTAL"})
                 assertTrue("PDF sem \"" + s + "\"", text.contains(s));
+            assertTrue(text.contains("página " + DesktopPdfReport.pages(pdf) + "/" + DesktopPdfReport.pages(pdf)));
         }
         File dir = TestPaths.artifacts("pdf-windows-0.5.2");
         dir.mkdirs();
