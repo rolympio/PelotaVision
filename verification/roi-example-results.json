@@ -7,9 +7,6 @@
       "trained_model": false,
       "model_scope": "experimental; provisional labels; synthetic or unverified scenes; no real production validation",
       "score_type": "uncalibrated forest score, not a probability",
-      "classifier": "heuristic fallback",
-      "crack_crop_pixels": "original analyzed grayscale; never the super-resolution image",
-      "comparison": null,
       "trace_method": "blackhat connected-line geometry; not trained crack segmentation",
       "sensitivity": 50,
       "analysis_ms": 0,
@@ -2624,7 +2621,7 @@
       "top_px": 86.5,
       "right_px": 1382.4,
       "bottom_px": 778.5,
-      "coordinates": "full upright preview coordinates; active analysis may be cropped at 1:1 pixel scale, recorded in processing_scope",
+      "coordinates": "upright analyzed photo pixels; image not cropped or resized by ROI",
       "inclusion_rule": "entire detected ellipse inside ROI; unfitted seed boundary retained",
       "excluded_outside_or_crossing": 65
     }
@@ -2637,9 +2634,6 @@
       "trained_model": false,
       "model_scope": "experimental; provisional labels; synthetic or unverified scenes; no real production validation",
       "score_type": "uncalibrated forest score, not a probability",
-      "classifier": "heuristic fallback",
-      "crack_crop_pixels": "original analyzed grayscale; never the super-resolution image",
-      "comparison": null,
       "trace_method": "blackhat connected-line geometry; not trained crack segmentation",
       "sensitivity": 50,
       "analysis_ms": 0,
@@ -3952,7 +3946,7 @@
       "top_px": 86.5,
       "right_px": 1114,
       "bottom_px": 778.5,
-      "coordinates": "full upright preview coordinates; active analysis may be cropped at 1:1 pixel scale, recorded in processing_scope",
+      "coordinates": "upright analyzed photo pixels; image not cropped or resized by ROI",
       "inclusion_rule": "entire detected ellipse inside ROI; unfitted seed boundary retained",
       "excluded_outside_or_crossing": 101
     }
