@@ -79,6 +79,12 @@ public final class MainActivity extends ComponentActivity {
     private boolean nativeReady=false,binding=false,numbers=true,torchOn=false;
     private int profile=3,sensitivity=75;
     private boolean autoSuggest=true;
+    /** 0.18.0: ROI automática (recipiente redondo/retangular, trecho carregado de correia, campo cheio). */
+    private boolean autoRoi=true;
+    private final AutoRoi.Stabilizer liveAutoRoi=new AutoRoi.Stabilizer();
+    private volatile long lastAutoRoi;
+    /** Proposta da ROI automática da foto atual (vai para o JSON). */
+    private AutoRoi.Result photoAutoRoi;
     private double minimumExpectedMm=5;
     private DetectionTuner.Report photoSuggestions;
     private DetectionTuner.Option photoOption;
@@ -341,7 +347,9 @@ public final class MainActivity extends ComponentActivity {
             DetectionTuner.Option option=new DetectionTuner.Option(profile,sensitivity,method(),beltScene);
             gray=ImageCodec.luma(image);
             synchronized(liveFrameLock){if(lastLiveGray==null)lastLiveGray=new Mat();gray.copyTo(lastLiveGray);}
-            LiveFrameAnalysis.Request request=new LiveFrameAnalysis.Request(option,liveRoiFraction,liveLight,liveScale,rrBasis(),liveShowFiltered);
+            LiveFrameAnalysis.RoiFraction roiFraction=liveRoiFraction;
+            if(roiFraction==null&&autoRoi)roiFraction=liveAutoFraction(gray,now);
+            LiveFrameAnalysis.Request request=new LiveFrameAnalysis.Request(option,roiFraction,liveLight,liveScale,rrBasis(),liveShowFiltered);
             Bitmap filtered=null;
             LiveFrameAnalysis.Output out=LiveFrameAnalysis.run(gray,request);
             try{if(out.filtered!=null){filtered=Bitmap.createBitmap(out.filtered.cols(),out.filtered.rows(),Bitmap.Config.ARGB_8888);org.opencv.android.Utils.matToBitmap(out.filtered,filtered);}}
@@ -350,6 +358,22 @@ public final class MainActivity extends ComponentActivity {
             runOnUiThread(()-> {if(!isDestroyed()&&mode==Mode.LIVE&&revision==epoch)showLiveOutput(out,shown);});
         } catch(Exception e) {runOnUiThread(()-> {if(!isDestroyed()&&mode==Mode.LIVE)hint.setText("Falha na análise. Tente fotografar ou abrir uma imagem.");});}
         finally {if(gray!=null)gray.release();image.close();}
+    }
+    /** 0.18.0: ROI automática no ao vivo, refeita a cada ~1 s e estabilizada entre quadros; vale enquanto o operador não desenhar uma área. */
+    private LiveFrameAnalysis.RoiFraction liveAutoFraction(Mat gray,long now){
+        int w=gray.cols(),h=gray.rows();
+        if(now-lastAutoRoi>1000){
+            lastAutoRoi=now;
+            try{
+                byte[] g=new byte[w*h];Mat c=gray.isContinuous()?gray:gray.clone();
+                try{c.get(0,0,g);}finally{if(c!=gray)c.release();}
+                AutoRoi.Result r=AutoRoi.detectAnySize(g,w,h);
+                liveAutoRoi.update(r.usable()?r:null,w,h);
+            }catch(RuntimeException ignored){}
+        }
+        AutoRoi.Result cur=liveAutoRoi.current();
+        if(cur==null||cur.region==null||cur.region.right>w+1e-7||cur.region.bottom>h+1e-7)return null;
+        try{return LiveFrameAnalysis.toFraction(cur.region,w,h);}catch(RuntimeException e){return null;}
     }
     private void showLiveOutput(LiveFrameAnalysis.Output out,Bitmap filtered){
         lastLiveResult=out.result;lastResult=SystemClock.elapsedRealtime();
@@ -368,7 +392,8 @@ public final class MainActivity extends ComponentActivity {
         }
         if(!liveCharts&&chartSlot.getVisibility()==View.VISIBLE)setChartsVisibility(View.GONE);
         String light=out.appliedLight==LowLightPreprocessor.Mode.ORIGINAL?"":" · luz: "+LowLightInfo.label(out.appliedLight);
-        scaleLabel.setText((liveRoiFraction==null?"":"ROI · ")+out.scaleNote+light);
+        AutoRoi.Result auto=liveRoiFraction==null&&autoRoi?liveAutoRoi.current():null;
+        scaleLabel.setText((liveRoiFraction!=null?"ROI · ":auto!=null&&auto.region!=null?"ROI auto: "+auto.kind.label+" · ":"")+out.scaleNote+light);
         if(liveScale!=null&&!out.physical()&&!liveScale.settings.pixelsOnly()&&!liveScaleMismatchNotified){liveScaleMismatchNotified=true;toast("A escala não vale para este enquadramento. Recalibre em Escala / mm.");}
         applyViewMode();
     }
@@ -614,8 +639,20 @@ public final class MainActivity extends ComponentActivity {
         try {
             int[] sourceSize=ImageCodec.originalUprightSize(file);
             bitmap=ImageCodec.upright(file);
-            AnalysisWindow window=new AnalysisWindow(bitmap.getWidth(),bitmap.getHeight(),replacingCurrent?interestRegion:null);window.requireDetectable();
-            fullGray=ImageCodec.gray(bitmap);gray=window.region==null?fullGray:window.cropGray(fullGray);
+            fullGray=ImageCodec.gray(bitmap);
+            // 0.18.0: foto nova sem área definida recebe a ROI automática antes da primeira análise.
+            InterestRegion startRegion=replacingCurrent?interestRegion:null;AutoRoi.Result proposal=replacingCurrent?photoAutoRoi:null;
+            if(!replacingCurrent&&autoRoi){
+                try{
+                    byte[] g=new byte[fullGray.cols()*fullGray.rows()];Mat c=fullGray.isContinuous()?fullGray:fullGray.clone();
+                    try{c.get(0,0,g);}finally{if(c!=fullGray)c.release();}
+                    proposal=AutoRoi.detectAnySize(g,fullGray.cols(),fullGray.rows());
+                    if(proposal.usable()){new AnalysisWindow(bitmap.getWidth(),bitmap.getHeight(),proposal.region).requireDetectable();startRegion=proposal.region;}
+                }catch(RuntimeException ignored){startRegion=null;}
+            }
+            final AutoRoi.Result autoProposal=proposal;
+            AnalysisWindow window=new AnalysisWindow(bitmap.getWidth(),bitmap.getHeight(),startRegion);window.requireDetectable();
+            gray=window.region==null?fullGray:window.cropGray(fullGray);
             DetectionTuner.Option current=replacingCurrent&&photoParameters==cfg&&photoOption!=null?photoOption:new DetectionTuner.Option(profile,sensitivity,method(),beltScene);
             DetectionTuner.Report suggestions=replacingCurrent&&window.sameScope(suggestionWindow)?photoSuggestions:null;
             DetectionTuner.Option selected=current;PelletDetector.Result local;
@@ -666,8 +703,9 @@ public final class MainActivity extends ComponentActivity {
                 releasePreviousPhoto();photoBitmap=ready;photoFiltered=filteredReady;photoFile=file;photoMime=mime;photoResult=result;photoCracks=cracks;photoParameters=selectedOption.parameters;photoOption=selectedOption;photoSuggestions=searchReport;
                 photoAnalysisWindow=window;suggestionWindow=searchReport==null?null:window;roiNeedsAnalysis=false;
                 originalWidth=sourceSize[0];originalHeight=sourceSize[1];scaleSettings=previousScale;
-                photoAllResult=result;photoAllCracks=cracks;photoLowLight=analyzedLight;interestRegion=window.region;cropRoiReport=interestRegion!=null;
+                photoAllResult=result;photoAllCracks=cracks;photoLowLight=analyzedLight;interestRegion=window.region;cropRoiReport=interestRegion!=null;photoAutoRoi=autoProposal;
                 frozen.setVisibility(View.VISIBLE);mode=Mode.PHOTO;applyRegion(interestRegion);
+                if(!replacingCurrent&&autoProposal!=null&&autoProposal.usable()&&AnalysisWindow.sameRegion(window.region,autoProposal.region))toast("Área automática: "+autoProposal.describe());
                 if(searchReport!=null)hint.setText((window.region==null?"Foto":"ROI")+": "+(searchReport.cancelled?"busca cancelada; aplicado o ajuste atual.":searchReport.weak()?"sugestão com pouca evidência; confira os contornos.":"ajuste sugerido aplicado. Toque em Sugestão para comparar.")+(minimumExpectedMm>0&&scaleSettings==null?" Calibre pela medida real para verificar "+HistogramView.number(minimumExpectedMm)+" mm.":""));
                 if(referenceInvalidated){hint.setText("O contorno da referência mudou. Toque novamente no objeto para calibrar.");toast("Referência alterada pela reanálise; escala removida.");}
                 if(camera!=null&&torchOn){camera.getCameraControl().enableTorch(false);torchOn=false;torch.setText("Luz");}
@@ -809,13 +847,13 @@ public final class MainActivity extends ComponentActivity {
         final Bitmap exportedFiltered=filteredCopy;
         File source=photoFile;String mime=photoMime;PelletDetector.Result result=photoResult;PelletDetector.Parameters cfg=photoParameters;
         Granulometry.Distribution exportedDistribution=distribution;CrackAnalysis exportedCracks=photoCracks;final ReportVisuals exportedVisuals=visuals;final CrackClassifierChoice.Resolution exportedChoice=crackResolution;final MobileNetCrackModel net=crackNetwork;final String exportedNetwork=net==null?null:net.id;
-        InterestRegion exportedRegion=interestRegion;int outside=regionExcludedCount();final boolean exportedCrop=cropRoiReport;final DetailedAnalysis.Report exportedDetail=photoDetailReport;final LowLightInfo exportedLight=photoLowLight;
+        InterestRegion exportedRegion=interestRegion;final AutoRoi.Result exportedAuto=photoAutoRoi;int outside=regionExcludedCount();final boolean exportedCrop=cropRoiReport;final DetailedAnalysis.Report exportedDetail=photoDetailReport;final LowLightInfo exportedLight=photoLowLight;
         DetectionTuner.Report exportedSuggestions=rankedSuggestions();DetectionTuner.Option exportedOption=photoOption;
         final RosinRammler.Basis exportedBasis=rrBasis();
         setBusy(Mode.SAVING,"Salvando…");
         worker.execute(()-> {
             try {
-                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork,exportedLight,exportedFiltered,outputFolder,testName,exportedBasis);
+                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork,exportedLight,exportedFiltered,outputFolder,testName,exportedBasis,exportedAuto);
                 runOnUiThread(()-> {if(!isDestroyed()){
                     mode=Mode.PHOTO;updateControls();final String dir=saved.folder==null?"PelotaVision":"PelotaVision/"+saved.folder;
                     hint.setText(saved.pdf!=null?"Relatório PDF salvo em Downloads / "+dir+".":"Histograma salvo no arquivo _resultado.png. Dados em Downloads / "+dir+".");
@@ -1346,6 +1384,7 @@ public final class MainActivity extends ComponentActivity {
         if(mode==Mode.PROCESSING||mode==Mode.SAVING)return;
         LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(10),dp(20),dp(8));ScrollView scroll=new ScrollView(this);scroll.addView(content);
         CheckBox auto=new CheckBox(this);auto.setText("Sugerir ajuste ao abrir ou fotografar");auto.setTextColor(Color.WHITE);auto.setChecked(autoSuggest);auto.setTag("auto_suggest");content.addView(auto);
+        CheckBox autoArea=new CheckBox(this);autoArea.setText("Área automática (recipiente, bandeja ou correia carregada)");autoArea.setTextColor(Color.WHITE);autoArea.setChecked(autoRoi);autoArea.setTag("auto_roi");content.addView(autoArea);
         content.addView(text("Diâmetro mínimo esperado (mm; 0 desativa)",13,Color.WHITE));EditText minimum=new EditText(this);minimum.setTextColor(Color.WHITE);minimum.setSingleLine();minimum.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);minimum.setText(Double.toString(minimumExpectedMm));minimum.setTag("minimum_expected_mm");content.addView(minimum);
         content.addView(text("O mínimo só pontua com calibração física independente. Não apaga detecções nem recorta o histograma. Rosin–Rammler não é normal e não é imposta à amostra.",12,Color.LTGRAY));
         content.addView(text("Cena",14,Color.WHITE));android.widget.RadioGroup scenes=new android.widget.RadioGroup(this);int[] sceneIds={View.generateViewId(),View.generateViewId()};String[] sceneLabels={"Bancada · amostra espalhada, pelotas grandes na foto","Correia · pelotas pequenas e numerosas (até 5000 por foto)"};for(int i=0;i<2;i++){android.widget.RadioButton radio=new android.widget.RadioButton(this);radio.setId(sceneIds[i]);radio.setText(sceneLabels[i]);radio.setTextColor(Color.WHITE);radio.setTextSize(12);scenes.addView(radio);}scenes.check(sceneIds[beltScene?1:0]);content.addView(scenes);
@@ -1374,16 +1413,21 @@ public final class MainActivity extends ComponentActivity {
         dialog.setOnShowListener(d->{
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{try{minimumExpectedMm=minimumInput(minimum);getPreferences(MODE_PRIVATE).edit().putString("expected_minimum_mm",Double.toString(minimumExpectedMm)).apply();refreshSuggestionLabel();dialog.dismiss();if(mode==Mode.PHOTO)showSuggestions();else new AlertDialog.Builder(this).setTitle("Sugestão na foto").setMessage("Ao abrir ou fotografar, são comparados quatro perfis e três sensibilidades nos métodos de bordas e LoG; com a rede neural escolhida como método, ela também entra com os quatro perfis. LoG também é testado quando não era o ajuste atual. A melhor pontuação inicia a análise. Toque em Sugestão para comparar ou manter um ajuste manual. Sem escala física, a comparação é em pixels; depois de calibrar, o limite em mm pode mudar a recomendação, sem trocar os contornos automaticamente.").setPositiveButton("Entendi",null).show();}catch(IllegalArgumentException e){error.setText(e.getMessage());}});
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{
-                minimumExpectedMm=minimumInput(minimum);autoSuggest=auto.isChecked();for(int i=0;i<optionIds.length;i++)if(sizes.getCheckedRadioButtonId()==optionIds[i])profile=i;for(int i=0;i<methodIds.length;i++)if(methods.getCheckedRadioButtonId()==methodIds[i])detectionMethod=i;beltScene=scenes.getCheckedRadioButtonId()==sceneIds[1];sensitivity=slider.getProgress();applyParameters();epoch++;
-                getPreferences(MODE_PRIVATE).edit().putInt("adaptive_profile",profile).putInt("sensitivity",sensitivity).putBoolean("legacy_detection",detectionMethod==DetectionTuner.LOG).putInt("detection_method",detectionMethod).putBoolean("belt_scene",beltScene).putBoolean("auto_suggest",autoSuggest).putString("expected_minimum_mm",Double.toString(minimumExpectedMm)).apply();dialog.dismiss();
+                minimumExpectedMm=minimumInput(minimum);autoSuggest=auto.isChecked();if(autoRoi!=autoArea.isChecked()){autoRoi=autoArea.isChecked();liveAutoRoi.reset();}for(int i=0;i<optionIds.length;i++)if(sizes.getCheckedRadioButtonId()==optionIds[i])profile=i;for(int i=0;i<methodIds.length;i++)if(methods.getCheckedRadioButtonId()==methodIds[i])detectionMethod=i;beltScene=scenes.getCheckedRadioButtonId()==sceneIds[1];sensitivity=slider.getProgress();applyParameters();epoch++;
+                getPreferences(MODE_PRIVATE).edit().putInt("adaptive_profile",profile).putInt("sensitivity",sensitivity).putBoolean("legacy_detection",detectionMethod==DetectionTuner.LOG).putInt("detection_method",detectionMethod).putBoolean("belt_scene",beltScene).putBoolean("auto_suggest",autoSuggest).putBoolean("auto_roi",autoRoi).putString("expected_minimum_mm",Double.toString(minimumExpectedMm)).apply();dialog.dismiss();
                 if(mode==Mode.PHOTO&&photoFile!=null){File file=photoFile;String mime=photoMime;PelletDetector.Parameters cfg=parameters;setBusy(Mode.PROCESSING,"Reanalisando com ajuste manual…");worker.execute(()->processPhoto(file,mime,cfg));}
             }catch(IllegalArgumentException e){error.setText(e.getMessage());}});
         });dialog.show();
     }
     private void restoreParameters() {
+        // 0.18.0: uma vez por instalação, modelos mais assertivos (StarDist; volta ao gradiente se a rede faltar), SAM 2, MobileNetV3 e área automática.
+        if(!getPreferences(MODE_PRIVATE).getBoolean("defaults018",false)){
+            getPreferences(MODE_PRIVATE).edit().putInt("detection_method",DetectionTuner.NEURAL).putBoolean("sam2",true).putString("crack_classifier_v2",CrackClassifierChoice.DEFAULT.name()).putBoolean("auto_roi",true).putBoolean("defaults018",true).apply();Sam2Refiner.setEnabled(Sam2Refiner.available());
+        }
         autoSuggest=getPreferences(MODE_PRIVATE).getBoolean("auto_suggest",true);
+        autoRoi=getPreferences(MODE_PRIVATE).getBoolean("auto_roi",true);
         try{minimumExpectedMm=Double.parseDouble(getPreferences(MODE_PRIVATE).getString("expected_minimum_mm","5"));if(!Double.isFinite(minimumExpectedMm)||minimumExpectedMm<0||minimumExpectedMm>1000)minimumExpectedMm=5;}catch(NumberFormatException e){minimumExpectedMm=5;}
-        detectionMethod=getPreferences(MODE_PRIVATE).getInt("detection_method",getPreferences(MODE_PRIVATE).getBoolean("legacy_detection",false)?DetectionTuner.LOG:DetectionTuner.GRADIENT);if(detectionMethod<0||detectionMethod>2)detectionMethod=DetectionTuner.GRADIENT;beltScene=getPreferences(MODE_PRIVATE).getBoolean("belt_scene",false);
+        detectionMethod=getPreferences(MODE_PRIVATE).getInt("detection_method",getPreferences(MODE_PRIVATE).getBoolean("legacy_detection",false)?DetectionTuner.LOG:DetectionTuner.NEURAL);if(detectionMethod<0||detectionMethod>2)detectionMethod=DetectionTuner.GRADIENT;beltScene=getPreferences(MODE_PRIVATE).getBoolean("belt_scene",false);
         profile=Math.max(0,Math.min(3,getPreferences(MODE_PRIVATE).getInt("adaptive_profile",3)));
         sensitivity=Math.max(0,Math.min(100,getPreferences(MODE_PRIVATE).getInt("sensitivity",75)));
         applyParameters();

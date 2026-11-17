@@ -56,6 +56,36 @@ final class PhotoSession {
 
     InterestRegion region() { return region; }
 
+    /** 0.18.0: proposta da ROI automática (null se não rodou). Fica registrada mesmo se o operador editar. */
+    private AutoRoi.Result autoRoi;
+    AutoRoi.Result autoRoi() { return autoRoi; }
+
+    /**
+     * Roda a ROI automática na foto analisada e, se a proposta for confiável e ainda não houver ROI,
+     * aplica. Devolve a proposta (aplicada ou não).
+     */
+    /** Usa uma proposta vinda do ao vivo (já nas coordenadas desta foto). */
+    void useAutoRoi(AutoRoi.Result r) {
+        if (r == null || r.region == null) return;
+        setRegion(r.region);
+        autoRoi = r;
+    }
+
+    AutoRoi.Result applyAutoRoi() {
+        int w = analyzedImage.getWidth(), h = analyzedImage.getHeight();
+        byte[] g = new byte[w * h];
+        int[] row = new int[w];
+        for (int y = 0; y < h; y++) {
+            analyzedImage.getRGB(0, y, w, 1, row, 0, w);
+            for (int x = 0; x < w; x++) { int p = row[x]; g[y * w + x] = (byte) ((299 * (p >> 16 & 255) + 587 * (p >> 8 & 255) + 114 * (p & 255)) / 1000); }
+        }
+        autoRoi = AutoRoi.detectAnySize(g, w, h);
+        if (region == null && autoRoi.usable()) {
+            try { setRegion(autoRoi.region); } catch (IllegalArgumentException ignored) { }
+        }
+        return autoRoi;
+    }
+
     /** Igual a activateRoi + applyRegion: mudar de escopo exige nova analise. */
     void setRegion(InterestRegion r) {
         if (r != null) new AnalysisWindow(width, height, r); // valida limites

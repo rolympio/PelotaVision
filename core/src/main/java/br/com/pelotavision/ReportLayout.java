@@ -747,7 +747,9 @@ public final class ReportLayout {
             JSONObject o = j.optJSONObject("region_of_interest");
             if (o == null) { kvAdd(r, "Região", "imagem inteira"); return r; }
             kvAdd(r, "Forma", shapeLabel(o.optString("shape")) + (o.has("automatic") ? (o.optBoolean("automatic") ? " · automática" : " · manual") : ""));
-            if (o.has("detected_as")) kvAdd(r, "Detectada como", o.optString("detected_as"));
+            if (o.has("detected_as")) kvAdd(r, o.optBoolean("automatic") ? "Detectada como" : "Proposta automática",
+                    o.optString("detected_label", o.optString("detected_as")) + (o.has("auto_confidence") ? String.format(Locale.ROOT, " · confiança %.0f%%", 100 * o.optDouble("auto_confidence")) : "")
+                            + (o.has("auto_reason") ? " (" + o.optString("auto_reason") + ")" : ""));
             kvAdd(r, "Limites (px)", "x " + num(o.opt("left_px")) + "–" + num(o.opt("right_px")) + " · y " + num(o.opt("top_px")) + "–" + num(o.opt("bottom_px")));
             kvAdd(r, "Objetos fora/cruzando", String.valueOf(o.optInt("excluded_outside_or_crossing")));
             kvAdd(r, "Regra", "só entram pelotas com a elipse inteira dentro da região");

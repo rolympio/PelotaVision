@@ -22,7 +22,7 @@ import java.util.Locale;
 
 final class ResultSaver {
     private ResultSaver() {}
-    static final String APP_VERSION="0.15.5";
+    static final String APP_VERSION="0.18.0";
     static final class SavedResult {
         final String base;final Uri image;
         /** 0.15.0: relatório PDF; null quando a geração falhou (os demais arquivos continuam válidos). */
@@ -81,6 +81,10 @@ final class ResultSaver {
     }
     /** 0.15.3: {@code rrBasis} = base da curva Rosin–Rammler mostrada na figura do PDF (as duas bases vão para o JSON). */
     static SavedResult save(Context context,Bitmap photo,File original,String originalMime,PelletDetector.Result result,PelletDetector.Parameters parameters,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,DetectionTuner.Report suggestions,DetectionTuner.Option applied,boolean cropRoi,DetailedAnalysis.Report detailed,ReportVisuals visuals,CrackClassifierChoice.Resolution crackChoice,String networkId,LowLightInfo lowLight,Bitmap filtered,String folder,String testName,RosinRammler.Basis rrBasis) throws Exception {
+        return save(context,photo,original,originalMime,result,parameters,cracks,distribution,region,excludedByRegion,suggestions,applied,cropRoi,detailed,visuals,crackChoice,networkId,lowLight,filtered,folder,testName,rrBasis,null);
+    }
+    /** 0.18.0: {@code autoRoi} = proposta da ROI automática (registrada no JSON; "automatic" só se usada sem edição). */
+    static SavedResult save(Context context,Bitmap photo,File original,String originalMime,PelletDetector.Result result,PelletDetector.Parameters parameters,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,DetectionTuner.Report suggestions,DetectionTuner.Option applied,boolean cropRoi,DetailedAnalysis.Report detailed,ReportVisuals visuals,CrackClassifierChoice.Resolution crackChoice,String networkId,LowLightInfo lowLight,Bitmap filtered,String folder,String testName,RosinRammler.Basis rrBasis,AutoRoi.Result autoRoi) throws Exception {
         if(rrBasis==null)rrBasis=RosinRammler.Basis.NUMBER;
         testName=SaveNaming.cleanTestName(testName);
         folder=folder==null||folder.trim().isEmpty()?null:SaveNaming.sanitizeFolder(folder);
@@ -126,7 +130,7 @@ final class ResultSaver {
             json.put("crack_histogram",ReportJson.crackHistogramJson(crackHistogram,visuals));
             Object mapJson=ReportJson.mapJson(distribution,visuals);if(mapJson instanceof JSONObject)((JSONObject)mapJson).put("file",mapFile==null?JSONObject.NULL:mapFile);json.put("granulometric_map",mapJson);
             JSONObject display=new JSONObject();display.put("histogram_show_all",visuals.showAll);display.put("histogram_show_cracked",visuals.showCracked);display.put("histogram_values_on_bars",visuals.showValues);display.put("histogram_normalization",visuals.normalization.name());display.put("all_color","#268CAB alpha 0.55");display.put("cracked_color","#FF8C1A alpha 0.65");json.put("visualization",display);
-            json.put("region_of_interest",ReportJson.regionJson(region,excludedByRegion));json.put("detection_suggestion",ReportJson.suggestionJson(suggestions,applied));json.put("neural_model",ReportJson.neuralModelJson(applied));json.put("sam2_refinement",ReportJson.sam2Json(result));json.put("scene",ReportJson.sceneJson(applied));json.put("low_light",lowLight==null?JSONObject.NULL:lowLight.toJson());
+            json.put("region_of_interest",ReportJson.regionJson(region,excludedByRegion,autoRoi));json.put("detection_suggestion",ReportJson.suggestionJson(suggestions,applied));json.put("neural_model",ReportJson.neuralModelJson(applied));json.put("sam2_refinement",ReportJson.sam2Json(result));json.put("scene",ReportJson.sceneJson(applied));json.put("low_light",lowLight==null?JSONObject.NULL:lowLight.toJson());
             JSONObject imagery=new JSONObject();imagery.put("filtered_file",filteredFile==null?JSONObject.NULL:filteredFile);imagery.put("segmented_base",filtered!=null?"filtered":"original");imagery.put("map_base",filtered!=null?"filtered":"original");
             imagery.put("note","filtered image is for display and object proposal only; ellipses, diameters and crack crops use ORIGINAL pixels");json.put("report_images",imagery);
             JSONObject processing=ReportJson.processingScopeJson(new AnalysisWindow(result.width,result.height,result.method.contains("active_roi_crop_v1")?region:null));
