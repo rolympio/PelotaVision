@@ -132,9 +132,28 @@ def test_xanylabeling_ida_e_volta_pela_filtrada(tmp_path):
             s["label"] = "trinca"
     cena, res = X.anotacao_para_cena(a, pre, tmp_path, tmp_path / "ds")
     assert res["pelotas"] == 1 and res["com_trinca"] == 1 and res["alvo"] == "filtrada"
+    assert res["deteccoes_do_app_completadas_como_ignoradas"] == 0     # a 2 ja estava como auto_ (ignorada)
     o = cena["annotations"][0]
     c = np.mean(o["polygon"], 0)
     assert abs(c[0] - 500) < 0.05 and abs(c[1] - 400) < 0.05            # volta para pixels da original
     assert abs(o["raio_px"] - math.sqrt(40 * 30)) < 0.1
     peso = cv2.imread(str(tmp_path / "ds" / cena["weight_mask"]), cv2.IMREAD_GRAYSCALE)
     assert peso[420, 620] == 0 and peso[400, 450] == 255 and peso[50, 50] == 0   # auto ignorada, ROI ok, fora da ROI 0
+
+
+def test_xanylabeling_completa_puladas_e_tira_esfera(tmp_path):
+    import xanylabeling_pelotavision as X
+    a = _analise_sintetica()
+    a["physical_scale"] = {"reference_pixels": 60.0, "selected_object": {"real_dimension_mm": 11,
+                           "original_ellipse": {"x_px": 450, "y_px": 500, "major_axis_px": 60, "minor_axis_px": 60, "angle_deg": 0}}}
+    pre = X.pre_anotacao(a, "original")
+    shapes = [s for s in pre["shapes"] if s["label"] == "auto_pelota"][:1]          # anotou so a pelota 1
+    shapes[0]["label"] = "pelota"
+    esf = X.elipse(450, 500, 61.8, 61.8, 0) + 0.5                                    # esfera desenhada 3% maior, como 'pelota'
+    shapes.append({"label": "pelota", "shape_type": "polygon", "points": esf.tolist()})
+    anot = dict(pre, shapes=shapes)
+    cena, res = X.anotacao_para_cena(a, anot, tmp_path, tmp_path / "ds")
+    assert res["pelotas"] == 1 and res["deteccoes_do_app_completadas_como_ignoradas"] == 1
+    assert abs(res["esfera_razao_anotada_app"] - 1.03) < 0.01
+    peso = cv2.imread(str(tmp_path / "ds" / cena["weight_mask"]), cv2.IMREAD_GRAYSCALE)
+    assert peso[420, 620] == 0 and peso[500, 450] == 0

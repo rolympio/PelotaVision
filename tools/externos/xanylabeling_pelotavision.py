@@ -15,6 +15,9 @@ Rotulos (o que nao for 'pelota' nunca vira fundo):
   auto_*           -> regiao ignorada (pre-anotacao ainda nao revisada)
   trinca           -> marca a pelota que contem o centro da forma (lista em 'trincas'); nao entra na borda
   roi              -> fora deste poligono nada e supervisionado
+Pelota detectada pelo app e nao anotada vira regiao ignorada (--sem-completar desliga). A esfera de calibracao
+anotada como 'pelota' vira ignorada, e o diametro dela fica no resumo: se voce desenha a esfera e as pelotas
+com a mesma convencao de borda, a escala tirada da SUA esfera cancela essa convencao.
 Na filtrada, o que fica fora do circulo da ROI e sempre ignorado.
 
 Uso:
@@ -139,7 +142,8 @@ def pontos_forma(s) -> np.ndarray | None:
     return None
 
 
-def anotacao_para_cena(analise: dict, anot: dict, pasta_analise: Path, saida: Path, alvo: str | None = None) -> tuple[dict, dict]:
+def anotacao_para_cena(analise: dict, anot: dict, pasta_analise: Path, saida: Path, alvo: str | None = None,
+                       completar_com_app: bool = True) -> tuple[dict, dict]:
     if alvo is None:
         nome = Path(anot.get("imagePath", "")).name
         alvo = "filtrada" if nome == analise.get("report_images", {}).get("filtered_file") else "original"
@@ -170,6 +174,34 @@ def anotacao_para_cena(analise: dict, anot: dict, pasta_analise: Path, saida: Pa
             roi_user.append(po)
         elif lab in IGNORADOS or lab.startswith("auto_") or lab:
             ignorar.append(po)
+    # Esfera de calibracao anotada como pelota: nao e pelota (cor, material) -> regiao ignorada.
+    ref = ((analise.get("physical_scale") or {}).get("selected_object") or {}).get("original_ellipse")
+    esfera_px = None
+    if ref:
+        rr = (ref["major_axis_px"] + ref["minor_axis_px"]) / 4
+        resto = []
+        for po in objs:
+            c0 = po.mean(0)
+            if math.hypot(c0[0] - ref["x_px"], c0[1] - ref["y_px"]) < 0.3 * rr:
+                esfera_px = 2 * math.sqrt(abs(cv2.contourArea(po.astype(np.float32))) / math.pi)
+                ignorar.append(po)
+            else:
+                resto.append(po)
+        objs = resto
+    # Deteccoes do app sem anotacao correspondente viram regiao ignorada (pelota que voce pulou nao vira fundo).
+    completadas = 0
+    if completar_com_app:
+        mh = np.zeros((H, W), np.int32)
+        for k, po in enumerate(objs + ignorar, 1):
+            cv2.fillPoly(mh, [np.round(po).astype(np.int32)], k)
+        for d in analise.get("detections", []):
+            e = elipse(d["x_px"], d["y_px"], d["ellipse_major_axis_px"], d["ellipse_minor_axis_px"], d["ellipse_angle_deg"], 72)
+            me = np.zeros((H, W), np.uint8)
+            cv2.fillPoly(me, [np.round(e).astype(np.int32)], 1)
+            area = int(me.sum())
+            if area and (mh[me > 0] > 0).mean() < 0.3:
+                ignorar.append(e)
+                completadas += 1
     if roi_user:
         m = np.zeros_like(peso)
         for r in roi_user:
@@ -203,7 +235,12 @@ def anotacao_para_cena(analise: dict, anot: dict, pasta_analise: Path, saida: Pa
     resumo = {"rotulos": cont, "pelotas": len(anns), "pelotas_inteiras": sum(not a["partial"] for a in anns),
               "com_trinca": sum(a["trinca"] for a in anns), "trincas_sem_pelota": sum(
                   not any(cv2.pointPolygonTest(o.astype(np.float32), tuple(map(float, t.mean(0))), False) >= 0 for o in objs) for t in trincas),
-              "regioes_ignoradas": len(ignorar), "alvo": alvo}
+              "regioes_ignoradas": len(ignorar), "deteccoes_do_app_completadas_como_ignoradas": completadas,
+              "esfera_anotada_px": None if esfera_px is None else round(esfera_px, 2),
+              "esfera_app_px": (analise.get("physical_scale") or {}).get("reference_pixels"), "alvo": alvo}
+    if esfera_px:
+        resumo["esfera_razao_anotada_app"] = round(esfera_px / resumo["esfera_app_px"], 4)
+        cena["escala_px_por_mm_anotacao"] = round(esfera_px / float((analise["physical_scale"]["selected_object"] or {}).get("real_dimension_mm") or 11), 4)
     return cena, resumo
 
 
@@ -219,6 +256,7 @@ def main(argv=None):
     a2.add_argument("--analise", required=True)
     a2.add_argument("--anotacao", required=True)
     a2.add_argument("--saida", required=True, help="pasta do conjunto (annotations.json e acumulado)")
+    a2.add_argument("--sem-completar", action="store_true", help="nao usar deteccoes do app para ignorar pelotas puladas")
     a = ap.parse_args(argv)
     p = Path(a.analise)
     analise = json.loads(p.read_text(encoding="utf-8"))
@@ -236,7 +274,7 @@ def main(argv=None):
     saida = Path(a.saida)
     saida.mkdir(parents=True, exist_ok=True)
     anot = json.loads(Path(a.anotacao).read_text(encoding="utf-8"))
-    cena, resumo = anotacao_para_cena(analise, anot, p.parent.resolve(), saida.resolve())
+    cena, resumo = anotacao_para_cena(analise, anot, p.parent.resolve(), saida.resolve(), completar_com_app=not a.sem_completar)
     arq = saida / "annotations.json"
     cenas = json.loads(arq.read_text(encoding="utf-8")) if arq.exists() else []
     cenas = [c for c in cenas if c["group"] != cena["group"]] + [cena]   # reconverter substitui a mesma foto
