@@ -16,3 +16,9 @@
 - Executar testes de segurança dos scripts e inventário antes de integrar infraestrutura.
   Builds científicos Windows/Android e paridade são verificações distintas, não presumidas.
 - Usar branch de desenvolvimento e PR; não publicar dados privados ou releases automaticamente.
+- Os projetos ficam em `D:\Projetos\` (repositório `D:\Projetos\PelotaVision`, área privada
+  `D:\Projetos\PelotaVision-local`). Caminhos em C: de documentos antigos estão desatualizados.
+- Agente local (Ollama + opencode): ver `docs/agente-local.md`. Um passo por pedido; rodar o comando,
+  ler a saída e relatar números. Treinos longos rodam no terminal; o agente só lê os resultados.
+- Rede de borda e dados externos: `ml_training/borda/README.md`, `tools/externos/` e skills
+  `pelotavision-borda` / `pelotavision-roboflow`. Chave do Roboflow só em `ROBOFLOW_API_KEY`, nunca em arquivo.

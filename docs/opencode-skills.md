@@ -33,8 +33,10 @@ mais. As mudanças são recarregadas ao salvar; se necessário usar `/reload`.
 
 - `pelotavision-ambiente`: verificação, compilação e atualização segura Windows.
 - `pelotavision-dataset`: inventário privado, hashes e prevenção de vazamento.
+- `pelotavision-roboflow`: baixar, converter e auditar datasets externos (Roboflow) com licença e proveniência.
+- `pelotavision-borda`: treinar, exportar e avaliar a rede de borda com critério de implantação fixo.
 
-Invocar no prompt como `@pelotavision-ambiente` ou `@pelotavision-dataset`.
+Invocar no prompt como `@pelotavision-<id>`. Uso com modelo local (Ollama): `docs/agente-local.md`.
 Não afirmar que uma skill executou algo só porque foi descoberta/carregada.
 
 ## Receber skills externas
