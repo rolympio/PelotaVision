@@ -11,6 +11,15 @@ function Ok([string]$m) { Write-Host "  [ok] $m" -ForegroundColor Green }
 function Aviso([string]$m) { Write-Host "  [!]  $m" -ForegroundColor Yellow }
 function Pergunta([string]$m) { if ($Sim) { return $true }; return ((Read-Host "$m [s/N]") -match '^(s|sim|y)$') }
 function Tem([string]$c) { return [bool](Get-Command $c -ErrorAction SilentlyContinue) }
+# Sonda um programa externo sem que a saida de erro dele derrube o script (Windows PowerShell 5.1 trata
+# stderr redirecionado como erro fatal com ErrorActionPreference=Stop). Devolve @{ Codigo; Saida }.
+function Sonda([string]$exe, [string[]]$argumentos) {
+    $anterior = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $saida = & $exe @argumentos 2>$null; $codigo = $LASTEXITCODE } catch { $saida = $null; $codigo = 1 }
+    finally { $ErrorActionPreference = $anterior }
+    return @{ Codigo = $codigo; Saida = $saida }
+}
 
 Write-Host "PelotaVision - agente local`n  repositorio: $repo`n  area local:  $LocalRoot"
 if ($repo -notmatch '^[Dd]:\\') { Aviso 'O repositorio nao esta em D:. Os projetos foram movidos para D:\Projetos; confira se esta e a copia certa.' }
@@ -79,23 +88,29 @@ if (Test-Path -LiteralPath $cfg) {
 # ---------- Python da rede de borda
 if (-not $SemPython) {
     $python = $null
-    foreach ($v in @('3.12', '3.11', '3.10')) { if (Tem 'py') { $e = & py "-$v" -c 'import sys;print(sys.executable)' 2>$null; if ($LASTEXITCODE -eq 0 -and $e) { $python = $e; break } } }
+    foreach ($v in @('3.12', '3.11', '3.10')) { if (Tem 'py') { $r = Sonda 'py' @("-$v", '-c', 'import sys;print(sys.executable)'); if ($r.Codigo -eq 0 -and $r.Saida) { $python = [string]($r.Saida | Select-Object -Last 1); break } } }
     if (!$python -and (Tem 'python')) { $python = (Get-Command python).Source }
     if (!$python) { Aviso 'Python 3.10-3.12 nao encontrado; a rede de borda fica para depois.' }
     else {
         $venv = Join-Path $LocalRoot 'envs\borda'; $vpy = Join-Path $venv 'Scripts\python.exe'
         if (!(Test-Path -LiteralPath $vpy)) { & $python -m venv $venv }
         $idx = if ($vram -gt 0) { 'https://download.pytorch.org/whl/cu124' } else { 'https://download.pytorch.org/whl/cpu' }
-        & $vpy -c 'import torch' 2>$null
-        if ($LASTEXITCODE -ne 0) {
+        if ((Sonda $vpy @('-c', 'import torch')).Codigo -ne 0) {
             if (Pergunta "Instalar PyTorch ($(if ($vram) {'CUDA'} else {'CPU'})) na venv isolada $venv?") {
+                $ErrorActionPreference = 'Continue'
                 & $vpy -m pip install --disable-pip-version-check --progress-bar off torch --index-url $idx
+                $codigoTorch = $LASTEXITCODE
+                $ErrorActionPreference = 'Stop'
+                if ($codigoTorch -ne 0) { throw 'Instalacao do PyTorch falhou (veja acima).' }
             }
         }
+        $ErrorActionPreference = 'Continue'
         & $vpy -m pip install --disable-pip-version-check -q -r (Join-Path $repo 'ml_training\borda\requirements.txt') --extra-index-url $idx
-        $cuda = (& $vpy -c 'import torch;print(torch.cuda.is_available())') -join ''
+        if ($LASTEXITCODE -ne 0) { $ErrorActionPreference = 'Stop'; throw 'pip install dos requisitos falhou (veja acima).' }
+        $ErrorActionPreference = 'Stop'
+        $cuda = ((Sonda $vpy @('-c', 'import torch;print(torch.cuda.is_available())')).Saida) -join ''
         Ok "venv da rede de borda: $vpy (CUDA: $cuda)"
-        Push-Location $repo; & $vpy -m pytest -q tools/externos ml_training/borda; $t = $LASTEXITCODE; Pop-Location
+        Push-Location $repo; $ErrorActionPreference = 'Continue'; & $vpy -m pytest -q tools/externos ml_training/borda; $t = $LASTEXITCODE; $ErrorActionPreference = 'Stop'; Pop-Location
         if ($t -eq 0) { Ok 'testes sinteticos da rede de borda e dos externos passaram' } else { Aviso 'testes falharam: veja acima' }
     }
 }

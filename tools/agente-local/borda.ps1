@@ -16,8 +16,11 @@ $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 
 function Run([string[]]$a) {
     Write-Host ">> python $($a -join ' ')" -ForegroundColor DarkGray
+    $ErrorActionPreference = 'Continue'      # avisos do Python no stderr nao podem derrubar o script (PS 5.1)
     & $py @a
-    if ($LASTEXITCODE -ne 0) { throw "Falhou (codigo $LASTEXITCODE)." }
+    $codigo = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($codigo -ne 0) { throw "Falhou (codigo $codigo)." }
 }
 function Fonte([string]$id) {
     $reg = Get-Content -Raw -Encoding UTF8 (Join-Path $repo 'tools\externos\fontes_roboflow.json') | ConvertFrom-Json
