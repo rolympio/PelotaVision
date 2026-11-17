@@ -100,3 +100,41 @@ def test_mascara_do_sam2_vira_poligono():
     r = math.sqrt(cv2.contourArea(p.astype(np.float32)) / math.pi)
     n = ((xx - 40) ** 2 + (yy - 40) ** 2 <= 15 ** 2).sum()
     assert p is not None and abs(r - math.sqrt(n / math.pi)) < 0.15
+
+
+def _analise_sintetica():
+    dets = [{"id": 1, "x_px": 500.0, "y_px": 400.0, "ellipse_major_axis_px": 80.0, "ellipse_minor_axis_px": 60.0,
+             "ellipse_angle_deg": 30.0, "equivalent_diameter_px": 2 * math.sqrt(40 * 30), "needs_review": False,
+             "crack_status": "POSSIBLE", "crack_manually_reviewed": False},
+            {"id": 2, "x_px": 620.0, "y_px": 420.0, "ellipse_major_axis_px": 70.0, "ellipse_minor_axis_px": 70.0,
+             "ellipse_angle_deg": 0.0, "equivalent_diameter_px": 70.0, "needs_review": True,
+             "crack_status": "NO_INDICATION", "crack_manually_reviewed": False}]
+    return {"app": "teste", "original_file": "f_original.png", "report_images": {"filtered_file": "f_filtrada.png"},
+            "source": {"original_width": 1000, "original_height": 800, "analyzed_width": 1000, "analyzed_height": 800},
+            "report_viewport": {"render_scale": 1.5, "crop_left": 300, "crop_top": 200, "render_width": 600, "render_height": 600},
+            "region_of_interest": {"shape": "CIRCLE", "left_px": 300, "right_px": 700, "top_px": 200, "bottom_px": 600},
+            "detections": dets,
+            "cracks": {"pellets": [{"pellet_id": 1, "status": "POSSIBLE", "model_score": 0.9,
+                                    "marked_runs_x1_y1_x2_y2_px": [495, 395, 505, 395, 495, 405, 505, 405]}]}}
+
+
+def test_xanylabeling_ida_e_volta_pela_filtrada(tmp_path):
+    import xanylabeling_pelotavision as X
+    a = _analise_sintetica()
+    pre = X.pre_anotacao(a, "filtrada")
+    assert (pre["imageWidth"], pre["imageHeight"]) == (600, 600)
+    labs = [s["label"] for s in pre["shapes"]]
+    assert labs.count("auto_pelota") == 2 and labs.count("auto_trinca") == 1
+    # revisao: aceita so a pelota 1 e a trinca; a 2 fica auto_ (ignorada)
+    pre["shapes"][0]["label"] = "pelota"
+    for s in pre["shapes"]:
+        if s["label"] == "auto_trinca":
+            s["label"] = "trinca"
+    cena, res = X.anotacao_para_cena(a, pre, tmp_path, tmp_path / "ds")
+    assert res["pelotas"] == 1 and res["com_trinca"] == 1 and res["alvo"] == "filtrada"
+    o = cena["annotations"][0]
+    c = np.mean(o["polygon"], 0)
+    assert abs(c[0] - 500) < 0.05 and abs(c[1] - 400) < 0.05            # volta para pixels da original
+    assert abs(o["raio_px"] - math.sqrt(40 * 30)) < 0.1
+    peso = cv2.imread(str(tmp_path / "ds" / cena["weight_mask"]), cv2.IMREAD_GRAYSCALE)
+    assert peso[420, 620] == 0 and peso[400, 450] == 255 and peso[50, 50] == 0   # auto ignorada, ROI ok, fora da ROI 0

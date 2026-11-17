@@ -1,6 +1,7 @@
 # Rede de borda + dados externos: um atalho por passo. Nada aqui apaga ou sobrescreve dados.
 #   BORDA.bat <acao> [argumentos]
-# Acoes: testes | baixar [args do roboflow_baixar.py] | converter <id> | caixas <id> | auditar <id> |
+# Acoes: testes | pre <analise.json> [filtrada|original] | revisada <analise.json> <anotacao.json> |
+#        baixar [args do roboflow_baixar.py] | converter <id> | caixas <id> | auditar <id> |
 #        pretreino [--validar-fonte <id>] [--iteracoes N] | ajuste <pasta> [args] | exportar [pasta .pt] | avaliar <pasta> [args]
 # Sem bloco param(): argumentos como '--prioridade' seguem intactos para o Python via $args.
 $Acao = if ($args.Count) { [string]$args[0] } else { 'ajuda' }
@@ -49,6 +50,15 @@ switch ($Acao.ToLowerInvariant()) {
         $a = @('tools/externos/caixas_para_contorno_sam2.py', '--entrada', $v, '--id', $id, '--sam2', $sam, '--saida', (Join-Path $ext "convertido\$id"))
         if ($f.classes_pelota.Count -gt 0) { $a += @('--classes') + @($f.classes_pelota) }
         Run ($a + @($Resto | Select-Object -Skip 1))
+    }
+    'pre' {
+        # pre-anotacao para o X-AnyLabeling: BORDA.bat pre <analise.json> [original|filtrada]
+        $alvo = if ($Resto.Count -gt 1) { $Resto[1] } else { 'filtrada' }
+        Run @('tools/externos/xanylabeling_pelotavision.py', 'pre', '--analise', $Resto[0], '--alvo', $alvo)
+    }
+    'revisada' {
+        # anotacao revisada -> conjunto proprio: BORDA.bat revisada <analise.json> <anotacao.json>
+        Run @('tools/externos/xanylabeling_pelotavision.py', 'treino', '--analise', $Resto[0], '--anotacao', $Resto[1], '--saida', (Join-Path $LocalRoot 'datasets\bancada_revisada'))
     }
     'auditar' {
         $id = $Resto[0]

@@ -41,6 +41,11 @@ BORDA.bat exportar
 BORDA.bat avaliar ..\PelotaVision-local\datasets\holdout_revisado
 ```
 
+**Fotos próprias (X-AnyLabeling):** `BORDA.bat pre <análise>.json` grava a pré-anotação ao lado da
+`_filtrada.png` (elipses do app como `auto_pelota`). Renomeie para `pelota` só o que conferir; o que ficar
+`auto_*` é ignorado no treino. Depois, `BORDA.bat revisada <análise>.json <anotação>.json` converte para a
+foto original e acumula em `..\PelotaVision-local\datasets\bancada_revisada`.
+
 Cada passo também roda direto em Python (ver `--help` de cada script).
 
 ## Arquivos
