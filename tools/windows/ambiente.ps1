@@ -63,7 +63,12 @@ function Assert-Repo {
 }
 
 function Find-OpenCv {
+    # 17/11/2026: projetos migrados para D:\Projetos; procura primeiro ao lado do repositório e na área local.
+    $parent = Split-Path -Parent $repo
     $candidates = @($OpenCvJava, $env:OPENCV_JAVA_DIR, "$repo\desktop\opencv-java",
+        "$parent\tools\opencv-4.12.0\opencv\build\java", "$parent\PelotaVision-local\tools\opencv-4.12.0\opencv\build\java",
+        "$parent\opencv-4.12.0\opencv\build\java",
+        'D:\Projetos\tools\opencv-4.12.0\opencv\build\java', 'D:\opencv-4.12.0\opencv\build\java', 'D:\opencv\build\java',
         'C:\opencv-4.12.0\opencv\build\java', 'C:\opencv\build\java', 'C:\Projetos\tools\opencv-4.12.0\opencv\build\java')
     foreach ($dir in $candidates) {
         if ($dir -and (Test-Path -LiteralPath "$dir\opencv-4120.jar") -and
