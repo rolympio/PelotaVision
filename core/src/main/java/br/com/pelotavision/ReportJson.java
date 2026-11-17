@@ -131,6 +131,20 @@ public final class ReportJson {
         cls.put("random_forest_id",CrackModel.ID);cls.put("mobilenet_id",networkId==null?JSONObject.NULL:networkId);cls.put("mobilenet_status","experimental_not_validated");
         cls.put("crack_localization_unet","unavailable: no real crack masks");j.put("crack_classifier",cls);return j;
     }
+    /**
+     * 0.18.0: registra a proposta da ROI automática. {@code automatic} só é true quando a região usada é a
+     * proposta sem edição; se o operador mexeu, a proposta fica registrada mas a região é manual.
+     */
+    public static Object regionJson(InterestRegion region,int excluded,AutoRoi.Result auto)throws Exception {
+        Object base=regionJson(region,excluded);
+        if(!(base instanceof JSONObject)||auto==null||auto.region==null)return base;
+        JSONObject roi=(JSONObject)base;
+        roi.put("automatic",AnalysisWindow.sameRegion(region,auto.region));
+        roi.put("detected_as",auto.kind.code);roi.put("detected_label",auto.kind.label);
+        roi.put("auto_confidence",Math.round(auto.confidence*1000)/1000.0);roi.put("auto_reason",auto.reason);
+        roi.put("auto_method","AutoRoi v1: aro do recipiente + textura isotrópica de bordas + bordas da correia");
+        return roi;
+    }
     public static Object regionJson(InterestRegion region,int excluded)throws Exception {
         if(region==null)return JSONObject.NULL;
         JSONObject roi=new JSONObject();roi.put("shape",region.shape.name());roi.put("left_px",region.left);roi.put("top_px",region.top);roi.put("right_px",region.right);roi.put("bottom_px",region.bottom);

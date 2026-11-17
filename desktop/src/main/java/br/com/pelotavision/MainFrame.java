@@ -98,6 +98,10 @@ final class MainFrame extends JFrame {
     private final JComboBox<String> methodBox = new JComboBox<>(new String[]{"Bordas/gradientes", "LoG/segmentacao", "Rede neural StarDist (demonstracao)"});
     private final JSpinner sensitivity = new JSpinner(new SpinnerNumberModel(75, 0, 100, 5));
     private final JCheckBox autoSuggest = new JCheckBox("Sugerir ajuste ao abrir/capturar", true);
+    /** 0.18.0: ROI automática (recipiente redondo/retangular, trecho carregado da correia, campo cheio). */
+    private final JCheckBox autoRoiBox = new JCheckBox("ROI automática", true);
+    private final AutoRoi.Stabilizer liveAuto = new AutoRoi.Stabilizer();
+    private volatile long lastAutoRoi;
     private final JCheckBox numbers = new JCheckBox("Numeros");
     private final JButton roiButton = new JButton("ROI…");
     private final JButton analyzeButton = new JButton("Segmentar");
@@ -162,13 +166,17 @@ final class MainFrame extends JFrame {
         sceneBox.setToolTipText("Correia: pelotas pequenas e numerosas (raio 0,4-1,6% da largura, ate 5000 objetos, ate 1600 px). Trincas tendem a ficar inconclusivas; modo detalhado indisponivel.");
         sceneBox.addActionListener(e -> updateProfileLabels());
         updateProfileLabels();
-        int savedMethod = prefs.getInt("method", prefs.getBoolean("legacy", false) ? 1 : 0);
+        migrateDefaults018();
+        int savedMethod = prefs.getInt("method", prefs.getBoolean("legacy", false) ? 1 : DetectionTuner.NEURAL);
         methodBox.setSelectedIndex(savedMethod < 0 || savedMethod > 2 ? 0 : savedMethod);
         methodBox.setToolTipText("<html>Bancada: " + NeuralPelletDetector.status(false) + "<br>Correia: " + NeuralPelletDetector.status(true)
                 + "<br>A rede so propoe objetos; as elipses sao medidas nas bordas. Modelo de correia treinado com pseudo-rotulos sem revisao humana.</html>");
         sensitivity.setValue(prefs.getInt("sensitivity", 75));
         restoreVisuals();
         autoSuggest.setSelected(prefs.getBoolean("auto", true));
+        autoRoiBox.setSelected(prefs.getBoolean("autoRoi", true));
+        autoRoiBox.setToolTipText("Identifica recipiente redondo/retangular, trecho carregado da correia ou campo cheio e limita a análise a ele.");
+        autoRoiBox.addActionListener(e -> { liveAuto.reset(); savePrefs(); });
         lockFocus.setSelected(prefs.getBoolean("lockFocus", true));
         lockExposure.setSelected(prefs.getBoolean("lockExposure", true));
         cameraBox.addItem("Procurando cameras…");
@@ -269,7 +277,7 @@ final class MainFrame extends JFrame {
                 calibrate, StudioShell.note("Clique numa pelota na imagem para revisar a referência e sua exclusão das estatísticas. Sem escala confiável, os valores permanecem em pixels."));
         JPanel segmentation = StudioShell.stack(new JLabel("Cena"), sceneBox, new JLabel("Perfil de tamanho"), profileBox,
                 new JLabel("Método de segmentação"), methodBox, new JLabel("Sensibilidade (%)"), sensitivity,
-                sam2Box, autoSuggest, roiButton, analyzeButton, detailButton, lightButton);
+                sam2Box, autoSuggest, autoRoiBox, roiButton, analyzeButton, detailButton, lightButton);
         previewAiButton.setToolTipText("Carrega ONNX experimental por SHA-256 e gera apenas prévia; não altera medições nem PDF.");
         previewAiButton.addActionListener(e -> runExperimentalPreview());
         JPanel analysis = StudioShell.stack(new JLabel("Revisão e comparação"), extraToolbar,
@@ -545,6 +553,7 @@ final class MainFrame extends JFrame {
                 try {
                     gray = Mats.gray(copy);
                     InterestRegion roi = liveRoi(gray.cols(), gray.rows());
+                    if (roi == null && autoRoiBox.isSelected()) roi = liveAutoRoi(gray);
                     LiveFrameAnalysis.Light light = liveLight;
                     PelletDetector.Result raw;
                     if (light == LiveFrameAnalysis.Light.OFF) raw = DesktopAnalysis.live(gray, cfg, roi);
@@ -570,6 +579,49 @@ final class MainFrame extends JFrame {
                 }
             });
         }
+    }
+
+    /**
+     * 0.18.0: ROI automática no ao vivo, refeita a cada ~1 s e estabilizada entre quadros (não pula).
+     * Só vale enquanto o operador não desenhar uma ROI; aparece na tela como a ROI comum.
+     */
+    private InterestRegion liveAutoRoi(Mat gray) {
+        int w = gray.cols(), h = gray.rows();
+        long now = System.currentTimeMillis();
+        if (now - lastAutoRoi > 1000) {
+            lastAutoRoi = now;
+            byte[] g = new byte[w * h];
+            Mat c = gray.isContinuous() ? gray : gray.clone();
+            try { c.get(0, 0, g); } finally { if (c != gray) c.release(); }
+            AutoRoi.Result r = AutoRoi.detectAnySize(g, w, h);
+            AutoRoi.Result s = liveAuto.update(r.usable() ? r : null, w, h);
+            if (s != null && s.region != null) {
+                InterestRegion reg = s.region;
+                SwingUtilities.invokeLater(() -> {
+                    if (mode != Mode.LIVE || liveRoi != null) return;
+                    view.setViewport(new AnalysisWindow(w, h, reg));
+                    setStatus("Ao vivo · ROI automática: " + s.describe());
+                });
+            }
+        }
+        AutoRoi.Result cur = liveAuto.current();
+        if (cur == null || cur.region == null || cur.region.right > w + 1e-7 || cur.region.bottom > h + 1e-7) return null;
+        return cur.region;
+    }
+
+    /**
+     * 0.18.0: uma única vez por instalação, passa aos modelos mais assertivos — StarDist (volta ao gradiente
+     * sozinho se a rede não estiver instalada), máscaras SAM 2 e MobileNetV3 de trincas — e liga a ROI automática.
+     * Depois disso a escolha do operador é respeitada.
+     */
+    private void migrateDefaults018() {
+        if (prefs.getBoolean("defaults018", false)) return;
+        prefs.putInt("method", DetectionTuner.NEURAL);
+        prefs.putBoolean(DesktopAnalysis.SAM2_PREF, true);
+        Sam2Refiner.setEnabled(true);
+        prefs.put("crackChoice2", CrackClassifierChoice.DEFAULT.name());
+        prefs.putBoolean("autoRoi", true);
+        prefs.putBoolean("defaults018", true);
     }
 
     /** ROI do ao vivo válida para este quadro (a resolução pode ter mudado). */
@@ -733,6 +785,13 @@ final class MainFrame extends JFrame {
         frame.release();
         // 0.5.4: a ROI do ao vivo vale para a foto capturada (mesmas coordenadas, ou reduzidas se a foto foi amostrada).
         InterestRegion roi = liveRoi;
+        AutoRoi.Result auto = liveAuto.current();
+        if (roi == null && autoRoiBox.isSelected() && auto != null && auto.region != null) {
+            // 0.18.0: a foto herda a ROI automática do ao vivo, registrada como automática no JSON.
+            double k = s.width / (double) fw;
+            try { s.useAutoRoi(auto.scaled(k, k, s.width, s.height)); } catch (IllegalArgumentException ignored) { }
+            roi = null;
+        }
         if (roi != null) {
             double k = s.width / (double) fw;
             try { s.setRegion(new InterestRegion(roi.shape, roi.left * k, roi.top * k, roi.right * k, roi.bottom * k)); }
@@ -808,6 +867,14 @@ final class MainFrame extends JFrame {
         view.setBanner(null);
         view.setMeasure(null, null);
         view.setImage(s.analyzedImage, false);
+        // 0.18.0: sem ROI vinda do ao vivo, propõe e aplica a ROI automática antes da primeira análise.
+        if (autoRoiBox.isSelected() && s.region() == null) {
+            try {
+                AutoRoi.Result r = s.applyAutoRoi();
+                setStatus(r.usable() ? "ROI automática: " + r.describe() + ". Ajuste em ROI se precisar."
+                        : "ROI automática não aplicada (" + r.reason + "): analisando a imagem inteira.");
+            } catch (RuntimeException ex) { setStatus("ROI automática indisponível: " + ex.getMessage()); }
+        }
         refreshPhoto();
         if (autoSuggest.isSelected()) analyze(true, null);
         else analyze(false, null);
@@ -1365,6 +1432,7 @@ final class MainFrame extends JFrame {
         prefs.putInt("method", methodBox.getSelectedIndex());
         prefs.putInt("sensitivity", (Integer) sensitivity.getValue());
         prefs.putBoolean("auto", autoSuggest.isSelected());
+        prefs.putBoolean("autoRoi", autoRoiBox.isSelected());
         prefs.putBoolean("lockFocus", lockFocus.isSelected());
         prefs.putBoolean("lockExposure", lockExposure.isSelected());
         int cam = selectedCamera();

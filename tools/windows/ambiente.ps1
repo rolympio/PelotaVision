@@ -63,7 +63,12 @@ function Assert-Repo {
 }
 
 function Find-OpenCv {
+    # 17/11/2026: projetos migrados para D:\Projetos; procura primeiro ao lado do repositório e na área local.
+    $parent = Split-Path -Parent $repo
     $candidates = @($OpenCvJava, $env:OPENCV_JAVA_DIR, "$repo\desktop\opencv-java",
+        "$parent\tools\opencv-4.12.0\opencv\build\java", "$parent\PelotaVision-local\tools\opencv-4.12.0\opencv\build\java",
+        "$parent\opencv-4.12.0\opencv\build\java",
+        'D:\Projetos\tools\opencv-4.12.0\opencv\build\java', 'D:\opencv-4.12.0\opencv\build\java', 'D:\opencv\build\java',
         'C:\opencv-4.12.0\opencv\build\java', 'C:\opencv\build\java', 'C:\Projetos\tools\opencv-4.12.0\opencv\build\java')
     foreach ($dir in $candidates) {
         if ($dir -and (Test-Path -LiteralPath "$dir\opencv-4120.jar") -and
@@ -82,7 +87,11 @@ function Get-Jdk {
 }
 
 function Find-AndroidSdk {
-    foreach ($sdk in @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT, "$env:LOCALAPPDATA\Android\Sdk", 'C:\Projetos\tools\android-sdk')) {
+    # 17/11/2026: também procura ao lado do repositório e em D:\Projetos (migração do C:).
+    $parent = Split-Path -Parent $repo
+    foreach ($sdk in @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT, "$env:LOCALAPPDATA\Android\Sdk",
+            "$parent\tools\android-sdk", "$parent\PelotaVision-local\tools\android-sdk",
+            'D:\Projetos\tools\android-sdk', 'D:\Android\Sdk', 'C:\Projetos\tools\android-sdk')) {
         if ($sdk -and (Test-Path -LiteralPath "$sdk\platforms\android-35\android.jar") -and
             (Test-Path -LiteralPath "$sdk\build-tools\35.0.0\aapt2.exe")) { return $sdk }
     }

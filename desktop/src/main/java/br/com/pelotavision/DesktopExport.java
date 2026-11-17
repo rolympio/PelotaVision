@@ -388,7 +388,7 @@ final class DesktopExport {
         json.put("app", "PelotaVision Windows " + DesktopApp.VERSION + " (nucleo " + DesktopApp.CORE_VERSION + ")");
         json.put("created_at_epoch_ms", System.currentTimeMillis());
         json.put("source", sourceJson(s));
-        json.put("region_of_interest", ReportJson.regionJson(region, s.regionExcluded()));
+        json.put("region_of_interest", ReportJson.regionJson(region, s.regionExcluded(), s.autoRoi()));
         json.put("detection_suggestion", ReportJson.suggestionJson(s.rankedSuggestions(), out.applied));
         json.put("neural_model", ReportJson.neuralModelJson(out.applied));
         json.put("sam2_refinement", ReportJson.sam2Json(out.result));
