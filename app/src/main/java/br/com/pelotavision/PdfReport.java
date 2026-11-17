@@ -92,8 +92,10 @@ final class PdfReport {
                 if(o.text==null||o.text.isEmpty())return;
                 Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.SUBPIXEL_TEXT_FLAG);
                 p.setTypeface(Typeface.create(Typeface.SANS_SERIF,o.bold?Typeface.BOLD:Typeface.NORMAL));p.setTextSize(o.size);p.setColor(argb(o.color));
+                // A quebra de linha usa a métrica da Helvetica (núcleo). Se a fonte do aparelho passar da
+                // largura prevista, reduz o corpo para caber; nunca alarga (sem invadir a coluna vizinha).
                 float m=p.measureText(o.text);
-                if(m>0&&o.w>0)p.setTextScaleX(Math.max(.8f,Math.min(1.2f,o.w/m)));
+                if(m>o.w&&o.w>0)p.setTextSize(o.size*o.w/m);
                 c.drawText(o.text,o.x,o.y,p);return;
             }
             case RECT:{
