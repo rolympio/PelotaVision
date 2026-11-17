@@ -199,14 +199,22 @@ public final class MainActivity extends ComponentActivity {
         else requestPermissions(new String[]{Manifest.permission.CAMERA},CAMERA_PERMISSION);
     }
     private void buildInterface() {
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(Color.rgb(16,26,35));
-        root.setPadding(dp(18),dp(8),dp(18),dp(12));setContentView(root);
-        root.setOnApplyWindowInsetsListener((v,insets)-> {
+        // 0.18.0: a foto não encolhe mais quando gráficos e botões aparecem. Ela ocupa toda a altura visível
+        // abaixo do cabeçalho; gráficos e ajustes ficam logo abaixo e se chega a eles rolando a tela. A barra
+        // Fotografar/Salvar fica fixa no rodapé.
+        LinearLayout shell=new LinearLayout(this);shell.setOrientation(LinearLayout.VERTICAL);shell.setBackgroundColor(Color.rgb(16,26,35));
+        shell.setPadding(dp(18),dp(8),dp(18),dp(12));setContentView(shell);
+        shell.setOnApplyWindowInsetsListener((v,insets)-> {
             int top,bottom,left,right;
             if(Build.VERSION.SDK_INT>=30){Insets i=insets.getInsets(WindowInsets.Type.systemBars());top=i.top;bottom=i.bottom;left=i.left;right=i.right;}
             else {top=insets.getSystemWindowInsetTop();bottom=insets.getSystemWindowInsetBottom();left=insets.getSystemWindowInsetLeft();right=insets.getSystemWindowInsetRight();}
-            root.setPadding(dp(18)+left,dp(8)+top,dp(12)+right,dp(12)+bottom);return insets;
+            shell.setPadding(dp(18)+left,dp(8)+top,dp(12)+right,dp(12)+bottom);return insets;
         });
+        ScrollView mainScroll=new ScrollView(this);mainScroll.setTag("main_scroll");mainScroll.setFillViewport(true);mainScroll.setVerticalScrollBarEnabled(true);this.mainScroll=mainScroll;
+        shell.addView(mainScroll,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
+        mainScroll.addView(root,new ScrollView.LayoutParams(-1,-2));
+        mainScroll.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,orr,ob)->{if(b-t!=ob-ot||r-l!=orr-ol)v.post(this::sizeImageFrame);});
         LinearLayout titleRow=row();root.addView(titleRow);
         LinearLayout brand=new LinearLayout(this);brand.setOrientation(LinearLayout.VERTICAL);
         TextView title=text("PelotaVision",24,Color.WHITE);title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);brand.addView(title);
@@ -218,7 +226,7 @@ public final class MainActivity extends ComponentActivity {
         LinearLayout metricLabels=new LinearLayout(this);metricLabels.setOrientation(LinearLayout.VERTICAL);metricLabels.setPadding(dp(12),0,0,0);
         metricLabels.addView(text("pelotas detectadas",14,Color.WHITE));detail=text("Posicione a câmera",12,Color.rgb(151,174,187));metricLabels.addView(detail);metrics.addView(metricLabels);
         shapeLabel=text("Esfericidade aparente 2D (b/a): —",12,Color.rgb(181,198,208));shapeLabel.setPadding(0,0,0,dp(6));shapeLabel.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Forma projetada das pelotas").setMessage("Índice b/a = eixo menor / eixo maior da elipse. Próximo de 1 significa projeção mais circular. É uma estimativa 2D, não esfericidade 3D.\n\nA média aritmética por número usa apenas elipses ajustadas, inteiras e sem alerta, dentro da área de interesse. Contornos inconclusivos e pelotas de borda são excluídos. A razão não depende de px/mm. Perspectiva, sombras e oclusões podem alterar a estimativa.").setPositiveButton("Entendi",null).show());root.addView(shapeLabel);
-        FrameLayout frame=new FrameLayout(this);frame.setBackground(shape(Color.BLACK,18));frame.setClipToOutline(true);root.addView(frame,new LinearLayout.LayoutParams(-1,0,1));
+        FrameLayout frame=new FrameLayout(this);frame.setTag("image_frame");frame.setBackground(shape(Color.BLACK,18));frame.setClipToOutline(true);root.addView(frame,new LinearLayout.LayoutParams(-1,dp(360)));this.imageFrame=frame;
         preview=new PreviewView(this);preview.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);preview.setScaleType(PreviewView.ScaleType.FIT_CENTER);
         frame.addView(preview,new FrameLayout.LayoutParams(-1,-1));
         frozen=new ImageView(this);frozen.setScaleType(ImageView.ScaleType.FIT_CENTER);frozen.setBackgroundColor(Color.BLACK);frozen.setVisibility(View.GONE);frame.addView(frozen,new FrameLayout.LayoutParams(-1,-1));
@@ -265,12 +273,38 @@ public final class MainActivity extends ComponentActivity {
         adjust=button("Ajustes",false);adjust.setTextSize(11);adjust.setOnClickListener(v->showAdjustments());tools.addView(adjust,new LinearLayout.LayoutParams(dp(77),dp(40)));
         cameraResolutionLabel=text("Câmera: verificando resolução…",11,Color.rgb(151,174,187));
         cameraResolutionLabel.setOnClickListener(v->showCameraPicker());root.addView(cameraResolutionLabel);
-        LinearLayout actions=row();actions.setPadding(0,dp(7),0,0);root.addView(actions);
+        TextView foot=text("Contagem automática · requer revisão",10,Color.rgb(151,174,187));foot.setGravity(Gravity.CENTER);foot.setPadding(0,dp(8),0,dp(4));root.addView(foot);
+        LinearLayout actions=row();actions.setPadding(0,dp(7),0,0);shell.addView(actions);
         capture=button("Fotografar",true);capture.setEnabled(false);capture.setOnClickListener(v->capturePhoto());actions.addView(capture,new LinearLayout.LayoutParams(0,dp(49),1));
         save=button("Salvar foto + dados",true);save.setOnClickListener(v->savePhoto());save.setVisibility(View.GONE);actions.addView(save,new LinearLayout.LayoutParams(0,dp(49),1));
         open=button("Abrir foto",false);open.setOnClickListener(v->openPhoto());LinearLayout.LayoutParams other=new LinearLayout.LayoutParams(dp(112),dp(49));other.leftMargin=dp(8);actions.addView(open,other);
         back=button("Câmera",false);back.setOnClickListener(v->returnToCamera());back.setVisibility(View.GONE);LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(dp(95),dp(49));bp.leftMargin=dp(8);actions.addView(back,bp);
-        TextView foot=text("Contagem automática · requer revisão",10,Color.rgb(151,174,187));foot.setGravity(Gravity.CENTER);foot.setPadding(0,dp(8),0,0);root.addView(foot);
+    }
+
+    private ScrollView mainScroll;
+    private FrameLayout imageFrame;
+    /**
+     * Altura da área da foto: toda a altura visível da tela rolável abaixo do cabeçalho, menos uma faixa de
+     * {@code dp(30)} que deixa à mostra a linha seguinte e indica que há mais conteúdo abaixo. Com foto
+     * congelada, não passa da altura em que ela ocupa a largura inteira, para não sobrar faixa preta.
+     */
+    private void sizeImageFrame(){
+        if(mainScroll==null||imageFrame==null)return;
+        int viewport=mainScroll.getHeight(),width=imageFrame.getWidth();
+        if(viewport<=0||width<=0)return;
+        int target=Math.max(dp(240),viewport-imageFrame.getTop()-dp(30));
+        Bitmap shown=mode==Mode.PHOTO&&photoBitmap!=null&&!photoBitmap.isRecycled()?photoBitmap:null;
+        if(shown!=null&&shown.getWidth()>0){
+            int fitted=(int)Math.ceil(width*(double)shown.getHeight()/shown.getWidth());
+            target=Math.max(dp(240),Math.min(target,fitted));
+        }
+        LinearLayout.LayoutParams lp=(LinearLayout.LayoutParams)imageFrame.getLayoutParams();
+        if(lp.height!=target||lp.weight!=0){lp.height=target;lp.weight=0;imageFrame.setLayoutParams(lp);}
+    }
+    /** Depois de mostrar uma foto analisada: ajusta a altura e volta ao topo, para a foto aparecer inteira. */
+    private void showImageAtTop(){
+        if(mainScroll==null)return;
+        mainScroll.post(()->{sizeImageFrame();mainScroll.scrollTo(0,0);});
     }
     private void bindCamera() {
         if(binding||!nativeReady||isDestroyed()||isFinishing())return;
@@ -704,7 +738,7 @@ public final class MainActivity extends ComponentActivity {
                 photoAnalysisWindow=window;suggestionWindow=searchReport==null?null:window;roiNeedsAnalysis=false;
                 originalWidth=sourceSize[0];originalHeight=sourceSize[1];scaleSettings=previousScale;
                 photoAllResult=result;photoAllCracks=cracks;photoLowLight=analyzedLight;interestRegion=window.region;cropRoiReport=interestRegion!=null;photoAutoRoi=autoProposal;
-                frozen.setVisibility(View.VISIBLE);mode=Mode.PHOTO;applyRegion(interestRegion);
+                frozen.setVisibility(View.VISIBLE);mode=Mode.PHOTO;applyRegion(interestRegion);showImageAtTop();
                 if(!replacingCurrent&&autoProposal!=null&&autoProposal.usable()&&AnalysisWindow.sameRegion(window.region,autoProposal.region))toast("Área automática: "+autoProposal.describe());
                 if(searchReport!=null)hint.setText((window.region==null?"Foto":"ROI")+": "+(searchReport.cancelled?"busca cancelada; aplicado o ajuste atual.":searchReport.weak()?"sugestão com pouca evidência; confira os contornos.":"ajuste sugerido aplicado. Toque em Sugestão para comparar.")+(minimumExpectedMm>0&&scaleSettings==null?" Calibre pela medida real para verificar "+HistogramView.number(minimumExpectedMm)+" mm.":""));
                 if(referenceInvalidated){hint.setText("O contorno da referência mudou. Toque novamente no objeto para calibrar.");toast("Referência alterada pela reanálise; escala removida.");}
@@ -798,7 +832,7 @@ public final class MainActivity extends ComponentActivity {
             DetailedAnalysis.Output analyzed=DetailedAnalysis.run(input.gray,input.geometry,selected,compare,upscaler,scaleSettings,source[0],source[1],minimumExpectedMm,crackDetector(),crackSensitivity,()->cancel.get()||isDestroyed(),(done,total,label)->runOnUiThread(()->updateTuneProgress(done,total,label)));
             final Bitmap displayed=ready;final DetailedAnalysis.Report detailedReport=analyzed.report.withSearch(report);final DetectionTuner.Option chosen=selected;
             runOnUiThread(()->{closeTuneProgress();if(isDestroyed()||isFinishing()){displayed.recycle();return;}if(cancel.get()){displayed.recycle();mode=Mode.PHOTO;applyRegion(interestRegion);hint.setText("Processamento cancelado; resultado anterior preservado.");return;}Granulometry.Settings previous=scaleSettings;boolean changed=previous!=null&&previous.selectedObject!=null&&!scope.keepsReference(previous.selectedObject,analyzed.result,source[0],source[1]);if(changed)previous=null;
-                photoFile=null;releasePreviousPhoto();photoBitmap=displayed;photoFile=file;photoMime=mime;originalWidth=source[0];originalHeight=source[1];scaleSettings=previous;photoAllResult=analyzed.result;photoAllCracks=analyzed.cracks;photoParameters=chosen.parameters;photoOption=chosen;photoSuggestions=null;suggestionWindow=null;photoAnalysisWindow=scope;photoDetailReport=detailedReport;photoLowLight=null;detailMode=true;detailCompare=compare;detailSr=sr;interestRegion=scope.region;cropRoiReport=scope.region!=null;roiNeedsAnalysis=false;frozen.setVisibility(View.VISIBLE);mode=Mode.PHOTO;applyRegion(interestRegion);
+                photoFile=null;releasePreviousPhoto();photoBitmap=displayed;photoFile=file;photoMime=mime;originalWidth=source[0];originalHeight=source[1];scaleSettings=previous;photoAllResult=analyzed.result;photoAllCracks=analyzed.cracks;photoParameters=chosen.parameters;photoOption=chosen;photoSuggestions=null;suggestionWindow=null;photoAnalysisWindow=scope;photoDetailReport=detailedReport;photoLowLight=null;detailMode=true;detailCompare=compare;detailSr=sr;interestRegion=scope.region;cropRoiReport=scope.region!=null;roiNeedsAnalysis=false;frozen.setVisibility(View.VISIBLE);mode=Mode.PHOTO;applyRegion(interestRegion);showImageAtTop();
                 hint.setText(analyzed.report.summary()+". Toque em Detalhada para comparar. "+(changed?"O contorno da referência mudou; calibre novamente.":"Confira os contornos antes de salvar."));if(changed)toast("Referência alterada; escala removida.");
             });
         }catch(Exception|OutOfMemoryError e){if(ready!=null)ready.recycle();final String reason=e instanceof java.util.concurrent.CancellationException?"Processamento cancelado; resultado anterior preservado.":e instanceof IllegalArgumentException&&e.getMessage()!=null?e.getMessage():"Não foi possível concluir a análise detalhada. Reduza a ROI ou desative SR e tente novamente.";runOnUiThread(()->{if(!isDestroyed()){closeTuneProgress();mode=Mode.PHOTO;applyRegion(interestRegion);hint.setText(reason);toast(reason);}});
@@ -875,7 +909,7 @@ public final class MainActivity extends ComponentActivity {
     }
     private void returnToCamera() {
         epoch++;mode=Mode.LIVE;lastResult=0;lastLiveResult=null;liveDistribution=null;releasePreviousPhoto();hideColorMap(true);
-        frozen.setVisibility(View.GONE);overlay.clear();badge.setText("AO VIVO");count.setText("—");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");detail.setText("Aguardando análise");
+        frozen.setVisibility(View.GONE);overlay.clear();showImageAtTop();badge.setText("AO VIVO");count.setText("—");shapeLabel.setText("Esfericidade aparente 2D (b/a): —");detail.setText("Aguardando análise");
         hint.setText("Mantenha a câmera parada. Toque na imagem para focar.");updateControls();
     }
     private void releasePreviousPhoto() {
