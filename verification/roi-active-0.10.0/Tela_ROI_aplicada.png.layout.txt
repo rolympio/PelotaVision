@@ -1,1 +1,1 @@
-save_visible=true; fullHeight=98; visible=Rect(36, 1474 - 570, 1572); root=1640; parent=1572
+save_visible=true; fullHeight=98; visible=Rect(36, 1518 - 570, 1616); root=1640; parent=1616
