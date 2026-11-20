@@ -1,0 +1,43 @@
+# Super-resolução neural offline para pelotas
+
+| Nome | Entrada | Frames | Licença | Pesos | Custo/GPU | Serve para pelotas? |
+|---|---|---:|---|---|---|---|
+| Deep Burst SR / BSRN (CVPR 2021) | RAW Bayer mosaico de smartphone; saída RGB linear | 14 usados no modelo publicado | README lista LICENSE, mas o extrator não informa o tipo; conferir arquivo antes de redistribuir | Sim, pesos para SyntheticBurst e BurstSR | PyTorch, fluxo óptico/alinhamento; README não dá VRAM/latência; inadequado assumir CPU móvel | Só se o app puder capturar RAW compatível e tratar pipeline de sensor. Alto custo de integração; não recebe JPEG sRGB diretamente [1] |
+| NTIRE21_BURSTSR | Inferência do Deep Burst SR; RAW burst | 14 (herda o modelo DBSR) | Não verificada; o repositório redireciona para DBSR | Modelos agora no repo DBSR | Sem dado público confiável de custo próprio | Não é alternativa separada nem modelo sRGB; usar DBSR como referência [2] |
+| Burstormer (CVPR 2023) | Burst de imagens; documentação do repo não foi verificável nesta coleta para precisar Bayer vs sRGB | Não verificado | Não verificada | Não verificado nesta coleta | Arquitetura Transformer, sem orçamento de inferência verificável; não presumir viabilidade em ARM64 | Candidato de pesquisa, mas não recomendável para integração Java/OpenCV sem confirmar formato, licença, checkpoint e benchmark [3] |
+| SReNet / Melfi et al. (ICCVW 2019) | O trabalho trata burst SR auto-supervisionado; formato exato não confirmado | Múltiplos frames; quantidade não verificada | Não confirmada | Não confirmado | Não há estimativa reproduzível disponível nas fontes verificadas | A promessa de auto-supervisão é relevante, mas os repositórios indicados não puderam ser confirmados como fontes legíveis; tratar como indisponível até validar código/pesos [4] [5] |
+| Lecouat et al., HDR/SR de bursts RAW (ECCV 2022) | RAW mosaico; HDR e SR | Burst; quantidade depende da captura/protocolo | Repositório/código e licença não confirmados | Não verificado | Método de pesquisa; sem custo de app publicado nesta coleta | Conceitualmente adequado a RAW, mas não parece caminho plug-and-play para pelotas sem validar disponibilidade do código e suporte de câmera [6] |
+| Real-ESRGAN | Imagem única RGB/sRGB comum | 1 | BSD-3-Clause no repositório | Sim; general x4, general small x4v3 e modelos anime | Executável ncnn Vulkan offline para Windows/Linux/macOS e GPU Intel/AMD/NVIDIA; tiled inference; o repo não dá latência/VRAM universal | Bom baseline offline para textura/upsampling, não recupera detalhe factual garantido. Anime não faz sentido para pelotas; testar modelo geral e artefatos [7] |
+| SwinIR / HAT (referências de qualidade) | SISR RGB, modelos comuns | 1 | Conferir licença de código e pesos de cada repo/modelo | Pesos de pesquisa/model zoo publicados | Transformers de imagem; tendem a ser mais pesados que FSRCNN/RLFN; sem custo uniforme | Referência de qualidade em PC, não prioridade para execução em Android/CPU [8] [9] |
+| RLFN (ByteDance, NTIRE 2022) | Imagem única RGB | 1 | README/repositório deve ser checado para uso/redistribuição | Busca do repo informa pesos pré-treinados e código de teste | Projetado para trilha de runtime eficiente; sem latência comparável para seu hardware nesta coleta | Candidato leve para benchmark depois de converter/validar modelo e licença; não substituir FSRCNN sem teste real [10] |
+| OpenCV DNN Super Resolution: FSRCNN / ESPCN | RGB de canal único ou colorido conforme caminho OpenCV; não RAW mosaico | 1 | Código OpenCV Apache-2.0; pesos têm licença/origem própria | API carrega pesos externos (p.ex. ONNX/Caffe); OpenCV implementa EDSR, ESPCN, FSRCNN e LapSRN, mas não fornece automaticamente o arquivo de cada modelo | FSRCNN/ESPCN são opções leves para CPU; sem benchmark oficial comparável na doc. FSRCNN x2 já integrado no projeto é a referência prática | Sim como baseline offline. Preservar imagem original e oferecer SR como visualização, não como medição sem validação [11] |
+| DUSRM / dropout-based SR (Mao et al., CVPR 2023) | Imagem degradada, método auto-supervisionado conforme paper | 1 ou mais conforme protocolo; não confirmado no README | Não verificada | Disponibilidade de código/pesos não confirmada nesta coleta | Reprodutibilidade/custo não confirmado | Interessante pela falta de HR, mas não escolher antes de provar que há implementação executável e estabilidade em dados de pelotas [12] |
+| Zero-DCE (complementar, não SR) | Imagem RGB de baixa luz | 1 | Verificar licença do repo antes de incorporar | Pesos/código do projeto disponíveis publicamente | Rede de realce de luz, não SR; custo não informado aqui | Pode ser avaliado para exposição baixa, mas não recupera detalhe e pode amplificar ruído; aplicar antes só com controle e comparação [13] |
+
+## Recomendação
+
+O ponto de partida mais realista é manter o FSRCNN x2 via OpenCV DNN em CPU como baseline offline e compará-lo, no mesmo aparelho, com ESPCN x2 e RLFN convertido para um formato aceito pelo runtime. A documentação oficial do OpenCV lista FSRCNN e ESPCN entre as quatro arquiteturas de `dnn_superres`, mas isso não significa que inclua os pesos: os arquivos do modelo precisam ser obtidos e licenciados separadamente. Meça latência, memória, temperatura e qualidade com imagens reais de pelotas no Android ARM64 e no Windows, para as resoluções-alvo do app [10] [11].
+
+Para fotos sRGB existentes, Real-ESRGAN é a opção de maior conveniência para teste local: há executável ncnn portátil, modelos gerais e modelos de anime, e o README diz que o treino usa dados sintéticos. O general x4 ou o modelo general pequeno x4v3 são os candidatos relevantes; modelos anime são especializados para ilustração e devem ser descartados para objetos reais. Embora seja offline, a versão padrão de alta qualidade pode ser pesada para CPU/Android; um executável Windows não equivale a integração Java/Android, então avalie ncnn/Vulkan ou um modelo menor convertido antes de prometer suporte [7].
+
+Não recomendaria começar por DBSR/BSRN, Burstormer ou Lecouat num app Java+OpenCV sem uma etapa maior de engenharia. DBSR requer sequências RAW mosaico e produz RGB linear, com 14 frames no modelo e pesos publicados; o problema não é simplesmente envolver um `Mat`, mas obter RAW consistente do sensor, normalizar CFA/exposição e integrar alinhamento/fusão e runtime PyTorch. Isso só faz sentido se o aplicativo controla a captura RAW e houver GPU/NPUs e tempo para portar [1] [6].
+
+Sem fotos HR de pelotas, ainda é possível ajustar SR usando pares sintéticos: degradar recortes de imagens nítidas de pelotas com blur, redução, ruído, compressão e variações de iluminação, preservando a imagem original como alvo de treino. Isso não torna o método sem supervisão; cria supervisão sintética e pode gerar viés se a degradação não imitar a câmera. Real-ESRGAN usa esse princípio em escala geral, mas um modelo de domínio específico precisaria de um conjunto diverso de imagens de pelotas, split por sessão/objeto e avaliação visual/geométrica. Auto-supervisão tipo SReNet/DUSRM só deve entrar no plano após localizar repositório utilizável e reproduzir resultados; Zero-DCE é apenas realce de baixa luz, não super-resolução [4] [7] [12] [13].
+
+Por fim, SR generativa pode inventar textura. Para inspeção, contagem ou mensuração de pelotas, a saída ampliada deve ser identificada como aprimoramento visual; não use pixels gerados para inferir tamanho, bordas ou defeitos sem validação quantitativa contra imagens de maior resolução. Uma opção segura é permitir alternância original/SR e preservar metadados e imagem-fonte.
+
+## Referências
+
+[1]: https://github.com/goutamgmb/deep-burst-sr "Deep Burst Super-Resolution, README e model zoo"
+[2]: https://github.com/goutamgmb/NTIRE21_BURSTSR "Repositório NTIRE21 BURSTSR"
+[3]: https://github.com/HongYang222/Burstormer "Burstormer, repositório indicado"
+[4]: https://github.com/aaugustinus/SReNet "Candidato de repositório SReNet aaugustinus"
+[5]: https://github.com/mcger/SReNet "Candidato de repositório SReNet mcger"
+[6]: https://arxiv.org/abs/2207.14671 "High Dynamic Range and Super-Resolution from Raw Image Bursts"
+[7]: https://github.com/xinntao/Real-ESRGAN "Real-ESRGAN README"
+[8]: https://github.com/JingyunLiang/SwinIR "SwinIR"
+[9]: https://github.com/XPixelGroup/HAT "HAT"
+[10]: https://github.com/bytedance/RLFN "RLFN"
+[11]: https://docs.opencv.org/4.13.0/d9/de0/group__dnn__superres.html "OpenCV DNN Super Resolution"
+[12]: https://openaccess.thecvf.com/content/CVPR2023/html/Bhat_Self-Supervised_Burst_Super-Resolution_CVPR_2023_paper.html "Self-Supervised Burst Super-Resolution"
+[13]: https://github.com/Li-Chongyi/Zero-DCE "Zero-DCE"
