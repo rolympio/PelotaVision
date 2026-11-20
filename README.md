@@ -14,6 +14,7 @@ O **PelotaVision** é um software de pesquisa e desenvolvimento para análise de
 - **Calibração:** escala em pixel/mm, referência dimensional, largura conhecida da correia e diâmetro interno de recipiente redondo com borda detectada automaticamente ([detalhes](docs/calibracao-recipiente.md)), sempre com confirmação do usuário.
 - **ROI:** seleção e processamento de região de interesse, preservando a fotografia original.
 - **Qualidade de imagem:** ajustes de contraste e iluminação, análise detalhada em blocos e super-resolução FSRCNN 2× opcional e experimental.
+- **Rajada (0.19.0):** várias fotos da mesma cena viram uma imagem empilhada com menos ruído, na mesma grade e escala. Um laudo mede tremor, registro e ruído antes de liberar a super-resolução 2× multiframe, que é opcional e nunca é usada para medir ([detalhes](docs/rajada-burst.md)).
 - **Rastreabilidade:** exportações e registros de configurações, parâmetros, medidas e evidências visuais, conforme o suporte de cada versão.
 - **Plataformas:** aplicativo Android e aplicação Windows, com fluxos de captura, importação, análise e exportação.
 
@@ -52,6 +53,25 @@ Análise de imagens de pelotas de minério de ferro: localização e ajuste elí
 **Estado:** protótipo de P&D. O software não foi validado metrologicamente nem em condições industriais; os números abaixo servem ao desenvolvimento, não à metrologia.
 
 Versões descritas nesta documentação: Android `0.16.0` e Windows `0.6.0`. Releases anteriores permanecem no histórico abaixo.
+
+## Novo na 0.19.0 (Android) / Windows 0.11.0 — Rajada
+- **Laudo da rajada (Trilha 0):** para N fotos da mesma cena, mede:
+  - deslocamento sub-pixel (correlação de fase + ECC);
+  - erro interno de registro (duas metades);
+  - cobertura das fases da grade 2×, deriva de brilho, nitidez, ruído e movimento.
+  - Decide entre `NADA_A_FAZER`, `SOMENTE_MEDIANA` e `SR_2X_PLAUSIVEL`.
+- **Empilhada (Trilha 1):** mediana robusta ponderada na grade da foto base, com a mesma escala px/mm.
+  Deghosting por pixel. Em rajadas simuladas sobre fotos do repositório, ganhou +9 a +14 dB de PSNR
+  (N = 12 a 24).
+- **SR 2× (Trilha 2):** drizzle/IBP com adjunta exata e gate de χ². Desmarcada por padrão e liberada
+  só pelo laudo. Ganho medido de −0,1 a +1,3 dB sobre a empilhada ampliada (ruído 10) e de +1,2 a
+  +2,8 dB com ruído 3 e fases controladas. **Arquivo derivado: nunca é medida.**
+- **Windows:** botão **Rajada (várias fotos)…** (câmera aberta ou arquivos) e `RAJADA.bat` para lote.
+  **Android:** escolha **2 ou mais fotos** em "Abrir foto". A exportação grava os quadros, a empilhada
+  e o bloco `burst` do JSON.
+- **Estado:** testado em software (14 testes) e demonstrado em imagem de verificação
+  (`verification/burst-0.19.0/`). **Não validado com amostra física.** O ensaio A está em
+  `tools/burst_validate/README.md`.
 
 ## Novo na 0.16.0 (Android) / Windows 0.6.0
 - **Trincas (MobileNetV3 v3):** retreinada com 31 trincas e 102 pelotas sem trinca revisadas à mão em 6 análises de webcam sobre panela (27/10). Análise inteira fora: AUC 0,922 e 26 de 31 trincas achadas, contra 0,872 e 22 de 31 da v2 nas mesmas pelotas; holdout antigo 0,977, FN 0. Critério fixado antes do treino. Detalhes em `verification/cracks-webcam-20261027/`.
