@@ -1,8 +1,16 @@
+"""Infográfico da rajada (docs/img/rajada-storytelling.png).
+
+Uso: python figura_storytelling.py PASTA_VERIF SAIDA.png
+PASTA_VERIF contém bancada/mao_r35 e bancada/grade_r3, cada um com sim/ (simular_rajada.py) e res/ (BurstCli),
+como gerado no roteiro de verification/burst-0.19.0/README.md.
+"""
+import sys
 import json, cv2, numpy as np, matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, Rectangle, Circle
-V='/home/claude/verif2'
+V=sys.argv[1] if len(sys.argv)>1 else 'verif'
+OUT=sys.argv[2] if len(sys.argv)>2 else 'rajada-storytelling.png'
 rd=lambda p: cv2.cvtColor(cv2.imread(p),cv2.COLOR_BGR2RGB)
 def case(foto,c):
     d=f'{V}/{foto}/{c}'; b=json.load(open(d+'/res/rajada.json'))['burst']; base=b['base_frame']
@@ -121,4 +129,4 @@ T(0.68,-0.345,'Na prática',fontsize=14,weight='bold',color=GOOD,va='top')
 T(0.68,-0.37,'1. Trave foco e exposição.\n2. Tire 8 a 24 fotos, cena parada.\n3. Leia o laudo.\n4. Use a empilhada: ruído\n    cai ~√N, escala intacta.\n5. SR 2× é bônus raro:\n    luz boa + deslocamento ½ px.',fontsize=12,va='top',linespacing=1.5)
 T(0.05,-0.51,'Mil fotos não dão “resolução infinita”: o teto físico é 2×. O ganho grande e confiável é o de ruído.',fontsize=13.5,weight='bold',color=ACC)
 T(0.05,-0.523,'Estado: testado em software e em imagens de verificação simuladas · ainda não validado com amostra física (ensaio A pendente) · docs/rajada-burst.md',fontsize=10.5,color=MUTE)
-fig.savefig('/home/claude/story/rajada_storytelling.png',facecolor=PAPER)
+fig.savefig(OUT,facecolor=PAPER)
