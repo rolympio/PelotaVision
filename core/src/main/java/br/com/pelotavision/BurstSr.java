@@ -10,11 +10,12 @@ import java.util.Random;
  * sub-pixel {@code S_k}, integração do pixel {@code B} (caixa de lado 2 na grade HR) e decimação
  * {@code D}. Sem rede neural e sem "aumentar e afiar".</p>
  * <ol>
- *   <li><b>Drizzle / convolução normalizada:</b> {@code x0 = Σ Aᵀ(c_k y_k) / Σ Aᵀ(c_k 1)}, pesos de área.</li>
- *   <li><b>Back-projection iterativa (IBP):</b> descida em {@code ½ Σ ||M_k (A_k x − y_k)||² + μ R(x)},
- *   passo {@code 1,2 / λ_max} com λ_max por iteração de potência, 6 a 12 iterações (nunca 60: o ensaio
- *   mostrou que amplifica ruído). Máscara de robustez M rejeita amostras inconsistentes (deghosting) e
- *   R suaviza só as áreas planas (peso {@code exp(-(|∇x0|/τ)²)}), preservando a aresta.</li>
+ *   <li><b>Ponto de partida:</b> a empilhada (Trilha 1) ampliada por bicúbica, como no IBP de Irani–Peleg;
+ *   sem ela, drizzle / convolução normalizada {@code x0 = Σ Aᵀ(c_k y_k) / Σ Aᵀ(c_k 1)}.</li>
+ *   <li><b>Back-projection iterativa (IBP):</b> descida em {@code ½ Σ ||M_k (A_k x − y_k)||² + μ R(x)}, 6 a 12
+ *   iterações (nunca 60: o ensaio mostrou que amplifica ruído), em duas fases. Fase 1: só a confiança por quadro,
+ *   passo {@code 1,2/λ_max}. Fase 2: máscara de robustez M contra a estimativa da fase 1 (deghosting) e
+ *   suavidade R só nas áreas planas dessa estimativa, passo {@code 1,2/(λ_max + 8μ)}. λ_max por iteração de potência.</li>
  * </ol>
  *
  * <p>Garantias verificadas em teste e em toda execução: adjunta exata ({@code <Ax,r> = <x,Aᵀr>} até
