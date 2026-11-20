@@ -85,6 +85,10 @@ final class ResultSaver {
     }
     /** 0.18.0: {@code autoRoi} = proposta da ROI automática (registrada no JSON; "automatic" só se usada sem edição). */
     static SavedResult save(Context context,Bitmap photo,File original,String originalMime,PelletDetector.Result result,PelletDetector.Parameters parameters,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,DetectionTuner.Report suggestions,DetectionTuner.Option applied,boolean cropRoi,DetailedAnalysis.Report detailed,ReportVisuals visuals,CrackClassifierChoice.Resolution crackChoice,String networkId,LowLightInfo lowLight,Bitmap filtered,String folder,String testName,RosinRammler.Basis rrBasis,AutoRoi.Result autoRoi) throws Exception {
+        return save(context,photo,original,originalMime,result,parameters,cracks,distribution,region,excludedByRegion,suggestions,applied,cropRoi,detailed,visuals,crackChoice,networkId,lowLight,filtered,folder,testName,rrBasis,autoRoi,null);
+    }
+    /** 0.19.0: {@code burst} = rajada que gerou a foto (a "original" é a empilhada; os quadros vão como _rajada_quadro_XX). */
+    static SavedResult save(Context context,Bitmap photo,File original,String originalMime,PelletDetector.Result result,PelletDetector.Parameters parameters,CrackAnalysis cracks,Granulometry.Distribution distribution,InterestRegion region,int excludedByRegion,DetectionTuner.Report suggestions,DetectionTuner.Option applied,boolean cropRoi,DetailedAnalysis.Report detailed,ReportVisuals visuals,CrackClassifierChoice.Resolution crackChoice,String networkId,LowLightInfo lowLight,Bitmap filtered,String folder,String testName,RosinRammler.Basis rrBasis,AutoRoi.Result autoRoi,BurstImport burst) throws Exception {
         if(rrBasis==null)rrBasis=RosinRammler.Basis.NUMBER;
         testName=SaveNaming.cleanTestName(testName);
         folder=folder==null||folder.trim().isEmpty()?null:SaveNaming.sanitizeFolder(folder);
@@ -103,10 +107,21 @@ final class ResultSaver {
         Bitmap annotated=null,map=null,filteredPanel=null;
         try {
             String extension="image/png".equals(originalMime)?"png":"image/webp".equals(originalMime)?"webp":"jpg";
+            final String originalName=burst!=null?base+"_rajada_empilhada.png":base+"_original."+extension;
             Uri source=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    base+"_original."+extension,originalMime,pictures);pending.add(source);
+                    originalName,burst!=null?"image/png":originalMime,pictures);pending.add(source);
             try(InputStream input=new FileInputStream(original);OutputStream output=stream(resolver,source)) {
                 byte[] bytes=new byte[65536];int count;while((count=input.read(bytes))!=-1)output.write(bytes,0,count);
+            }
+            java.util.List<String> burstNames=new ArrayList<>();
+            if(burst!=null)for(int i=0;i<burst.frames.size();i++) {
+                String m=burst.mimes.get(i);String ext="image/png".equals(m)?"png":"image/webp".equals(m)?"webp":"jpg";
+                String name=String.format(Locale.ROOT,"%s_rajada_quadro_%02d.%s",base,i+1,ext);
+                Uri frame=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,name,m,pictures);pending.add(frame);
+                try(InputStream input=new FileInputStream(burst.frames.get(i));OutputStream output=stream(resolver,frame)) {
+                    byte[] bytes=new byte[65536];int count;while((count=input.read(bytes))!=-1)output.write(bytes,0,count);
+                }
+                burstNames.add(name);
             }
             annotated=PhotoComposer.compose(photo,result,cracks,distribution,region,excludedByRegion,cropRoi,crackHistogram,visuals,filtered);
             Uri image=create(resolver,MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
@@ -145,7 +160,8 @@ final class ResultSaver {
             json.put("coordinates","detections in full upright analyzed photo pixels; composite x=(x-crop_left)*render_scale; composite y=annotated_panel_top+(y-crop_top)*render_scale");
             json.put("original_panel_top",layout.originalTop);json.put("annotated_panel_top",layout.annotatedTop);json.put("histogram_top",layout.histogramTop);
             json.put("cracks",ReportJson.crackJson(cracks));
-            json.put("original_file",base+"_original."+extension);json.put("annotated_file",base+"_resultado.png");
+            json.put("original_file",originalName);
+            if(burst!=null){json.put("burst",burst.result.toJson(burstNames,originalName,null,true));json.put("source_type","burst_median");}json.put("annotated_file",base+"_resultado.png");
             json.put("analysis_ms",result.durationMs);json.put("reviewed",false);json.put("candidate_limit",result.candidateLimit);
             json.put("physical_scale",JSONObject.NULL);json.put("histogram",JSONObject.NULL);
             json.put("note","Experimental 2D ellipse fit: area=pi*a*b, equivalent diameter=2*sqrt(a*b). Unfitted objects retain seed estimates and require review. Aspect ratio b/a is apparent 2D shape, not 3D sphericity. Roundness on fitted objects uses ellipse perimeter, not measured contour perimeter. Distribution by number, not validated sieve granulometry.");
