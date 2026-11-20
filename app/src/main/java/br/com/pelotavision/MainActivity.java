@@ -63,6 +63,8 @@ import java.util.concurrent.TimeUnit;
 public final class MainActivity extends ComponentActivity {
     private enum Mode { LIVE, PROCESSING, PHOTO, SAVING }
     private static final int CAMERA_PERMISSION=10, OPEN_PHOTO=11;
+    /** 0.19.0: rajada importada (a foto da sessão é a empilhada enquanto photoFile == photoBurst.fused). */
+    private BurstImport photoBurst;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final AdaptivePelletDetector detector=new AdaptivePelletDetector();
@@ -644,16 +646,25 @@ public final class MainActivity extends ComponentActivity {
     private void openPhoto() {
         if(mode==Mode.PROCESSING||mode==Mode.SAVING)return;
         Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);intent.setType("image/*");intent.addCategory(Intent.CATEGORY_OPENABLE);
+        // 0.19.0: escolher 2 ou mais fotos da mesma cena abre a rajada (empilhada); 1 foto segue o fluxo normal.
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
         try {startActivityForResult(intent,OPEN_PHOTO);}catch(Exception e){toast("Nenhum seletor de fotos disponível.");}
     }
     @Override public void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);
-        if(request!=OPEN_PHOTO||result!=RESULT_OK||data==null||data.getData()==null)return;
-        Uri uri=data.getData();setBusy(Mode.PROCESSING,"Abrindo foto…");epoch++;
+        if(request!=OPEN_PHOTO||result!=RESULT_OK||data==null)return;
+        android.content.ClipData clip=data.getClipData();
+        if(clip!=null&&clip.getItemCount()>=2){
+            java.util.List<Uri> uris=new java.util.ArrayList<>();for(int i=0;i<clip.getItemCount();i++)uris.add(clip.getItemAt(i).getUri());
+            importBurst(uris);return;
+        }
+        Uri uri=data.getData();if(uri==null&&clip!=null&&clip.getItemCount()==1)uri=clip.getItemAt(0).getUri();
+        if(uri==null)return;
+        final Uri chosen=uri;setBusy(Mode.PROCESSING,"Abrindo foto…");epoch++;
         worker.execute(()-> {
             File copy=new File(getCacheDir(),"importada_"+System.currentTimeMillis()+".img");
             try {
-                try(InputStream in=getContentResolver().openInputStream(uri);FileOutputStream out=new FileOutputStream(copy)) {
+                try(InputStream in=getContentResolver().openInputStream(chosen);FileOutputStream out=new FileOutputStream(copy)) {
                     if(in==null)throw new java.io.IOException("Imagem indisponível.");
                     byte[] bytes=new byte[65536];long total=0;int n;
                     while((n=in.read(bytes))!=-1){total+=n;if(total>100L*1024*1024)throw new java.io.IOException("Imagem muito grande.");out.write(bytes,0,n);}
@@ -663,6 +674,36 @@ public final class MainActivity extends ComponentActivity {
                 if(!"image/jpeg".equals(mime)&&!"image/png".equals(mime)&&!"image/webp".equals(mime))throw new java.io.IOException("Use uma foto JPEG, PNG ou WebP.");
                 processPhoto(copy,mime,parameters);
             } catch(Exception e) {copy.delete();runOnUiThread(()-> {if(!isDestroyed()){returnToCamera();toast("Não foi possível abrir a foto: "+e.getMessage());}});}
+        });
+    }
+    /** 0.19.0: rajada escolhida no seletor → laudo + empilhada analisada como foto comum. */
+    private void importBurst(java.util.List<Uri> uris) {
+        if(uris.size()>BurstStack.MAX_FRAMES){toast("Rajada limitada a "+BurstStack.MAX_FRAMES+" fotos; usando as primeiras.");uris=uris.subList(0,BurstStack.MAX_FRAMES);}
+        final java.util.List<Uri> list=new java.util.ArrayList<>(uris);
+        setBusy(Mode.PROCESSING,"Rajada: registrando e empilhando "+list.size()+" fotos…");epoch++;
+        worker.execute(()-> {
+            java.util.List<File> copies=new java.util.ArrayList<>();java.util.List<String> mimes=new java.util.ArrayList<>();
+            try {
+                long stamp=System.currentTimeMillis();
+                for(int i=0;i<list.size();i++){
+                    File copy=new File(getCacheDir(),"rajada_"+stamp+"_"+i+".img");copies.add(copy);
+                    try(InputStream in=getContentResolver().openInputStream(list.get(i));FileOutputStream out=new FileOutputStream(copy)) {
+                        if(in==null)throw new java.io.IOException("Imagem indisponível.");
+                        byte[] bytes=new byte[65536];long total=0;int n;
+                        while((n=in.read(bytes))!=-1){total+=n;if(total>100L*1024*1024)throw new java.io.IOException("Imagem muito grande.");out.write(bytes,0,n);}
+                    }
+                    android.graphics.BitmapFactory.Options bounds=new android.graphics.BitmapFactory.Options();bounds.inJustDecodeBounds=true;android.graphics.BitmapFactory.decodeFile(copy.getAbsolutePath(),bounds);
+                    String mime=bounds.outMimeType;
+                    if(!"image/jpeg".equals(mime)&&!"image/png".equals(mime)&&!"image/webp".equals(mime))throw new java.io.IOException("Use fotos JPEG, PNG ou WebP.");
+                    mimes.add(mime);
+                }
+                BurstImport b=BurstImport.run(copies,mimes,getCacheDir());
+                final String laudo=b.result.describe();
+                if(b.fused==null){b.deleteFrames();runOnUiThread(()->{if(!isDestroyed()){returnToCamera();new AlertDialog.Builder(this).setTitle("Rajada: nada a empilhar").setMessage(laudo).setPositiveButton("Entendi",null).show();}});return;}
+                BurstImport old=photoBurst;photoBurst=b;if(old!=null)old.deleteFrames();
+                processPhoto(b.fused,"image/png",parameters);
+                runOnUiThread(()->{if(!isDestroyed())new AlertDialog.Builder(this).setTitle("Rajada · "+BurstStack.label(b.result.diagnostics.verdict)).setMessage(laudo+"\n\nA análise usa a empilhada (mesma grade e escala da foto base). Salvar grava também os quadros e o laudo no JSON.").setPositiveButton("Entendi",null).show();});
+            } catch(Exception e) {for(File f:copies)f.delete();runOnUiThread(()-> {if(!isDestroyed()){returnToCamera();toast("Rajada não concluída: "+e.getMessage());}});}
         });
     }
     private void processPhoto(File file,String mime,PelletDetector.Parameters cfg) {processPhoto(file,mime,cfg,false,null);}
@@ -884,10 +925,11 @@ public final class MainActivity extends ComponentActivity {
         InterestRegion exportedRegion=interestRegion;final AutoRoi.Result exportedAuto=photoAutoRoi;int outside=regionExcludedCount();final boolean exportedCrop=cropRoiReport;final DetailedAnalysis.Report exportedDetail=photoDetailReport;final LowLightInfo exportedLight=photoLowLight;
         DetectionTuner.Report exportedSuggestions=rankedSuggestions();DetectionTuner.Option exportedOption=photoOption;
         final RosinRammler.Basis exportedBasis=rrBasis();
+        final BurstImport exportedBurst=photoBurst!=null&&photoBurst.fused!=null&&photoBurst.fused.equals(source)?photoBurst:null;
         setBusy(Mode.SAVING,"Salvando…");
         worker.execute(()-> {
             try {
-                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork,exportedLight,exportedFiltered,outputFolder,testName,exportedBasis,exportedAuto);
+                ResultSaver.SavedResult saved=ResultSaver.save(getApplicationContext(),copy,source,mime,result,cfg,exportedCracks,exportedDistribution,exportedRegion,outside,exportedSuggestions,exportedOption,exportedCrop,exportedDetail,exportedVisuals,exportedChoice,exportedNetwork,exportedLight,exportedFiltered,outputFolder,testName,exportedBasis,exportedAuto,exportedBurst);
                 runOnUiThread(()-> {if(!isDestroyed()){
                     mode=Mode.PHOTO;updateControls();final String dir=saved.folder==null?"PelotaVision":"PelotaVision/"+saved.folder;
                     hint.setText(saved.pdf!=null?"Relatório PDF salvo em Downloads / "+dir+".":"Histograma salvo no arquivo _resultado.png. Dados em Downloads / "+dir+".");

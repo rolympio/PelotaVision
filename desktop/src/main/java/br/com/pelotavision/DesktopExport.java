@@ -55,7 +55,8 @@ final class DesktopExport {
             Files.copy(s.file.toPath(), original.toPath(), StandardCopyOption.COPY_ATTRIBUTES);
         } else {
             extension = "png";
-            original = new File(folder, base + "_original.png");
+            // 0.19.0: rajada grava a empilhada (derivada, nome próprio); os quadros vão em _rajada_quadro_XX.
+            original = new File(folder, base + (s.burst() != null ? "_rajada_empilhada.png" : "_original.png"));
             if (!ImageIO.write(s.frame, "png", original)) throw new IOException("Falha ao gravar o quadro original.");
         }
         written.add(original);
@@ -92,6 +93,10 @@ final class DesktopExport {
         File json = new File(folder, base + ".json");
         JSONObject report = report(s, cfg, viewport, composite, base, extension);
         report.put("test_name", testName == null ? JSONObject.NULL : testName);
+        if (s.burst() != null) {
+            report.put("original_file", original.getName());
+            report.put("burst", s.burst().export(folder, base, written, original.getName()));
+        }
         RosinRammler.Basis rrBasis = cfg.rrBasis == null ? RosinRammler.Basis.NUMBER : cfg.rrBasis;
         report.put("rosin_rammler", RosinRammler.reportJson(d, rrBasis));
         report.put("output_folder", folder.getName());
@@ -492,7 +497,8 @@ final class DesktopExport {
         JSONObject j = new JSONObject();
         j.put("platform", System.getProperty("os.name") + " " + System.getProperty("os.version") + " " + System.getProperty("os.arch"));
         j.put("opencv_version", org.opencv.core.Core.VERSION);
-        j.put("type", s.file != null ? "file" : "webcam");
+        j.put("type", s.burst() != null ? "burst_median" : s.file != null ? "file" : "webcam");
+        if (s.burst() != null) j.put("burst_frames", s.burst().count());
         if (s.file != null) j.put("source_file_name", s.file.getName());
         j.put("original_width", s.originalWidth); j.put("original_height", s.originalHeight);
         j.put("analysis_sample_power_of_two", s.sample);

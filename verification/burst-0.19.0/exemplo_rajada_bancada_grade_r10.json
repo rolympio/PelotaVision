@@ -1,0 +1,294 @@
+{
+  "app": "PelotaVision Windows 0.10.0 (nucleo 0.18.0) BurstCli",
+  "opencv_version": "4.9.0",
+  "burst": {
+    "fusion_mean_weight_per_used_frame": [
+      1.0202,
+      0.9966,
+      0.9841,
+      0.9926,
+      0.9983,
+      1.0042,
+      0.9899,
+      1.0016,
+      1.009,
+      0.9964,
+      1.0094,
+      0.9977
+    ],
+    "jitter_px": {
+      "median": 0.5262,
+      "p90": 0.6899
+    },
+    "live_still": true,
+    "note": "Burst median keeps the base photo grid and scale. SR 2x output is display/proposal only; ellipses and cracks are never measured on reconstructed pixels.",
+    "frames_requested": 12,
+    "reasons": ["Todas as condições medidas permitem tentar SR 2×; a reconstrução ainda passa pela checagem de consistência."],
+    "snr_gain_db_expected": 10.79,
+    "brightness_drift_p90": 0.055,
+    "frame_files": [
+      "quadro_00.png",
+      "quadro_01.png",
+      "quadro_02.png",
+      "quadro_03.png",
+      "quadro_04.png",
+      "quadro_05.png",
+      "quadro_06.png",
+      "quadro_07.png",
+      "quadro_08.png",
+      "quadro_09.png",
+      "quadro_10.png",
+      "quadro_11.png"
+    ],
+    "grid2x_coverage": 1,
+    "base_frame": 9,
+    "enabled": true,
+    "frames_used": 12,
+    "mode": "median_sr2x",
+    "output": {
+      "path": "rajada_empilhada.png",
+      "method": "weighted_robust_median_v1 (consensus = per-pixel gray median; weight = confidence * exp(-0.5 (r / (2.5 sigma))^2))",
+      "grid": "original",
+      "scale_factor_vs_base_photo": 1
+    },
+    "noise_base": 7.463,
+    "scene_still": true,
+    "elapsed_ms": 4690,
+    "registration_rmse_px": 0.0571,
+    "used_for_measurement": false,
+    "snr_gain_db_measured": 11.26,
+    "frames": [
+      {
+        "phase_response": 0.9926,
+        "dx": -0.4971,
+        "ecc": 0.98859,
+        "dy": -0.057,
+        "sharpness_laplacian_var": 1231.78,
+        "brightness_drift": -0.033,
+        "residual_sigma": 8.935,
+        "index": 0,
+        "half_disagreement_px": 0.1743,
+        "used": true,
+        "noise_sigma": 7.399
+      },
+      {
+        "phase_response": 0.9905,
+        "dx": -0.0412,
+        "ecc": 0.99667,
+        "dy": 0.0857,
+        "sharpness_laplacian_var": 1234.2,
+        "brightness_drift": -0.033,
+        "residual_sigma": 9.442,
+        "index": 1,
+        "half_disagreement_px": 0.041,
+        "used": true,
+        "noise_sigma": 7.387
+      },
+      {
+        "phase_response": 0.9807,
+        "dx": -0.4834,
+        "ecc": 0.98266,
+        "dy": 0.3824,
+        "sharpness_laplacian_var": 1228.97,
+        "brightness_drift": -0.021,
+        "residual_sigma": 8.735,
+        "index": 2,
+        "half_disagreement_px": 0.1935,
+        "used": true,
+        "noise_sigma": 7.359
+      },
+      {
+        "phase_response": 0.9903,
+        "dx": -0.0242,
+        "ecc": 0.9972,
+        "dy": 0.5219,
+        "sharpness_laplacian_var": 1225.81,
+        "brightness_drift": -0.033,
+        "residual_sigma": 8.987,
+        "index": 3,
+        "half_disagreement_px": 0.0374,
+        "used": true,
+        "noise_sigma": 7.322
+      },
+      {
+        "phase_response": 0.9899,
+        "dx": -0.5723,
+        "ecc": 0.99718,
+        "dy": -0.0429,
+        "sharpness_laplacian_var": 1232.8,
+        "brightness_drift": -0.048,
+        "residual_sigma": 9.1,
+        "index": 4,
+        "half_disagreement_px": 0.0124,
+        "used": true,
+        "noise_sigma": 7.412
+      },
+      {
+        "phase_response": 0.9997,
+        "dx": -0.0115,
+        "ecc": 0.99696,
+        "dy": -0.0773,
+        "sharpness_laplacian_var": 1241.03,
+        "brightness_drift": 0.033,
+        "residual_sigma": 9.433,
+        "index": 5,
+        "half_disagreement_px": 0.0387,
+        "used": true,
+        "noise_sigma": 7.446
+      },
+      {
+        "phase_response": 0.9919,
+        "dx": -0.4691,
+        "ecc": 0.98978,
+        "dy": 0.5169,
+        "sharpness_laplacian_var": 1234.03,
+        "brightness_drift": 0,
+        "residual_sigma": 8.667,
+        "index": 6,
+        "half_disagreement_px": 0.2031,
+        "used": true,
+        "noise_sigma": 7.334
+      },
+      {
+        "phase_response": 0.9899,
+        "dx": 0.0192,
+        "ecc": 0.98893,
+        "dy": 0.4853,
+        "sharpness_laplacian_var": 1233.14,
+        "brightness_drift": 0.092,
+        "residual_sigma": 9.01,
+        "index": 7,
+        "half_disagreement_px": 0.141,
+        "used": true,
+        "noise_sigma": 7.392
+      },
+      {
+        "phase_response": 0.9765,
+        "dx": -0.6148,
+        "ecc": 0.99719,
+        "dy": 0.0262,
+        "sharpness_laplacian_var": 1227.95,
+        "brightness_drift": 0.055,
+        "residual_sigma": 9.052,
+        "index": 8,
+        "half_disagreement_px": 0.0413,
+        "used": true,
+        "noise_sigma": 7.395
+      },
+      {
+        "phase_response": 1,
+        "dx": 0,
+        "ecc": 1,
+        "dy": 0,
+        "sharpness_laplacian_var": 1253.63,
+        "brightness_drift": 0,
+        "residual_sigma": 0,
+        "index": 9,
+        "half_disagreement_px": 0,
+        "used": true,
+        "noise_sigma": 7.463
+      },
+      {
+        "phase_response": 0.9784,
+        "dx": -0.5199,
+        "ecc": 0.99737,
+        "dy": 0.528,
+        "sharpness_laplacian_var": 1225.57,
+        "brightness_drift": -0.026,
+        "residual_sigma": 8.598,
+        "index": 10,
+        "half_disagreement_px": 0.0207,
+        "used": true,
+        "noise_sigma": 7.363
+      },
+      {
+        "phase_response": 0.9658,
+        "dx": -0.0136,
+        "ecc": 0.99717,
+        "dy": 0.5298,
+        "sharpness_laplacian_var": 1239.65,
+        "brightness_drift": -0.041,
+        "residual_sigma": 9.059,
+        "index": 11,
+        "half_disagreement_px": 0.0861,
+        "used": true,
+        "noise_sigma": 7.409
+      }
+    ],
+    "noise_fused": 2.041,
+    "sr_output": {
+      "scale_rule": "px/mm in this file = 2 x px/mm of the base photo; crop origin in base photo pixels below",
+      "path": "rajada_sr2x.png",
+      "crop_in_base_photo": {
+        "x": 2,
+        "width": 252,
+        "y": 2,
+        "height": 252
+      },
+      "grid": "2x",
+      "scale_factor_vs_base_photo": 2,
+      "used_for_measurement": false
+    },
+    "frames_rejected": [],
+    "registration_rect": {
+      "x": 0,
+      "width": 256,
+      "y": 0,
+      "height": 256
+    },
+    "noise_estimate": 7.463,
+    "measurement_source": "original_pixels",
+    "ibp": {
+      "chi2": 0.7911,
+      "reason": "consistente",
+      "smoothness_weight": 1.5,
+      "frames": 12,
+      "chi2_max": 2.5,
+      "relaxation": 1.2,
+      "lambda_max": 2.893948,
+      "accepted": true,
+      "step": 0.08057,
+      "adjoint_error": 3.189860875073567E-14,
+      "forced_for_testing": false,
+      "iterations": 10
+    },
+    "verdict": "SR_2X_PLAUSIVEL",
+    "sr2x_criteria": {
+      "min_frames": 8,
+      "max_brightness_drift": 1.5,
+      "p90_jitter_px": [
+        0.15,
+        2
+      ],
+      "min_grid2x_coverage": 0.6,
+      "max_registration_rmse_px": 0.15,
+      "max_noise_sigma": 10
+    },
+    "phase_histogram_4x4": [
+      [
+        2,
+        1,
+        1,
+        0
+      ],
+      [
+        2,
+        1,
+        1,
+        0
+      ],
+      [
+        0,
+        1,
+        0,
+        1
+      ],
+      [
+        1,
+        0,
+        1,
+        0
+      ]
+    ]
+  }
+}

@@ -90,6 +90,7 @@ final class MainFrame extends JFrame {
     private final LiveStabilizer stabilizer = new LiveStabilizer();
     private volatile long lastThumb;
     private final JButton captureButton = new JButton("Capturar foto");
+    private final JButton burstButton = new JButton("Rajada (várias fotos)…");
     private final JButton openButton = new JButton("Abrir imagem…");
     private final JButton backLiveButton = new JButton("Voltar ao vivo");
 
@@ -269,7 +270,7 @@ final class MainFrame extends JFrame {
 
         getContentPane().setLayout(new BorderLayout());
         JPanel acquisition = StudioShell.stack(openButton, new JLabel("Câmera e resolução"), cameraBox, resolutionBox,
-                cameraButton, captureButton, backLiveButton, driverButton, lockFocus, lockExposure,
+                cameraButton, captureButton, burstButton, backLiveButton, driverButton, lockFocus, lockExposure,
                 liveBox, liveTuneBox, liveSearchBox, liveScaleButton);
         JButton calibrate = new JButton("Referências e escala…");
         calibrate.addActionListener(e -> showScaleDialog());
@@ -326,6 +327,8 @@ final class MainFrame extends JFrame {
         cameraButton.addActionListener(e -> toggleCamera());
         driverButton.addActionListener(e -> { if (!camera.showDriverSettings()) info("Este driver nao oferece a janela de ajustes pelo DirectShow."); });
         captureButton.addActionListener(e -> capture());
+        burstButton.setToolTipText("0.19.0: N fotos da mesma cena → laudo, empilhada (menos ruído, mesma escala) e SR 2× só se o laudo permitir.");
+        burstButton.addActionListener(e -> burst());
         openButton.addActionListener(e -> openImage());
         backLiveButton.addActionListener(e -> backToLive());
         roiButton.addActionListener(e -> editRegion());
@@ -798,6 +801,33 @@ final class MainFrame extends JFrame {
             catch (IllegalArgumentException ignored) { }
         }
         loadPhoto(s);
+    }
+
+    /** 0.19.0: rajada da câmera aberta ou de arquivos; a empilhada abre como foto (os quadros vão na exportação). */
+    private void burst() {
+        BurstDialog.Host host = new BurstDialog.Host() {
+            @Override public boolean cameraRunning() { return camera.isRunning() && !camera.isReconnecting(); }
+            @Override public Mat snapshot() { return camera.snapshot(); }
+            @Override public CameraSource.Info cameraInfo() { return camera.currentInfo(); }
+            @Override public Boolean liveStill() {
+                if (!camera.isRunning() || !Double.isFinite(stabilizer.lastDifference())) return null;
+                return stabilizer.state() == LiveMotion.State.STILL;
+            }
+            @Override public org.opencv.core.Rect roi(int w, int h) {
+                InterestRegion r = camera.isRunning() ? liveRoi(w, h) : null;
+                if (r == null) return null;
+                int x0 = (int) Math.floor(r.left), y0 = (int) Math.floor(r.top);
+                return new org.opencv.core.Rect(x0, y0, Math.max(1, (int) Math.ceil(r.right) - x0), Math.max(1, (int) Math.ceil(r.bottom) - y0));
+            }
+        };
+        new BurstDialog(this, host, prefs, record -> {
+            Mat fused = record.result.fused;
+            PhotoSession s = new PhotoSession(null, Mats.toImage(fused), record.camera, fused);
+            s.setBurst(record);
+            loadPhoto(s);
+            setStatus("Rajada: " + record.count() + " quadros · " + BurstStack.label(record.result.diagnostics.verdict)
+                    + " · analisando a empilhada (mesma grade e escala da foto base). Salvar grava os quadros e o laudo.");
+        }).setVisible(true);
     }
 
     /** ROI sobre o quadro atual da câmera; a contagem e os gráficos ao vivo passam a usar só essa área. */
@@ -1403,6 +1433,7 @@ final class MainFrame extends JFrame {
         lockFocus.setEnabled(!running); lockExposure.setEnabled(!running);
         driverButton.setEnabled(running);
         captureButton.setEnabled(!busy && running && !camera.isReconnecting());
+        burstButton.setEnabled(!busy);
         backLiveButton.setEnabled(!busy && running && mode != Mode.LIVE);
         openButton.setEnabled(!busy);
         roiButton.setEnabled(!busy && (photo || (mode == Mode.LIVE && running)));

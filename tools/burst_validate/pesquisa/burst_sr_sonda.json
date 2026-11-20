@@ -1,0 +1,175 @@
+{
+  "cena": "20170619_09-52-13.jpg",
+  "N": 24,
+  "IBP_ITERS": 8,
+  "resultados": {
+    "ruido=0.035 tremor=0.0px": {
+      "rmse_registro_px": 0.025,
+      "oracle": {
+        "psnr_1frame": 30.29,
+        "psnr_media": 41.23,
+        "psnr_drizzle": 37.77,
+        "psnr_ibp": 37.77,
+        "diam_1frame": 0.25,
+        "diam_media": 0.08,
+        "diam_ibp": 0.09
+      },
+      "estimado": {
+        "psnr_1frame": 30.29,
+        "psnr_media": 41.23,
+        "psnr_drizzle": 38.2,
+        "psnr_ibp": 37.75,
+        "diam_1frame": 0.25,
+        "diam_media": 0.07,
+        "diam_ibp": 0.09
+      }
+    },
+    "ruido=0.035 tremor=0.5px": {
+      "rmse_registro_px": 0.167,
+      "oracle": {
+        "psnr_1frame": 29.96,
+        "psnr_media": 40.12,
+        "psnr_drizzle": 38.89,
+        "psnr_ibp": 32.51,
+        "diam_1frame": 0.25,
+        "diam_media": 0.09,
+        "diam_ibp": 0.09
+      },
+      "estimado": {
+        "psnr_1frame": 29.96,
+        "psnr_media": 38.78,
+        "psnr_drizzle": 37.9,
+        "psnr_ibp": 32.09,
+        "diam_1frame": 0.25,
+        "diam_media": 0.1,
+        "diam_ibp": 0.12
+      }
+    },
+    "ruido=0.035 tremor=1.5px": {
+      "rmse_registro_px": 0.482,
+      "oracle": {
+        "psnr_1frame": 28.1,
+        "psnr_media": 39.99,
+        "psnr_drizzle": 37.92,
+        "psnr_ibp": 32.61,
+        "diam_1frame": 0.55,
+        "diam_media": 0.09,
+        "diam_ibp": 0.1
+      },
+      "estimado": {
+        "psnr_1frame": 28.1,
+        "psnr_media": 33.85,
+        "psnr_drizzle": 32.09,
+        "psnr_ibp": 28.33,
+        "diam_1frame": 0.55,
+        "diam_media": 0.13,
+        "diam_ibp": 0.13
+      }
+    },
+    "ruido=0.035 tremor=2.5px": {
+      "rmse_registro_px": 0.798,
+      "oracle": {
+        "psnr_1frame": 26.32,
+        "psnr_media": 39.63,
+        "psnr_drizzle": 37.22,
+        "psnr_ibp": 32.52,
+        "diam_1frame": 0.68,
+        "diam_media": 0.11,
+        "diam_ibp": 0.08
+      },
+      "estimado": {
+        "psnr_1frame": 26.32,
+        "psnr_media": 30.42,
+        "psnr_drizzle": 28.76,
+        "psnr_ibp": 26.34,
+        "diam_1frame": 0.68,
+        "diam_media": 0.13,
+        "diam_ibp": 0.27
+      }
+    },
+    "ruido=0.010 tremor=0.0px": {
+      "rmse_registro_px": 0.006,
+      "oracle": {
+        "psnr_1frame": 39.49,
+        "psnr_media": 43.85,
+        "psnr_drizzle": 39.19,
+        "psnr_ibp": 39.19,
+        "diam_1frame": 0.09,
+        "diam_media": 0.05,
+        "diam_ibp": 0.06
+      },
+      "estimado": {
+        "psnr_1frame": 39.49,
+        "psnr_media": 43.85,
+        "psnr_drizzle": 39.27,
+        "psnr_ibp": 39.27,
+        "diam_1frame": 0.09,
+        "diam_media": 0.05,
+        "diam_ibp": 0.06
+      }
+    },
+    "ruido=0.010 tremor=0.5px": {
+      "rmse_registro_px": 0.149,
+      "oracle": {
+        "psnr_1frame": 37.25,
+        "psnr_media": 41.65,
+        "psnr_drizzle": 40.16,
+        "psnr_ibp": 42.46,
+        "diam_1frame": 0.11,
+        "diam_media": 0.05,
+        "diam_ibp": 0.03
+      },
+      "estimado": {
+        "psnr_1frame": 37.25,
+        "psnr_media": 40.12,
+        "psnr_drizzle": 39.08,
+        "psnr_ibp": 38.53,
+        "diam_1frame": 0.11,
+        "diam_media": 0.08,
+        "diam_ibp": 0.07
+      }
+    },
+    "ruido=0.010 tremor=1.5px": {
+      "rmse_registro_px": 0.487,
+      "oracle": {
+        "psnr_1frame": 31.37,
+        "psnr_media": 41.4,
+        "psnr_drizzle": 38.91,
+        "psnr_ibp": 42.34,
+        "diam_1frame": 0.17,
+        "diam_media": 0.06,
+        "diam_ibp": 0.04
+      },
+      "estimado": {
+        "psnr_1frame": 31.37,
+        "psnr_media": 34.07,
+        "psnr_drizzle": 32.28,
+        "psnr_ibp": 29.95,
+        "diam_1frame": 0.17,
+        "diam_media": 0.1,
+        "diam_ibp": 0.08
+      }
+    },
+    "ruido=0.010 tremor=2.5px": {
+      "rmse_registro_px": 0.823,
+      "oracle": {
+        "psnr_1frame": 28.1,
+        "psnr_media": 40.89,
+        "psnr_drizzle": 38.03,
+        "psnr_ibp": 42.09,
+        "diam_1frame": 0.45,
+        "diam_media": 0.09,
+        "diam_ibp": 0.03
+      },
+      "estimado": {
+        "psnr_1frame": 28.1,
+        "psnr_media": 30.34,
+        "psnr_drizzle": 28.68,
+        "psnr_ibp": 27.15,
+        "diam_1frame": 0.45,
+        "diam_media": 0.1,
+        "diam_ibp": 0.11
+      }
+    }
+  }
+}
