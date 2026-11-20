@@ -68,27 +68,28 @@ public final class BurstStack {
         public final Mat sr;
         public final SrInfo srInfo;
         public final long millis;
+        /** Fixado na criação: continua válido depois de {@link #release()} (o JSON é montado na exportação). */
+        private final String mode;
 
         Result(BurstDiagnostics.Report diagnostics, Mat fused, double[] frameWeights, double noiseBase, double noiseFused, Mat sr, SrInfo srInfo, long millis) {
             this.diagnostics = diagnostics; this.fused = fused; this.frameWeights = frameWeights; this.noiseBase = noiseBase;
             this.noiseFused = noiseFused; this.sr = sr; this.srInfo = srInfo; this.millis = millis;
+            if (fused == null) mode = diagnostics.verdict == BurstDiagnostics.Verdict.NADA_A_FAZER ? "rejected" : "diagnostics_only";
+            else mode = sr != null ? "median_sr2x" : "median";
         }
 
         public double snrGainDbMeasured() {
             return noiseFused > 0 && noiseBase > 0 ? 20 * Math.log10(noiseBase / noiseFused) : Double.NaN;
         }
 
-        public String mode() {
-            if (fused == null) return diagnostics.verdict == BurstDiagnostics.Verdict.NADA_A_FAZER ? "rejected" : "diagnostics_only";
-            return sr != null ? "median_sr2x" : "median";
-        }
+        public String mode() { return mode; }
 
         public void release() { if (fused != null) fused.release(); if (sr != null) sr.release(); }
 
         /** Texto para a tela: laudo + o que foi produzido. */
         public String describe() {
             StringBuilder b = new StringBuilder(diagnostics.describe());
-            if (fused != null) {
+            if (!"rejected".equals(mode) && !"diagnostics_only".equals(mode)) {
                 double m = snrGainDbMeasured();
                 b.append(String.format(BurstDiagnostics.BR, "%nEmpilhada (mediana robusta): ruído %.1f → %.1f níveis%s · mesma grade e escala da foto base.",
                         noiseBase, noiseFused, Double.isFinite(m) ? String.format(BurstDiagnostics.BR, " (%.1f dB medidos)", m) : ""));
@@ -113,7 +114,7 @@ public final class BurstStack {
             j.put("mode", mode());
             j.put("snr_gain_db_measured", Double.isFinite(snrGainDbMeasured()) ? BurstDiagnostics.round(snrGainDbMeasured(), 2) : JSONObject.NULL);
             j.put("noise_base", BurstDiagnostics.round(noiseBase, 3));
-            j.put("noise_fused", fused == null ? JSONObject.NULL : BurstDiagnostics.round(noiseFused, 3));
+            j.put("noise_fused", !Double.isFinite(noiseFused) ? JSONObject.NULL : BurstDiagnostics.round(noiseFused, 3));
             if (frameWeights != null) {
                 JSONArray w = new JSONArray();
                 for (double v : frameWeights) w.put(BurstDiagnostics.round(v, 4));
