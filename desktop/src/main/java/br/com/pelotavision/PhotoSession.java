@@ -50,7 +50,12 @@ final class PhotoSession {
         analyzedImage = Mats.toImage(analyzed);
     }
 
-    void release() { analyzed.release(); }
+    /** 0.19.0: rajada que gerou esta foto (a analisada é a empilhada), ou null. */
+    private BurstRecord burst;
+    BurstRecord burst() { return burst; }
+    void setBurst(BurstRecord b) { burst = b; }
+
+    void release() { analyzed.release(); if (burst != null) burst.release(); }
 
     // ---------------- ROI ----------------
 

@@ -67,6 +67,8 @@ final class LiveStabilizer {
     boolean still() { return motion.state() == LiveMotion.State.STILL; }
     private boolean stabilizing() { return enabled && still(); }
     LiveMotion.State state() { return motion.state(); }
+    /** 0.19.0: última diferença medida (NaN se o detector ainda não recebeu quadros). */
+    double lastDifference() { return motion.lastDifference(); }
     boolean tuning() { return tuning; }
     boolean shouldTune(boolean enabled) { return enabled && still() && !tuning && !tunedThisStill; }
     LiveTuner.Run lastRun() { return lastRun; }
