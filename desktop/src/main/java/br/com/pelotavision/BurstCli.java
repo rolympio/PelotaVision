@@ -32,7 +32,9 @@ public final class BurstCli {
     private BurstCli() {}
 
     public static void main(String[] args) throws Exception {
-        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+        // DLL ao lado do .jar (pacote portátil) ou java.library.path, como o DesktopApp, sem carregar redes.
+        File dll = new File(DesktopApp.appDir(), System.mapLibraryName(Core.NATIVE_LIBRARY_NAME));
+        if (dll.isFile()) System.load(dll.getAbsolutePath()); else System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
         File out = null;
         BurstStack.Options o = new BurstStack.Options();
         List<File> inputs = new ArrayList<>();
