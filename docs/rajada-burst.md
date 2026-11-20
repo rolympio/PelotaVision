@@ -9,6 +9,10 @@ nas fotos do projeto, rendeu de −0,1 a +1,3 dB sobre a empilhada ampliada com 
 Chegou a +1,2 a +2,8 dB só com ruído baixo (3 níveis) e deslocamento controlado. Por isso a SR 2× fica
 desmarcada, só é liberada pelo laudo e nunca entra na medição.
 
+![Rajada em 6 capítulos](img/rajada-storytelling.png)
+
+*Figura gerada por `tools/burst_validate/figura_storytelling.py` a partir das saídas da verificação.*
+
 Pesquisa e prompt de origem: `docs/pesquisa/rajada-burst-sr/`. Evidências desta versão:
 `verification/burst-0.19.0/`.
 
