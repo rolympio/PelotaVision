@@ -15,3 +15,10 @@ __pycache__/
 *.pyc
 artifacts/
 data/external/
+
+# Ambiente pessoal e dados privados nao devem ser publicados
+.pelotavision.local.json
+.opencode/node_modules/
+*.bundle
+/desktop/opencv-java/
+/pkg/
