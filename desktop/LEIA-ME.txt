@@ -1,4 +1,4 @@
-PelotaVision Windows 0.6.0 - prototipo
+PelotaVision Studio Windows 0.8.0 - previa experimental
 ======================================
 
 Nucleo de analise: o MESMO codigo do PelotaVision Android 0.16.0 (deteccao por bordas,
@@ -17,6 +17,30 @@ ACELERACAO POR HARDWARE (opcional, desligada por padrao)
 - Acelera so a StarDist e a MobileNetV3. Bordas, LoG e super-resolucao ficam na CPU.
 
 USO
+Studio: navegue por Aquisicao, Calibracao, Segmentacao, Analise, Resultados e Relatorio.
+Os controles ficam no painel contextual esquerdo; imagem ao centro e indicadores a
+direita. Os paineis podem ser recolhidos. Roda do mouse amplia, arrastar desloca.
+O historico de exportacoes fica em Relatorio; as configuracoes sao por usuario.
+Logs: %LOCALAPPDATA%\PelotaVision\logs.
+
+As camadas Instancias e Classes visiveis sao PROJECOES DAS ELIPSES do metodo atual,
+nao mascaras neurais verdade-terreno. A camada de trincas mostra apenas os tracos
+efetivamente propostos. Ausencia de traco nao significa ausencia de trinca.
+Correcao livre de contornos/split/merge ainda nao foi integrada ao aplicativo.
+
+IA MULTITAREFA (PREVIA EXPERIMENTAL, opcional)
+- Na etapa Analise, escolha "Testar IA multitarefa...", leia o aviso e selecione
+  explicitamente o arquivo ONNX experimental local. O modelo nao acompanha o pacote.
+- O arquivo precisa ter o SHA-256 indicado no manual tecnico da versao. Outros
+  pesos ou arquivos alterados sao recusados. A inferencia roda em CPU e pode ser
+  cancelada; imagens maiores que 4.194.304 pixels nao sao aceitas nesta previa.
+- Em Resultados, "IA multitarefa experimental" mostra verde (interior), vermelho
+  (borda) e azul (separacao) com limiares 0,5 nao calibrados. "Incerteza IA" e
+  entropia nao calibrada. Cores e entropia nao sao contagens, medidas ou diagnostico.
+- A previa NAO modifica segmentacao cientifica, calibracao, granulometria,
+  classificacao de trincas, JSON, CSV ou PDF. A rede foi treinada com poucas fotos
+  e pseudo-rotulos; pode marcar fundo como pelota. Nao use para decisao industrial.
+
 1. Duas formas, mesmo programa:
    - Instalador: execute PelotaVision_Windows_<versao>_instalador.exe. Instala so para o
      seu usuario (sem administrador), cria atalho no Menu Iniciar e aparece em
@@ -80,13 +104,22 @@ LIMITES
 - Distribuicao por numero, nao por massa. Foto 2D nao equivale a peneiramento.
 - Sem correcao de perspectiva, altura do leito ou distorcao de lente.
 - No PDF, os simbolos raiz, <= e >= aparecem escritos assim (fonte padrao do PDF).
-- A interface e a webcam nao sao testadas automaticamente (o CI nao tem tela/camera).
+- A interface tem ensaio automatizado --studio-smoke (janela, seis etapas e PDF).
+  Isso nao valida uma camera fisica nem substitui avaliacao humana/metrologica.
 - Prototipo de desenvolvimento. Modelos de trincas e redes neurais nao foram validados
   com amostras reais de producao nem metrologicamente.
 
 Licencas: OpenCV (Apache 2.0, OpenCV_LICENSE.txt). Apache PDFBox (Apache 2.0).
 Modelo FSRCNN em modelos\ (ver FSRCNN_LICENSE.txt / FSRCNN_NOTICE.txt).
 Runtime Java: Eclipse Temurin (GPLv2 + CPE).
+
+PACOTE COMPLETO E ATUALIZACOES
+- Nao copie apenas o .exe: mantenha juntas as pastas app e runtime do pacote.
+- Nao e necessario instalar Python ou Java para executar o pacote portatil.
+- VERIFICAR_ATUALIZACOES.bat abre Releases no GitHub. Use somente distribuicoes
+  aprovadas; compare o SHA-256 e extraia em nova pasta. Nao sobrescreve sua instalacao.
+- O executavel nao tem assinatura digital. Nao altere politicas corporativas de
+  seguranca nem ignore alertas; consulte a TI quando necessario.
 
 NOVO NA 0.5.3
 - Salvar foto + dados: nome do teste e pasta sugerida com data e hora do momento

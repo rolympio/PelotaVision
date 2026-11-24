@@ -22,7 +22,9 @@ final class HistogramView extends JPanel {
     static final ReportVisuals DEFAULTS = ReportVisuals.defaults().withHistogram(true, true, false, CrackHistogram.Normalization.ABSOLUTE);
     private ReportVisuals visuals = DEFAULTS;
 
-    HistogramView() { setPreferredSize(new Dimension(360, 240)); setBackground(Color.WHITE); }
+    static final Dimension CHART_SIZE = new Dimension(330, 270);
+
+    HistogramView() { setPreferredSize(CHART_SIZE); setBackground(StudioTheme.SURFACE); }
 
     void display(Granulometry.Distribution d) { display(d, null, visuals); }
     void display(Granulometry.Distribution d, CrackHistogram h, ReportVisuals v) { distribution = d; cracks = h; if (v != null) visuals = v; repaint(); }
@@ -34,9 +36,16 @@ final class HistogramView extends JPanel {
         // A moldura com título ocupa as bordas do componente: desenha só na área interna (antes o texto
         // da 1ª linha ficava por cima do título "Histograma por numero").
         java.awt.Insets in = getInsets();
-        g.translate(in.left, in.top);
-        g.clipRect(0, 0, getWidth() - in.left - in.right, getHeight() - in.top - in.bottom);
-        paint(g, distribution, cracks, visuals, getWidth() - in.left - in.right, getHeight() - in.top - in.bottom);
+        int w = getWidth() - in.left - in.right, h = getHeight() - in.top - in.bottom;
+        if (w > 0 && h > 0) {
+            java.awt.image.BufferedImage chart = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            Graphics2D cg = chart.createGraphics();
+            cg.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            paint(cg, distribution, cracks, visuals, w, h);
+            cg.dispose();
+            StudioChartPalette.apply(chart);
+            g.drawImage(chart, in.left, in.top, null);
+        }
         g.dispose();
     }
 
@@ -51,7 +60,7 @@ final class HistogramView extends JPanel {
         g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
         if (d == null || d.binCount() == 0) { g.drawString("Sem histograma.", 10, 20); return; }
         String unit = d.settings.unit();
-        int left = 40, right = 10, top = (second ? 52 : 22) + (v.showValues ? 12 : 0), bottom = 34;
+        int left = 40, right = 10, bottom = 34;
         int nb = d.binCount();
         double max = 0;
         for (int i = 0; i < nb; i++) {
@@ -61,15 +70,20 @@ final class HistogramView extends JPanel {
         }
         if (max <= 0) max = 1;
         double bw = (w - left - right) / (double) nb;
-        g.drawString(String.format(Locale.ROOT, "n=%d (excl. %d) · classe %s %s · %s", d.included, d.excluded, fmt(d.settings.binWidthMm), unit,
-                n == CrackHistogram.Normalization.ABSOLUTE ? "por numero" : n == CrackHistogram.Normalization.PERCENT_OF_ALL ? "% do total" : "% da propria serie"), left, 14);
+        int y = 12;
+        String title = String.format(Locale.ROOT, "n=%d (excl. %d) · classe %s %s · %s", d.included, d.excluded, fmt(d.settings.binWidthMm), unit,
+                n == CrackHistogram.Normalization.ABSOLUTE ? "por numero" : n == CrackHistogram.Normalization.PERCENT_OF_ALL ? "% do total" : "% da propria serie");
+        for (String line : ChartText.wrap(title, g.getFontMetrics(), w - left - right)) { g.drawString(line, left, y); y += 14; }
         if (second) {
-            g.drawString(indicators(ch), left, 28);
+            for (String line : ChartText.wrap(indicators(ch), g.getFontMetrics(), w - left - right)) { g.drawString(line, left, y); y += 14; }
             int x = left;
-            if (showAll) { g.setColor(alpha(ALL, .55f)); g.fillRect(x, 34, 10, 10); g.setColor(Color.DARK_GRAY); g.drawString("Todas as pelotas", x + 14, 43); x += 130; }
-            g.setColor(alpha(CRACKED, .65f)); g.fillRect(x, 34, 10, 10); g.setColor(ch.available ? Color.DARK_GRAY : new Color(170, 80, 0));
-            g.drawString(ch.available ? (n == CrackHistogram.Normalization.CONDITIONAL ? "Trincadas (distribuicao condicional)" : "Pelotas trincadas") : "Trincadas: " + ch.unavailableReason, x + 14, 43);
+            if (showAll) { g.setColor(alpha(ALL, .55f)); g.fillRect(x, y - 9, 10, 10); g.setColor(Color.DARK_GRAY); g.drawString("Todas as pelotas", x + 14, y); y += 14; }
+            g.setColor(alpha(CRACKED, .65f)); g.fillRect(x, y - 9, 10, 10); g.setColor(ch.available ? Color.DARK_GRAY : new Color(170, 80, 0));
+            String label = ch.available ? (n == CrackHistogram.Normalization.CONDITIONAL ? "Trincadas (distribuicao condicional)" : "Pelotas trincadas") : "Trincadas: " + ch.unavailableReason;
+            for (String line : ChartText.wrap(label, g.getFontMetrics(), w - x - right - 14)) { g.drawString(line, x + 14, y); y += 14; }
         }
+        int top = y + (v.showValues ? 12 : 2);
+        if (h - top - bottom < 20 || w - left - right < 20) return;
         Font small = new Font(Font.SANS_SERIF, Font.PLAIN, 9);
         for (int i = 0; i < nb; i++) {
             int x = (int) Math.round(left + i * bw), bwPx = Math.max(1, (int) Math.round(bw) - 1);

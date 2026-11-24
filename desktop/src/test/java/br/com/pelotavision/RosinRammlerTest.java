@@ -110,11 +110,8 @@ public class RosinRammlerTest {
             if (red > 200 && green > 110 && green < 190 && blue < 120) orange++;
         }
         assertTrue("série de trincadas ausente na figura (" + orange + " px)", orange > 200);
-        String dir = System.getProperty("pelotavision.validationDir");
-        if (dir != null) {
-            java.io.File out = new java.io.File(dir, "rosin-rammler-windows");
-            out.mkdirs();
-            javax.imageio.ImageIO.write(img, "png", new java.io.File(out, "figura_relatorio_com_trincadas.png"));
-        }
+        java.io.File out = TestPaths.artifacts("rosin-rammler-windows");
+        out.mkdirs();
+        javax.imageio.ImageIO.write(img, "png", new java.io.File(out, "figura_relatorio_com_trincadas.png"));
     }
 }

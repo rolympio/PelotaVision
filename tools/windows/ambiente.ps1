@@ -1,11 +1,14 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Instalar','Atualizar','Verificar','Compilar','Sincronizar')]
+    [ValidateSet('Instalar','Atualizar','Verificar','Compilar','Sincronizar','Instalador')]
     [string]$Action = 'Verificar',
     [string]$LocalRoot,
     [string]$DataSource,
     [string]$OpenCvJava,
-    [ValidateSet('Windows','Android')][string]$Platform = 'Windows',
+    [ValidateSet('Windows','Android','Ambos')][string]$Platform = 'Windows',
+    [switch]$PrepararSam2,
+    [switch]$AvaliarSam2,
+    [switch]$SemSam2,
     [switch]$PrepareOnly,
     [switch]$CheckRemote,
     [switch]$CopyData,
@@ -61,7 +64,7 @@ function Assert-Repo {
 
 function Find-OpenCv {
     $candidates = @($OpenCvJava, $env:OPENCV_JAVA_DIR, "$repo\desktop\opencv-java",
-        'C:\opencv-4.12.0\opencv\build\java', 'C:\opencv\build\java')
+        'C:\opencv-4.12.0\opencv\build\java', 'C:\opencv\build\java', 'C:\Projetos\tools\opencv-4.12.0\opencv\build\java')
     foreach ($dir in $candidates) {
         if ($dir -and (Test-Path -LiteralPath "$dir\opencv-4120.jar") -and
             (Test-Path -LiteralPath "$dir\x64\opencv_java4120.dll")) { return [IO.Path]::GetFullPath($dir) }
@@ -79,7 +82,7 @@ function Get-Jdk {
 }
 
 function Find-AndroidSdk {
-    foreach ($sdk in @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT, "$env:LOCALAPPDATA\Android\Sdk")) {
+    foreach ($sdk in @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT, "$env:LOCALAPPDATA\Android\Sdk", 'C:\Projetos\tools\android-sdk')) {
         if ($sdk -and (Test-Path -LiteralPath "$sdk\platforms\android-35\android.jar") -and
             (Test-Path -LiteralPath "$sdk\build-tools\35.0.0\aapt2.exe")) { return $sdk }
     }
@@ -94,8 +97,163 @@ function Invoke-Gradle([string[]]$Arguments) {
     } finally { Pop-Location }
 }
 
+# SHA-256 por .NET: nao depende do Get-FileHash, que some quando o Windows PowerShell 5.1 e aberto
+# a partir do PowerShell 7 (PSModulePath herdado aponta para o modulo Utility do 7).
+function Get-Sha256([string]$Path) {
+    $stream = [IO.File]::OpenRead((Resolve-Path -LiteralPath $Path).ProviderPath)
+    try {
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try { return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-', '') }
+        finally { $sha.Dispose() }
+    } finally { $stream.Dispose() }
+}
+
+# ---------------------------------------------------------------- SAM 2.1 (0.17.0 / Windows 0.9.0)
+$Sam2Files = @('sam2_encoder.onnx','sam2_decoder.onnx','sam2.json')
+$Sam2CheckpointUrl = 'https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt'
+$Sam2CheckpointSha = '7402E0D864FA82708A20FBD15BC84245C2F26DFF0EB43A4B5B93452DEB34BE69'
+$Sam2Commit = '2b90b9f5ceec907a1c18123530e92e794ad901a4'
+
+function Test-Sam2Dir([string]$Dir) {
+    foreach ($f in $Sam2Files) { if (!(Test-Path -LiteralPath (Join-Path $Dir $f))) { return $false } }
+    $meta = Get-Content -LiteralPath (Join-Path $Dir 'sam2.json') -Raw | ConvertFrom-Json
+    if ($meta.random_weights) { return $false }
+    foreach ($pair in @(@('sam2_encoder.onnx', $meta.encoder_sha256), @('sam2_decoder.onnx', $meta.decoder_sha256))) {
+        $h = Get-Sha256 (Join-Path $Dir $pair[0])
+        if ($h -ne ([string]$pair[1]).ToUpperInvariant()) { throw "SAM 2: SHA-256 de $($pair[0]) em $Dir nao confere com sam2.json." }
+    }
+    return $true
+}
+
+function Find-Python {
+    foreach ($v in @('3.12','3.11','3.13','3.10')) {
+        $py = Get-Command py -ErrorAction SilentlyContinue
+        if ($py) { $exe = & py "-$v" -c 'import sys;print(sys.executable)' 2>$null; if ($LASTEXITCODE -eq 0 -and $exe) { return [string]$exe } }
+    }
+    foreach ($name in @('python','python3')) {
+        $cmd = Get-Command $name -ErrorAction SilentlyContinue
+        if ($cmd) { $ok = & $cmd.Source -c 'import sys;print(sys.version_info[:2]>=(3,10))' 2>$null; if ("$ok" -eq 'True') { return $cmd.Source } }
+    }
+    return $null
+}
+
+function Invoke-Checked([string]$Exe, [string[]]$Arguments, [string]$What) {
+    $old = $ErrorActionPreference
+    try { $ErrorActionPreference = 'Continue'; & $Exe @Arguments 2>&1 | ForEach-Object { "$_" } | Write-Output; $code = $LASTEXITCODE }
+    finally { $ErrorActionPreference = $old }
+    if ($code -ne 0) { throw "$What falhou (codigo $code)." }
+}
+
+# Exporta o SAM 2.1 Tiny oficial para ONNX numa venv isolada em PelotaVision-local (nada global).
+# Downloads: checkpoint ~156 MB (Meta, Apache-2.0), PyTorch CPU ~200 MB, codigo SAM 2 (GitHub) ~5 MB.
+function Export-Sam2([string]$SamDir) {
+    New-Item -ItemType Directory -Path $SamDir -Force | Out-Null
+    $ckpt = Join-Path $SamDir 'sam2.1_hiera_tiny.pt'
+    if (!(Test-Path -LiteralPath $ckpt)) {
+        # Reaproveita um download manual (Downloads, pasta privada antiga ou worktrees), conferido pelo SHA-256.
+        $projetos = Split-Path $repo -Parent
+        foreach ($dir in @($SamDir, "$env:USERPROFILE\Downloads", (Join-Path $projetos 'worktrees\PelotaVision-local\models\sam2'),
+                           (Join-Path $projetos 'worktrees\PelotaVision-mascaras'), $LocalRoot)) {
+            $alt = Get-ChildItem -LiteralPath $dir -Filter 'sam2.1_hiera_tiny*.pt' -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($alt -and (Get-Sha256 $alt.FullName) -eq $Sam2CheckpointSha) {
+                Copy-Item -LiteralPath $alt.FullName -Destination $ckpt; Write-Output "SAM 2: checkpoint reaproveitado de $($alt.FullName)"; break
+            }
+        }
+    }
+    if (!(Test-Path -LiteralPath $ckpt)) {
+        Write-Output "SAM 2: checkpoint nao encontrado em $SamDir; baixando o oficial (~156 MB) de $Sam2CheckpointUrl"
+        $ProgressPreference = 'SilentlyContinue'
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $Sam2CheckpointUrl -OutFile "$ckpt.part" -UseBasicParsing
+        Move-Item -LiteralPath "$ckpt.part" -Destination $ckpt
+    }
+    Write-Output "SAM 2: usando o checkpoint $ckpt (sem novo download)"
+    $sha = Get-Sha256 $ckpt
+    if ($sha -ne $Sam2CheckpointSha) { throw "SAM 2: SHA-256 do checkpoint nao confere ($sha). Apague o arquivo e repita." }
+    $python = Find-Python
+    if (!$python) { throw 'SAM 2: instale Python 3.10-3.13 (python.org) para exportar o modelo uma unica vez.' }
+    $venv = Join-Path $LocalRoot 'envs\sam2-export'
+    $vpy = Join-Path $venv 'Scripts\python.exe'
+    if (!(Test-Path -LiteralPath $vpy)) { Invoke-Checked $python @('-m','venv',$venv) 'Criacao da venv SAM 2' }
+    Write-Output 'SAM 2: instalando PyTorch CPU na venv isolada (~200 MB, so na primeira vez; pode levar varios minutos)...'
+    Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','--progress-bar','off','torch','torchvision','--index-url','https://download.pytorch.org/whl/cpu') 'Instalacao do PyTorch CPU'
+    Write-Output 'SAM 2: instalando dependencias (onnx, onnxruntime, hydra)...'
+    Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','-q','onnx','onnxruntime','hydra-core>=1.3.2','iopath>=0.1.10','numpy','pillow','tqdm','opencv-python-headless==4.12.0.88','scipy') 'Instalacao das dependencias SAM 2'
+    $src = Join-Path $LocalRoot 'envs\sam2-src'
+    if (!(Test-Path -LiteralPath (Join-Path $src '.git'))) { Invoke-Checked 'git' @('clone','-q','https://github.com/facebookresearch/sam2',$src) 'Download do codigo SAM 2' }
+    Invoke-Checked 'git' @('-C',$src,'-c','advice.detachedHead=false','checkout','-q',$Sam2Commit) 'Checkout da revisao SAM 2'
+    $env:SAM2_BUILD_CUDA = '0'
+    Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','-q','--no-deps','--no-build-isolation','-e',$src) 'Instalacao do pacote SAM 2'
+    Write-Output 'SAM 2: exportando o modelo para ONNX (1-3 min)...'
+    Invoke-Checked $vpy @("$repo\tools\sam2\exportar_sam2_onnx.py",'--checkpoint',$ckpt,'--saida',$SamDir) 'Exportacao ONNX do SAM 2'
+    Write-Output 'SAM 2: conferindo ONNX x PyTorch oficial...'
+    Invoke-Checked $vpy @("$repo\tools\sam2\verificar_sam2_onnx.py",'--modelo',$SamDir,'--checkpoint',$ckpt) 'Verificacao ONNX x PyTorch do SAM 2'
+    Invoke-Sam2Evaluation $vpy $SamDir
+}
+
+# Fotos de referencia do repositorio: StarDist x StarDist + SAM 2 (imagens lado a lado + resumo.json). Nao bloqueia o build.
+function Invoke-Sam2Evaluation([string]$Vpy, [string]$SamDir) {
+    $out = Join-Path $LocalRoot "results\sam2-avaliacao-$runId"
+    Write-Output "SAM 2: avaliando nas fotos de referencia (alguns minutos) -> $out"
+    $fotos = @(Get-ChildItem "$repo\verification\fixtures\*.jpg" | ForEach-Object { $_.FullName })
+    try { Invoke-Checked $Vpy (@("$repo\tools\sam2\avaliar_sam2.py",'--modelo',$SamDir,'--saida',$out,'--cenas',"$repo\ml_training\data",'--fotos') + $fotos) 'Avaliacao SAM 2' }
+    catch { Write-Warning "Avaliacao SAM 2 falhou (o build continua): $($_.Exception.Message)" }
+}
+
+# Garante sam2_*.onnx + sam2.json em app\src\main\assets (fora do Git): Android embute; Windows copia para modelos\.
+function Prepare-Sam2 {
+    $assets = "$repo\app\src\main\assets"
+    $samDir = Join-Path $LocalRoot 'models\sam2'
+    if ($AvaliarSam2) {
+        $vpy = Join-Path $LocalRoot 'envs\sam2-export\Scripts\python.exe'
+        if ((Test-Path -LiteralPath $vpy) -and (Test-Sam2Dir $samDir)) {
+            Invoke-Checked $vpy @('-m','pip','install','--disable-pip-version-check','-q','opencv-python-headless==4.12.0.88','scipy') 'Dependencias da avaliacao'
+            Invoke-Sam2Evaluation $vpy $samDir
+        } else { Write-Warning 'SAM 2: -AvaliarSam2 exige o modelo exportado e a venv (rode COMPILAR_PELOTAVISION_COMPLETO.bat antes).' }
+    }
+    if ($SemSam2) {
+        New-Item -ItemType Directory -Path $samDir -Force | Out-Null
+        foreach ($f in $Sam2Files) { $p = Join-Path $assets $f; if (Test-Path -LiteralPath $p) { Move-Item -LiteralPath $p -Destination (Join-Path $samDir $f) -Force } }
+        Write-Output 'SAM 2: desativado (-SemSam2); pacote sem o modelo.'; return
+    }
+    if (!(Test-Sam2Dir $samDir)) {
+        if (Test-Sam2Dir $assets) { Write-Output "SAM 2: usando o modelo ja presente em $assets."; return }
+        if (!$PrepararSam2) {
+            Write-Warning "SAM 2 ausente em $samDir. O pacote sai SEM o refino SAM 2. Rode com -PrepararSam2 (ou COMPILAR_PELOTAVISION_COMPLETO.bat) para baixar e exportar automaticamente."
+            return
+        }
+        Export-Sam2 $samDir
+        if (!(Test-Sam2Dir $samDir)) { throw 'SAM 2: exportacao nao gerou os tres arquivos.' }
+    }
+    foreach ($f in $Sam2Files) { Copy-Item -LiteralPath (Join-Path $samDir $f) -Destination $assets -Force }
+    Write-Output "SAM 2: modelo copiado de $samDir para $assets (fora do Git)."
+}
+
+function Copy-AndroidArtifacts {
+    $out = Join-Path $LocalRoot "results\android-$runId"
+    New-Item -ItemType Directory -Path $out -Force | Out-Null
+    $lines = @()
+    foreach ($apk in @(Get-ChildItem "$repo\app\build\outputs\apk\debug\*.apk")) {
+        Copy-Item -LiteralPath $apk.FullName -Destination $out
+        $lines += "$(Get-Sha256 $apk.FullName)  $($apk.Name)"
+    }
+    $lines | Set-Content -Encoding ASCII (Join-Path $out 'SHA256.txt')
+    Write-Output "APKs Android: $out (celular: app-arm64-v8a-debug.apk)"
+}
+
 function Invoke-Build {
     Write-Output (Get-Jdk)
+    Prepare-Sam2
+    if ($Platform -eq 'Ambos') {
+        $script:Platform = 'Windows'; Invoke-Build-One
+        $script:Platform = 'Android'; Invoke-Build-One
+        $script:Platform = 'Ambos'
+        return
+    }
+    Invoke-Build-One
+}
+
+function Invoke-Build-One {
     if ($Platform -eq 'Windows') {
         $ocv = Find-OpenCv
         if (!$ocv) { throw 'Falta OpenCV Java 4.12.0 (jar + DLL x64). Use -OpenCvJava ou OPENCV_JAVA_DIR. Consulte docs/ambiente-windows.md.' }
@@ -108,6 +266,7 @@ function Invoke-Build {
         }
         $env:ANDROID_HOME = $sdk
         Invoke-Gradle @('--init-script', "$repo\tools\windows\isolar-testes.gradle", ':app:testDebugUnitTest', ':app:lintDebug', ':app:assembleDebug')
+        Copy-AndroidArtifacts
     }
     $files = @()
     if ($Platform -eq 'Windows') { $files = @(Get-Item "$repo\desktop\build\libs\pelotavision-desktop.jar") }
@@ -115,8 +274,60 @@ function Invoke-Build {
     if ($files.Count -eq 0) { throw 'Nenhum artefato gerado.' }
     $record = [ordered]@{ commit = [string](Invoke-Git @('rev-parse','HEAD')); platform = $Platform
         created_utc = [DateTime]::UtcNow.ToString('o'); dirty = (@(Invoke-Git @('status','--porcelain')).Count -gt 0)
-        artifacts = @($files | ForEach-Object { @{ name=$_.Name; sha256=(Get-FileHash $_.FullName -Algorithm SHA256).Hash } }) }
-    $record | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $LocalRoot "logs\build-$runId.json")
+        artifacts = @($files | ForEach-Object { @{ name=$_.Name; sha256=(Get-Sha256 $_.FullName) } }) }
+    $record | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $LocalRoot "logs\build-$Platform-$runId.json")
+}
+
+function Find-InnoSetup {
+    $candidates = @()
+    foreach ($base in @(${env:ProgramFiles(x86)}, $env:ProgramFiles, (Join-Path $env:LOCALAPPDATA 'Programs'))) {
+        if ($base) { $candidates += (Join-Path $base 'Inno Setup 6\ISCC.exe') }
+    }
+    $cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($cmd) { $candidates += $cmd.Source }
+    foreach ($c in $candidates) { if (Test-Path -LiteralPath $c -PathType Leaf) { return $c } }
+    return $null
+}
+
+# Instalador por usuario (sem administrador) a partir da MESMA pasta ja testada pelo autoteste.
+# Nao instala para testar: o AppId e fixo e um teste silencioso mexeria na instalacao real do usuario.
+function New-WindowsInstaller([string]$Dist, [string]$Version, [string]$OutDir) {
+    if (!(Test-Path -LiteralPath (Join-Path $Dist 'PelotaVision.exe'))) { throw "Pacote nao encontrado: $Dist" }
+    $iscc = Find-InnoSetup
+    if (!$iscc) {
+        Write-Warning 'Inno Setup 6 nao encontrado: instalador NAO gerado (exe e zip continuam validos).'
+        Write-Warning 'Instale com:  winget install --id JRSoftware.InnoSetup -e   e rode GERAR_INSTALADOR.bat'
+        return $null
+    }
+    Write-Host "Gerando instalador com $iscc (pode levar alguns minutos; o pacote tem ~1 GB)..."
+    & $iscc /Q "/DAppVersion=$Version" "/DSourceDir=$Dist" "/DOutputDir=$OutDir" "$repo\desktop\installer\PelotaVision.iss" | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "Inno Setup falhou (codigo $LASTEXITCODE)." }
+    $setup = Join-Path $OutDir "PelotaVision_Windows_${Version}_instalador.exe"
+    if (!(Test-Path -LiteralPath $setup)) { throw "Instalador nao gerado: $setup" }
+    $h = Get-Sha256 $setup
+    "$h  $([IO.Path]::GetFileName($setup))" | Add-Content -Encoding ASCII (Join-Path $OutDir 'SHA256.txt')
+    Write-Host "Instalador: $setup | SHA256=$h"
+    return $setup
+}
+
+function New-InstallerFromLatest {
+    $latest = Join-Path $LocalRoot 'latest-package.json'
+    if (!(Test-Path -LiteralPath $latest)) { throw 'Nenhum pacote Windows testado ainda. Rode COMPILAR_PELOTAVISION_COMPLETO.bat.' }
+    $meta = Get-Content -LiteralPath $latest -Raw | ConvertFrom-Json
+    if (!$meta.packaged_gui_test) { throw 'O ultimo pacote nao passou no ensaio da janela; instalador nao gerado.' }
+    $exePath = [string]$meta.executable
+    if (!(Test-Path -LiteralPath $exePath)) {
+        # Pasta movida (ex.: C: -> D:): reaproveita o trecho apos "results\" sob a area local atual.
+        $i = $exePath.ToLowerInvariant().LastIndexOf('\results\')
+        if ($i -ge 0) { $exePath = Join-Path $LocalRoot $exePath.Substring($i + 1) }
+    }
+    if (!(Test-Path -LiteralPath $exePath)) { throw "Executavel do ultimo pacote nao encontrado: $($meta.executable)" }
+    $dist = Split-Path $exePath -Parent
+    $out = Split-Path (Split-Path $dist -Parent) -Parent
+    Write-Output "Pacote: $dist | versao $($meta.version) | commit $($meta.commit)"
+    if ([string]$meta.commit -ne $commit) { Write-Warning "O pacote e do commit $($meta.commit); o repositorio esta em $commit. Para incluir as mudancas novas, compile de novo." }
+    $setup = New-WindowsInstaller $dist ([string]$meta.version) $out
+    if (!$setup) { throw 'Instalador nao gerado (Inno Setup ausente).' }
 }
 
 function New-WindowsPackage([string]$Ocv) {
@@ -146,6 +357,74 @@ function New-WindowsPackage([string]$Ocv) {
         !(Select-String -LiteralPath "$out\autoteste\autoteste.txt" -Pattern '^exit=0$' -Quiet)) {
         throw 'Autoteste do executavel falhou; pacote nao aprovado.'
     }
+    if ((Test-Path "$inputDir\modelos\sam2_encoder.onnx") -and
+        !(Select-String -LiteralPath "$out\autoteste\autoteste.txt" -Pattern '^sam2_run=' -Quiet)) {
+        throw 'SAM 2 empacotado, mas o autoteste nao o executou (veja sam2= no autoteste.txt); pacote nao aprovado.'
+    }
+    # Janela real e exportacao completa SEM Python/JDK no PATH e com cwd independente.
+    $oldPath = $env:PATH; $oldJava = $env:JAVA_HOME; $oldPython = $env:PYTHONHOME
+    $aiPreviewTested = $false
+    New-Item -ItemType Directory -Path "$out\cwd-vazio" | Out-Null
+    try {
+        $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+        $env:JAVA_HOME = ''; $env:PYTHONHOME = ''
+        $gui = Start-Process -FilePath $exe -WorkingDirectory "$out\cwd-vazio" `
+            -ArgumentList @('--studio-smoke', "`"$repo\verification\fixtures\1000411645.jpg`"", "`"$out\studio-smoke`"") -PassThru
+        $handle = $gui.Handle
+        if (!$gui.WaitForExit(360000)) { $gui.Kill(); throw 'Timeout do ensaio GUI do pacote.' }
+        $gui.Refresh()
+        $smokePath = "$out\studio-smoke\studio-smoke.json"
+        if ($gui.ExitCode -ne 0 -or !(Test-Path $smokePath)) { throw 'Ensaio GUI do executavel falhou.' }
+        $smoke = Get-Content $smokePath -Raw | ConvertFrom-Json
+        if ($smoke.exit -ne 0 -or $smoke.stages_rendered -ne 6 -or $smoke.pdf_pages -lt 1) {
+            throw 'Ensaio GUI incompleto: pacote nao aprovado.'
+        }
+        if ($env:PELOTAVISION_EXPERIMENTAL_MODEL) {
+            $modelPath = $env:PELOTAVISION_EXPERIMENTAL_MODEL
+            if (!(Test-Path -LiteralPath $modelPath -PathType Leaf)) { throw 'ONNX experimental solicitado para teste nao existe.' }
+            $ai = Start-Process -FilePath $exe -WorkingDirectory "$out\cwd-vazio" `
+                -ArgumentList @('--studio-ai-smoke', "`"$repo\verification\fixtures\1000411645.jpg`"", "`"$out\studio-ai-smoke`"", "`"$modelPath`"") -PassThru
+            $handle = $ai.Handle
+            if (!$ai.WaitForExit(480000)) { $ai.Kill(); throw 'Timeout do ensaio GUI da IA.' }
+            $ai.Refresh()
+            $aiPath = "$out\studio-ai-smoke\studio-smoke.json"
+            if ($ai.ExitCode -ne 0 -or !(Test-Path $aiPath)) { throw 'Ensaio GUI da IA falhou.' }
+            $aiResult = Get-Content $aiPath -Raw | ConvertFrom-Json
+            if ($aiResult.exit -ne 0 -or $aiResult.experimental_ai -ne 'preview_cpu_sha_verificado_sem_alteracao_de_medicoes') {
+                throw 'Previa IA nao concluiu sem alterar as medicoes.'
+            }
+            $aiPreviewTested = $true
+        }
+    } finally { $env:PATH = $oldPath; $env:JAVA_HOME = $oldJava; $env:PYTHONHOME = $oldPython }
+    $metadata = [ordered]@{ version=$version; commit=[string](Invoke-Git @('rev-parse','HEAD'))
+        created_utc=[DateTime]::UtcNow.ToString('o'); executable=$exe; packaged_gui_test=$true
+        ai_preview_tested=$aiPreviewTested; clean_vm_tested=$false; python_required=$false; experimental=$true }
+    $metadata | ConvertTo-Json | Set-Content -Encoding UTF8 "$out\dist\PelotaVision\VERSION.json"
+    @'
+@echo off
+rem Atualizacoes sao distribuidas apenas apos aprovacao. Nunca sobrescreve esta pasta.
+start "" "https://github.com/rolympio/PelotaVision/releases"
+'@ | Set-Content -Encoding ASCII "$out\dist\PelotaVision\VERIFICAR_ATUALIZACOES.bat"
+    $zip = "$out\PelotaVision_Studio_Windows_$version.zip"
+    # .NET em vez de Compress-Archive (mesmo motivo do Get-Sha256); inclui a pasta PelotaVision no zip.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::CreateFromDirectory("$out\dist\PelotaVision", $zip, [IO.Compression.CompressionLevel]::Optimal, $true)
+    $hash = [pscustomobject]@{ Hash = (Get-Sha256 $zip) }
+    "$($hash.Hash)  $([IO.Path]::GetFileName($zip))" | Set-Content -Encoding ASCII "$out\SHA256.txt"
+    $null = New-WindowsInstaller "$out\dist\PelotaVision" $version $out
+    $metadata | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $LocalRoot 'latest-package.json')
+    $desktop = [Environment]::GetFolderPath('Desktop')
+    if ($desktop -and (Test-Path -LiteralPath $desktop)) {
+        $shortcutPath = Join-Path $desktop 'PelotaVision Studio.lnk'
+        if (Test-Path $shortcutPath) { $shortcutPath = Join-Path $desktop "PelotaVision Studio-$runId.lnk" }
+        $shell = New-Object -ComObject WScript.Shell
+        $shortcut = $shell.CreateShortcut($shortcutPath)
+        $shortcut.TargetPath = $exe; $shortcut.WorkingDirectory = Split-Path $exe -Parent
+        $shortcut.IconLocation = "$exe,0"
+        $shortcut.Save()
+        Write-Output "Atalho criado: $shortcutPath"
+    }
+    Write-Output "Distribuicao: $zip | SHA256=$($hash.Hash)"
     Write-Output "Pacote Windows testado: $exe"
 }
 
@@ -178,6 +457,7 @@ try {
     switch ($Action) {
         'Verificar' {
             Write-Output (Get-Jdk)
+            if ($AvaliarSam2) { Prepare-Sam2 }
             Write-Output "OpenCV Java: $(Find-OpenCv)"
             Write-Output "Fonte de dados existe: $(Test-Path -LiteralPath $DataSource)"
             Write-Output "SDK Android 35/build-tools 35.0.0: $(Find-AndroidSdk)"
@@ -208,6 +488,7 @@ try {
             Invoke-Build
         }
         'Compilar' { Invoke-Build }
+        'Instalador' { New-InstallerFromLatest }
         'Sincronizar' {
             $python = Get-Command python3 -ErrorAction SilentlyContinue
             if (!$python) { $python = Get-Command python -ErrorAction Stop }

@@ -54,6 +54,7 @@ em `desktop/build/fixtures-locais/` ou `app/build/fixtures-locais/`, sem regrava
 | `INSTALAR_PELOTAVISION.bat` | Prepara pastas, executa testes e gera JAR/dependências Windows |
 | `ATUALIZAR_PELOTAVISION.bat` | Só `main` limpa, upstream `origin/main`, sem commits locais; bundle + merge `--ff-only` + testes/build |
 | `COMPILAR_PELOTAVISION.bat` | Testes + JAR Windows; `-Platform Android` executa testes, lint e APK debug |
+| `COMPILAR_PELOTAVISION_COMPLETO.bat` | SAM 2 (baixa/exporta na 1a vez), testes, pacote Windows e APK Android; ver `docs/compilar-0.17.0-sam2.md` |
 | `SINCRONIZAR_DADOS.bat` | Inventário somente leitura; não sincroniza fotos com GitHub |
 
 Opções:

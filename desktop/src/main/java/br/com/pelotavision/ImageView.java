@@ -45,6 +45,7 @@ final class ImageView extends JPanel {
     private Point2D measureA, measureB;
     private Consumer<Point2D> clickListener;
     private String banner;
+    private ExperimentalMultitask.Result experimental;
 
     ImageView() {
         setBackground(new Color(30, 30, 30));
@@ -90,7 +91,9 @@ final class ImageView extends JPanel {
     }
 
     void setOverlay(PelletDetector.Result result, CrackAnalysis cracks) { this.result = result; this.cracks = cracks; repaint(); }
-    /** 0 original (so a foto), 1 segmentacao (marcacoes), 2 mapa granulometrico. */
+    void setExperimental(ExperimentalMultitask.Result value) { experimental = value; repaint(); }
+    boolean experimentalAvailable() { return experimental != null; }
+    /** 0 original, 1 segmentação, 2 mapa; 6-9 prévias experimentais. */
     private int viewMode = 1;
     private Granulometry.Distribution mapDistribution;
     private ReportVisuals mapVisuals = ReportVisuals.defaults();
@@ -152,8 +155,33 @@ final class ImageView extends JPanel {
         }
         float w = (float) (2 / zoom);
         GranulometryColorScale mapScale = viewMode == 2 && result != null ? mapVisuals.scale(mapDistribution) : null;
-        if (mapScale != null) drawMap(gi, result, mapDistribution, mapScale, mapVisuals.mapOpacity);
+        if (viewMode >= 6 && viewMode <= 9) {
+            if (experimental != null) {
+                // A ROI circular continua visível mas nenhum overlay deve colorir fora dela.
+                if (viewport != null && viewport.region != null && viewport.region.shape == InterestRegion.Shape.CIRCLE) {
+                    InterestRegion r = viewport.region;
+                    gi.clip(new Ellipse2D.Double(r.left, r.top, r.width(), r.height()));
+                }
+                gi.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, (float) mapVisuals.mapOpacity));
+                BufferedImage layer = viewMode == 7 ? experimental.entropyOverlay : experimental.overlay;
+                if (viewMode == 8 || viewMode == 9) layer = experimental.channelOverlay(viewMode == 8 ? 1 : 2);
+                gi.drawImage(layer, 0, 0, null);
+                gi.setComposite(java.awt.AlphaComposite.SrcOver);
+            }
+        }
+        else if (mapScale != null) drawMap(gi, result, mapDistribution, mapScale, mapVisuals.mapOpacity);
         else if (result != null && viewMode == 1) drawDetections(gi, result, cracks, w, numbers);
+        else if (result != null && (viewMode == 3 || viewMode == 4)) {
+            drawInstanceProjection(gi, result, cracks, viewMode == 4, mapVisuals.mapOpacity, w);
+            drawDetections(gi, result, cracks, w, numbers);
+        } else if (result != null && viewMode == 5 && cracks != null) {
+            for (CrackAnalysis.Entry entry : cracks.entries) {
+                if (entry.status != CrackAnalysis.Status.POSSIBLE) continue;
+                gi.setColor(CRACK); gi.setStroke(new BasicStroke(w * 1.5f));
+                float[] runs = entry.markedRuns();
+                for (int i = 0; i + 3 < runs.length; i += 4) gi.draw(new Line2D.Float(runs[i], runs[i + 1], runs[i + 2], runs[i + 3]));
+            }
+        }
         if (reference != null) drawReference(gi, reference, w);
         gi.dispose();
         if (measureA != null) {
@@ -182,16 +210,42 @@ final class ImageView extends JPanel {
             g.setColor(Color.WHITE);
             g.drawString(banner, 16, 26);
         }
+        if (viewMode >= 6 && viewMode <= 9) {
+            String note = experimental == null ? "IA experimental: nenhuma prévia disponível"
+                    : "IA experimental · não altera estatísticas/PDF · não validada";
+            g.setFont(getFont().deriveFont(Font.BOLD, 13f));
+            int width = g.getFontMetrics().stringWidth(note);
+            g.setColor(new Color(25, 18, 8, 225));
+            g.fillRoundRect(8, Math.max(8, getHeight() - 34), width + 16, 26, 8, 8);
+            g.setColor(new Color(255, 195, 91));
+            g.drawString(note, 16, Math.max(27, getHeight() - 16));
+        }
         g.dispose();
+    }
+
+    /** Projecoes de elipses existentes, nao mascaras neurais nem reconstrucao de partes ocultas. */
+    static void drawInstanceProjection(Graphics2D g, PelletDetector.Result result, CrackAnalysis cracks,
+                                       boolean semantic, double opacity, float lineWidth) {
+        int alpha = GranulometryColorScale.alpha(opacity);
+        for (int i = 0; i < result.circles.size(); i++) {
+            PelletDetector.Detection d = result.circles.get(i);
+            Color color = Color.getHSBColor((float) ((i * .61803398875) % 1), .65f, .95f);
+            if (semantic) {
+                CrackAnalysis.Entry c = cracks != null && i < cracks.entries.size() ? cracks.entries.get(i) : null;
+                color = c != null && c.status == CrackAnalysis.Status.POSSIBLE ? CRACK : REVIEW;
+            }
+            g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha));
+            g.fill(outline(d));
+        }
     }
 
     /** Cor por diametro dentro da elipse de cada pelota incluida no histograma (mesma regra e escala). */
     static void drawMap(Graphics2D o, PelletDetector.Result result, Granulometry.Distribution d, GranulometryColorScale scale, double opacity) {
         int a = GranulometryColorScale.alpha(opacity);
         for (PelletDetector.Detection p : result.circles) {
-            Granulometry.Item item = new Granulometry.Item(2 * p.radius, p.partial, p.needsReview);
+            Granulometry.Item item = Granulometry.Item.of(p);
             if (!GranulometryColorScale.colored(d, item)) continue;
-            int c = scale.rgb(d.diameterMm(item.diameterPx));
+            int c = scale.rgb(d.diameterMm(item));
             o.setColor(new Color((c >> 16) & 255, (c >> 8) & 255, c & 255, a));
             double sa = p.semiMajor > 0 ? p.semiMajor : p.radius, sb = p.semiMinor > 0 ? p.semiMinor : p.radius;
             Shape e = new Ellipse2D.Double(-sa, -sb, 2 * sa, 2 * sb);
@@ -207,10 +261,10 @@ final class ImageView extends JPanel {
         java.util.List<java.awt.Rectangle> used = new java.util.ArrayList<>();
         double k = Math.sqrt(Math.abs(at.getDeterminant()));
         for (PelletDetector.Detection p : result.circles) {
-            Granulometry.Item item = new Granulometry.Item(2 * p.radius, p.partial, p.needsReview);
+            Granulometry.Item item = Granulometry.Item.of(p);
             if (!GranulometryColorScale.colored(d, item) || p.radius * k < 9) continue;
             Point2D c = at.transform(new Point2D.Double(p.x, p.y), null);
-            String s = HistogramView.fmt2(d.diameterMm(item.diameterPx));
+            String s = HistogramView.fmt2(d.diameterMm(item));
             int sw = g.getFontMetrics().stringWidth(s);
             java.awt.Rectangle r = new java.awt.Rectangle((int) c.getX() - sw / 2 - 2, (int) c.getY() - 10, sw + 4, 14);
             boolean free = true;

@@ -144,9 +144,9 @@ public final class GranulometryColorScale {
         if (scale == null) return 0;
         int n = 0;
         for (PelletDetector.Detection p : result.circles) {
-            Granulometry.Item item = new Granulometry.Item(2 * p.radius, p.partial, p.needsReview);
+            Granulometry.Item item = Granulometry.Item.of(p);
             if (!colored(d, item)) continue;
-            int color = scale.rgb(d.diameterMm(item.diameterPx));
+            int color = scale.rgb(d.diameterMm(item));
             double a = p.semiMajor > 0 ? p.semiMajor : p.radius, b = p.semiMinor > 0 ? p.semiMinor : p.radius;
             paintEllipse(rgb, width, height, p.x, p.y, a, b, p.semiMajor > 0 ? p.angleDeg : 0, color, opacity);
             n++;
@@ -156,6 +156,6 @@ public final class GranulometryColorScale {
 
     /** True when the pellet is part of the distribution (and therefore colored): same rule as the histogram. */
     public static boolean colored(Granulometry.Distribution d, Granulometry.Item item) {
-        return d != null && d.includes(item) && d.binIndex(d.diameterMm(item.diameterPx)) >= 0;
+        return d != null && d.includes(item) && d.binIndex(d.diameterMm(item)) >= 0;
     }
 }

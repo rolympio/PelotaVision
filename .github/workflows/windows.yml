@@ -11,7 +11,7 @@ on:
       publicar:
         description: 'Publicar o pacote portatil como Release'
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: write   # necessario para criar a Release
@@ -66,7 +66,7 @@ jobs:
 
       - name: Compilar e testar (OpenCV nativo 4.12)
         shell: cmd
-        run: gradlew.bat -p desktop test jar runtimeLibs --stacktrace
+        run: gradlew.bat -p desktop --init-script "%CD%\tools\windows\isolar-testes.gradle" test jar runtimeLibs --stacktrace
 
       - name: Testes com falha (anotacoes)
         if: always()
@@ -158,6 +158,7 @@ jobs:
           echo "$JP_OUT"
           [ $JP_RC -eq 0 ] || { echo "::error title=jpackage::$(echo "$JP_OUT" | tail -8 | tr '\n' ' ')"; exit 1; }
           cp desktop/LEIA-ME.txt pkg/dist/PelotaVision/
+          cp -r third_party pkg/dist/PelotaVision/
           find pkg/dist/PelotaVision -maxdepth 2 > pkg/conteudo.txt; cat pkg/conteudo.txt
 
       - name: Autoteste do pacote montado
@@ -175,7 +176,31 @@ jobs:
           grep '^accel' pkg/autoteste-gpu/autoteste.txt | while IFS= read -r l; do echo "::notice title=Autoteste com aceleracao::$l"; done
           grep -q 'ONNX Runtime ·' pkg/autoteste-gpu/autoteste.txt || { echo "::error title=Aceleracao::ONNX Runtime nao foi usado no pacote"; exit 1; }
 
-      - name: Compactar
+      - name: Studio - janela real sem Python ou Java no PATH
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = $env:GITHUB_WORKSPACE
+          $exe = Join-Path $root 'pkg\dist\PelotaVision\PelotaVision.exe'
+          $inputImage = Join-Path $root 'verification\fixtures\1000411645.jpg'
+          $out = Join-Path $root 'pkg\studio-smoke'
+          $cwd = Join-Path $env:RUNNER_TEMP ('pv-studio-cwd-' + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $cwd | Out-Null
+          $oldPath = $env:PATH
+          $oldJava = $env:JAVA_HOME
+          try {
+            $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+            $env:JAVA_HOME = ''
+            $p = Start-Process -FilePath $exe -WorkingDirectory $cwd -ArgumentList @('--studio-smoke', "`"$inputImage`"", "`"$out`"") -PassThru
+            $handle = $p.Handle
+            if (!$p.WaitForExit(360000)) { $p.Kill(); throw 'Studio: timeout da janela' }
+            $p.Refresh()
+            $r = Get-Content (Join-Path $out 'studio-smoke.json') -Raw | ConvertFrom-Json
+            if ($p.ExitCode -ne 0 -or $r.exit -ne 0 -or $r.stages_rendered -ne 6 -or $r.pdf_pages -lt 1) { throw 'Studio: fluxo GUI/PDF falhou' }
+            $r | ConvertTo-Json
+          } finally { $env:PATH = $oldPath; $env:JAVA_HOME = $oldJava }
+
+      - name: Compactar pacote aprovado pelos ensaios
         run: |
           Z="PelotaVision_Windows_${PV_DESKTOP_VERSION}_portatil.zip"
           (cd pkg/dist && 7z a -tzip "../../$Z" PelotaVision > /dev/null)
@@ -213,8 +238,7 @@ jobs:
           echo "::notice title=Instalador testado::instalou sem administrador, autoteste exit=0, desinstalou"
 
       - name: Publicar artefato
-        # Cota de artefatos do Actions esgotada nao pode bloquear a Release (o entregavel de fato).
-        continue-on-error: true
+        # Falha/cota no upload deve ficar visivel; nao contornar publicando Release sem aprovacao.
         uses: actions/upload-artifact@v6
         with:
           name: PelotaVision-Windows-${{ github.sha }}
@@ -223,10 +247,12 @@ jobs:
             ${{ env.PV_SETUP }}
             SHA256_windows.txt
             desktop/build/parity/
+            pkg/studio-smoke/
+            pkg/autoteste/
           retention-days: 30
 
       - name: Publicar Release
-        if: success() && ((github.event_name == 'workflow_dispatch' && inputs.publicar) || (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish-lowlight]')) || startsWith(github.ref, 'refs/tags/windows-v'))
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.publicar
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

@@ -179,6 +179,7 @@ public final class MainActivity extends ComponentActivity {
         HardwareAcceleration.setProvider(new LiteRtProvider(this));
         HardwareAcceleration.setEnabled(getPreferences(MODE_PRIVATE).getBoolean("hw_accel",false));
         if(HardwareAcceleration.enabled())worker.execute(this::installNeuralModel);else installNeuralModel();
+        worker.execute(this::installSam2); // 0.17.0: SAM 2 (≈125 MB) sempre fora da thread da tela
         restoreVisuals();
         crackLabel.setText(crackModel==null?"Trincas: heurística de reserva":"Trincas: modelo experimental · fotografe");
         handler.post(heartbeat);
@@ -645,6 +646,7 @@ public final class MainActivity extends ComponentActivity {
                     } finally {enhanced.release();}
                 }
             }
+            local=Sam2Refiner.applyIfEnabled(gray,local,()->isDestroyed()); // 0.17.0: máscaras SAM 2 (igual ao Windows)
             CrackAnalysis cracks=window.toGlobal(crackDetector().detect(gray,local,crackSensitivity));
             PelletDetector.Result result=window.toGlobal(local);Bitmap ready=bitmap;
             // 0.15.2: com realce aplicado, a tela, a imagem segmentada, o mapa e o PDF mostram a imagem filtrada.
@@ -703,6 +705,10 @@ public final class MainActivity extends ComponentActivity {
             runOnUiThread(()->note.setText(accelerationText(st)));
         });
     }
+    private static String sam2Text(){
+        Sam2Refiner.Report r=Sam2Refiner.lastReport();
+        return Sam2Refiner.status()+(r==null?"":"\nÚltima análise: "+r.summary())+"\n\nO método escolhido acima localiza as pelotas; o SAM 2 desenha a máscara de cada uma e o tamanho passa a ser a área dela. Máscaras ruins mantêm a elipse do detector. Mesmo modelo e mesmo motor (ONNX Runtime, CPU) do Windows. Leva alguns segundos por foto e não roda no ao vivo.";
+    }
     private static String accelerationText(String status){
         return status+"\n\nSó as redes neurais (StarDist e MobileNetV3) mudam de motor, e só se derem o mesmo resultado do OpenCV DNN numa sonda de paridade. Bordas, LoG e super-resolução continuam na CPU.";
     }
@@ -711,6 +717,28 @@ public final class MainActivity extends ComponentActivity {
         try{NeuralPelletDetector.install(copyAsset(NeuralPelletDetector.MODEL),readAsset(NeuralPelletDetector.METADATA));}catch(Exception e){android.util.Log.w("PelotaVision","Rede neural indisponível",e);}
         try{NeuralPelletDetector.installBelt(copyAsset(NeuralPelletDetector.BELT_MODEL),readAsset(NeuralPelletDetector.BELT_METADATA));}catch(Exception e){android.util.Log.w("PelotaVision","Rede neural de correia indisponível; correia usa o modelo de bancada",e);}
     }
+    /**
+     * 0.17.0: instala o SAM 2 (mesmo ONNX e mesmo ONNX Runtime do Windows). Procura nos assets do APK; se não
+     * estiver lá, em Android/data/br.com.pelotavision/files/modelos (cópia por USB). Ausente: refino indisponível.
+     */
+    private void installSam2(){
+        String meta="{}";File enc=new File(getFilesDir(),"sam2/"+Sam2Refiner.ENCODER),dec=new File(getFilesDir(),"sam2/"+Sam2Refiner.DECODER);
+        try{
+            if(assetExists(Sam2Refiner.METADATA)){meta=readAsset(Sam2Refiner.METADATA);enc=copyAssetOnce(Sam2Refiner.ENCODER);dec=copyAssetOnce(Sam2Refiner.DECODER);}
+            else{File ext=getExternalFilesDir("modelos");if(ext!=null&&new File(ext,Sam2Refiner.METADATA).isFile()){meta=new String(java.nio.file.Files.readAllBytes(new File(ext,Sam2Refiner.METADATA).toPath()),java.nio.charset.StandardCharsets.UTF_8);enc=new File(ext,Sam2Refiner.ENCODER);dec=new File(ext,Sam2Refiner.DECODER);}}
+        }catch(Exception e){android.util.Log.w("PelotaVision","SAM 2: falha ao copiar o modelo",e);}
+        Sam2Refiner.install(enc,dec,meta,OrtEngine.factory(false));
+        Sam2Refiner.setEnabled(getPreferences(MODE_PRIVATE).getBoolean("sam2",true));
+        android.util.Log.i("PelotaVision",Sam2Refiner.status());
+    }
+    private boolean assetExists(String name){try(InputStream ignored=getAssets().open(name)){return true;}catch(java.io.IOException e){return false;}}
+    /** Copia um asset grande (não comprimido) só quando o tamanho mudou; o SHA-256 é conferido na instalação. */
+    private File copyAssetOnce(String name)throws java.io.IOException{File dir=new File(getFilesDir(),"sam2");if(!dir.isDirectory()&&!dir.mkdirs())throw new java.io.IOException("sem pasta "+dir);File target=new File(dir,name);
+        long length=-1;try(android.content.res.AssetFileDescriptor fd=getAssets().openFd(name)){length=fd.getLength();}catch(java.io.IOException ignored){}
+        if(length>0&&target.isFile()&&target.length()==length)return target;
+        File tmp=new File(dir,name+".tmp");
+        try(InputStream input=getAssets().open(name);java.io.OutputStream output=new java.io.FileOutputStream(tmp)){byte[] buffer=new byte[1<<16];int n;while((n=input.read(buffer))!=-1)output.write(buffer,0,n);}
+        if(target.exists()&&!target.delete())throw new java.io.IOException("não apagou "+target);if(!tmp.renameTo(target))throw new java.io.IOException("não renomeou "+tmp);return target;}
     private File copyAsset(String name)throws java.io.IOException{File target=new File(getCacheDir(),name);
         try(InputStream input=getAssets().open(name);java.io.OutputStream output=new java.io.FileOutputStream(target)){byte[] buffer=new byte[16384];int n;while((n=input.read(buffer))!=-1)output.write(buffer,0,n);}return target;}
     private String readAsset(String name)throws java.io.IOException{try(InputStream input=getAssets().open(name)){java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[8192];int n;while((n=input.read(buffer))!=-1)bytes.write(buffer,0,n);return new String(bytes.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);}}
@@ -894,13 +922,13 @@ public final class MainActivity extends ComponentActivity {
     }
     private java.util.List<Granulometry.Item> measurementItems() {
         java.util.List<Granulometry.Item> items=new java.util.ArrayList<>();
-        for(PelletDetector.Detection d:photoResult.circles)items.add(new Granulometry.Item(d.radius*2,d.partial,d.needsReview));
+        for(PelletDetector.Detection d:photoResult.circles)items.add(Granulometry.Item.of(d));
         return items;
     }
     private java.util.List<Granulometry.Item> measurementItems(Granulometry.Settings prospective) {
         if(photoAllResult==null)return measurementItems();
         java.util.List<Granulometry.Item> items=new java.util.ArrayList<>();
-        for(int i:ObjectCalibration.sampleIndices(photoAllResult,interestRegion,prospective.selectedObject)){PelletDetector.Detection d=photoAllResult.circles.get(i);items.add(new Granulometry.Item(d.radius*2,d.partial,d.needsReview));}
+        for(int i:ObjectCalibration.sampleIndices(photoAllResult,interestRegion,prospective.selectedObject)){PelletDetector.Detection d=photoAllResult.circles.get(i);items.add(Granulometry.Item.of(d));}
         return items;
     }
     private void refreshDistribution() {
@@ -1043,28 +1071,38 @@ public final class MainActivity extends ComponentActivity {
         content.addView(text("A esfera padrão fica fora da contagem, das trincas, da forma média e do histograma por padrão. A pelota medida pode continuar na amostra. A marca REF continua visível.",12,Color.LTGRAY));
         TextView note=text("",12,Color.LTGRAY);content.addView(note);
         content.addView(text("Largura de cada classe (mm)",14,Color.WHITE));EditText bin=new EditText(this);bin.setTag("reference_bin_mm");bin.setSingleLine();bin.setTextColor(Color.WHITE);bin.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);bin.setText(Double.toString(scaleSettings==null?1:scaleSettings.binWidthMm));content.addView(bin);
+        // 0.17.0: várias esferas padrão e correção de perspectiva (1 + k·ρ²), iguais ao Windows.
+        boolean canAdd=previous!=null&&!editing&&previous.measure==ObjectCalibration.Measure.STANDARD_SPHERE&&!previous.covers(selected);
+        CheckBox addSphere=new CheckBox(this);addSphere.setTag("add_reference_sphere");addSphere.setTextColor(Color.WHITE);addSphere.setText(canAdd?"Somar às "+previous.spheres().size()+" esfera(s) já marcada(s) (média + ajuste de perspectiva)":"Somar às esferas já marcadas");addSphere.setChecked(canAdd);addSphere.setVisibility(canAdd?View.VISIBLE:View.GONE);content.addView(addSphere);
+        content.addView(text("Correção de perspectiva k (0 = desligada)",14,Color.WHITE));EditText kField=new EditText(this);kField.setTag("perspective_k");kField.setSingleLine();kField.setTextColor(Color.WHITE);kField.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL|InputType.TYPE_NUMBER_FLAG_SIGNED);
+        kField.setText(String.format(java.util.Locale.ROOT,"%.3f",editing?previous.perspectiveK:(double)getPreferences(MODE_PRIVATE).getFloat("perspective_k",.07f)));content.addView(kField);
+        content.addView(text("O tamanho aparente cresce (1 + k·ρ²) do centro (ρ=0) ao canto (ρ=1) da foto. Com 3+ esferas espalhadas (ou 2, uma no centro e outra na borda) o k é ajustado pelas próprias esferas. Teste de 11/11/2026 com o celular a ~12 cm: k entre 0,06 e 0,09.",12,Color.LTGRAY));
         TextView preview=text("",13,Color.rgb(82,216,190));preview.setTag("reference_scale_preview");content.addView(preview);TextView error=text("",13,Color.rgb(255,146,146));error.setTag("reference_error");error.setVisibility(View.GONE);content.addView(error);
         java.util.function.Supplier<ObjectCalibration.Measure> chosen=()->{for(int i=0;i<ids.length;i++)if(measures.getCheckedRadioButtonId()==ids[i])return ObjectCalibration.Measure.values()[i];return ObjectCalibration.Measure.MAJOR_AXIS;};
         java.util.function.Supplier<Granulometry.Settings> input=()->{
-            ObjectCalibration.Reference reference=ObjectCalibration.select(selected,fullId,displayId,chosen.get(),parsePositive(real.getText().toString()),exclude.isChecked(),originalWidth,originalHeight,snapshot.width,snapshot.height);
+            double k;try{k=Double.parseDouble(kField.getText().toString().trim().replace(',','.'));}catch(NumberFormatException e){throw new IllegalArgumentException("k inválido.");}
+            ObjectCalibration.Reference reference;
+            if(canAdd&&addSphere.isChecked()&&chosen.get()==ObjectCalibration.Measure.STANDARD_SPHERE){java.util.List<PelletDetector.Detection> extras=new java.util.ArrayList<>(previous.extraSpheres);extras.add(selected);
+                reference=ObjectCalibration.select(previous.geometry,previous.fullImageId,previous.displayIdAtSelection,previous.measure,parsePositive(real.getText().toString()),exclude.isChecked(),originalWidth,originalHeight,snapshot.width,snapshot.height,extras,k);}
+            else reference=ObjectCalibration.select(selected,fullId,displayId,chosen.get(),parsePositive(real.getText().toString()),exclude.isChecked(),originalWidth,originalHeight,snapshot.width,snapshot.height,editing?previous.extraSpheres:null,k);
             return Granulometry.Settings.selectedObject(reference,parsePositive(bin.getText().toString()),scaleSettings==null||scaleSettings.excludePartial,scaleSettings!=null&&scaleSettings.excludeReview);
         };
         Runnable update=()->{try{
             Granulometry.Settings cfg=input.get();ObjectCalibration.Reference ref=cfg.selectedObject;
-            java.util.List<Integer> sample=ObjectCalibration.sampleIndices(snapshot,interestRegion,ref);java.util.List<Granulometry.Item> items=new java.util.ArrayList<>();for(int i:sample){PelletDetector.Detection d=snapshot.circles.get(i);items.add(new Granulometry.Item(2*d.radius,d.partial,d.needsReview));}
+            java.util.List<Integer> sample=ObjectCalibration.sampleIndices(snapshot,interestRegion,ref);java.util.List<Granulometry.Item> items=new java.util.ArrayList<>();for(int i:sample){PelletDetector.Detection d=snapshot.circles.get(i);items.add(Granulometry.Item.of(d));}
             Granulometry.Distribution measured=Granulometry.compute(items,cfg,originalWidth,originalHeight,snapshot.width,snapshot.height);
-            preview.setText("Escala calculada: "+HistogramView.number(cfg.originalPixelsPerMm)+" px/mm na foto original.\nReferência: maior "+HistogramView.number(ref.majorMm())+" mm · menor "+HistogramView.number(ref.minorMm())+" mm · equivalente "+HistogramView.number(ref.equivalentMm())+" mm.\n"+(measured.included==0?"Nenhuma pelota incluída na distribuição.":"Histograma: média "+HistogramView.number(measured.meanMm)+" mm · n="+measured.included+" · "+measured.binCount()+" classes."));
+            preview.setText("Escala calculada: "+HistogramView.number(cfg.originalPixelsPerMm)+" px/mm na foto original.\nReferência: maior "+HistogramView.number(ref.majorMm())+" mm · menor "+HistogramView.number(ref.minorMm())+" mm · equivalente "+HistogramView.number(ref.equivalentMm())+" mm.\n"+(measured.included==0?"Nenhuma pelota incluída na distribuição.":"Histograma: média "+HistogramView.number(measured.meanMm)+" mm · n="+measured.included+" · "+measured.binCount()+" classes.")+"\n"+ref.perspectiveSummary());
         }catch(IllegalArgumentException e){preview.setText("Informe a medida real e a classe para conferir a escala.");}};
         measures.setOnCheckedChangeListener((g,checked)->{ObjectCalibration.Measure measure=chosen.get();referenceImage.measure(measure);dimensionLabel.setText(measure==ObjectCalibration.Measure.STANDARD_SPHERE?"Diâmetro conhecido da esfera (mm)":measure==ObjectCalibration.Measure.MAJOR_AXIS?"Eixo maior medido com paquímetro (mm)":"Eixo menor medido com paquímetro (mm)");exclude.setChecked(editing&&measure==previous.measure?previous.excludeFromStatistics:measure==ObjectCalibration.Measure.STANDARD_SPHERE);
             note.setText(measure==ObjectCalibration.Measure.STANDARD_SPHERE?"Esfera: usa o diâmetro equivalente à área da elipse. Confira se o contorno corresponde ao padrão conhecido."+(selected.aspectRatio()<.9?" A projeção está alongada; isso pode enviesar a escala.":""):"Meça a mesma dimensão destacada pela linha amarela. O diâmetro equivalente do histograma pode diferir do eixo medido.");update.run();});
-        android.text.TextWatcher watcher=new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int f){}public void onTextChanged(CharSequence s,int a,int b,int c){update.run();}public void afterTextChanged(android.text.Editable e){}};real.addTextChangedListener(watcher);bin.addTextChangedListener(watcher);exclude.setOnCheckedChangeListener((v,c)->update.run());
+        android.text.TextWatcher watcher=new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int f){}public void onTextChanged(CharSequence s,int a,int b,int c){update.run();}public void afterTextChanged(android.text.Editable e){}};real.addTextChangedListener(watcher);bin.addTextChangedListener(watcher);exclude.setOnCheckedChangeListener((v,c)->update.run());kField.addTextChangedListener(watcher);addSphere.setOnCheckedChangeListener((v,c)->update.run());
         measures.check(ids[editing?previous.measure.ordinal():0]);update.run();
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle(editing?"Editar referência de escala":"Calibrar pela pelota "+displayId).setView(scroll).setNegativeButton("Cancelar",null).setPositiveButton("Aplicar escala",null).setOnDismissListener(d->referenceImage.detach()).create();
         dialog.setOnShowListener(ignored->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             if(mode!=Mode.PHOTO||photoAllResult!=snapshot||photoBitmap!=snapshotPhoto){dialog.dismiss();toast("A foto mudou. Selecione a referência novamente.");return;}
             try{Granulometry.Settings settings=input.get();ObjectCalibration.Reference reference=settings.selectedObject;
-                java.util.List<Granulometry.Item> items=new java.util.ArrayList<>();for(int i:ObjectCalibration.sampleIndices(snapshot,interestRegion,reference)){PelletDetector.Detection d=snapshot.circles.get(i);items.add(new Granulometry.Item(2*d.radius,d.partial,d.needsReview));}
-                Granulometry.compute(items,settings,originalWidth,originalHeight,snapshot.width,snapshot.height);commitScale(settings);dialog.dismiss();toast("Escala aplicada à foto pela referência escolhida.");
+                java.util.List<Granulometry.Item> items=new java.util.ArrayList<>();for(int i:ObjectCalibration.sampleIndices(snapshot,interestRegion,reference)){PelletDetector.Detection d=snapshot.circles.get(i);items.add(Granulometry.Item.of(d));}
+                Granulometry.compute(items,settings,originalWidth,originalHeight,snapshot.width,snapshot.height);getPreferences(MODE_PRIVATE).edit().putFloat("perspective_k",(float)Double.parseDouble(kField.getText().toString().trim().replace(',','.'))).apply();commitScale(settings);dialog.dismiss();toast("Escala aplicada. "+reference.perspectiveSummary());
             }catch(IllegalArgumentException e){error.setText(e.getMessage());error.setVisibility(View.VISIBLE);}
         }));dialog.show();
     }
@@ -1327,6 +1365,10 @@ public final class MainActivity extends ComponentActivity {
         CheckBox accel=new CheckBox(this);accel.setText("Rodar as redes neurais na GPU (LiteRT) · experimental");accel.setTextColor(Color.WHITE);accel.setTextSize(12);accel.setChecked(HardwareAcceleration.enabled());accel.setTag("hw_accel");content.addView(accel);
         TextView accelNote=text(accelerationText(HardwareAcceleration.status()),12,Color.LTGRAY);accelNote.setTag("hw_accel_status");content.addView(accelNote);
         accel.setOnCheckedChangeListener((b,on)->setAcceleration(on,accelNote));
+        content.addView(text("Máscaras SAM 2",14,Color.WHITE));
+        CheckBox sam2=new CheckBox(this);sam2.setText("Medir o tamanho pela máscara SAM 2.1 de cada pelota");sam2.setTextColor(Color.WHITE);sam2.setTextSize(12);sam2.setChecked(Sam2Refiner.enabled()&&Sam2Refiner.available());sam2.setEnabled(Sam2Refiner.available());sam2.setTag("sam2");content.addView(sam2);
+        TextView sam2Note=text(sam2Text(),12,Color.LTGRAY);sam2Note.setTag("sam2_status");content.addView(sam2Note);
+        sam2.setOnCheckedChangeListener((b,on)->{getPreferences(MODE_PRIVATE).edit().putBoolean("sam2",on).apply();Sam2Refiner.setEnabled(on);sam2Note.setText(sam2Text());});
         TextView error=text("",13,Color.rgb(255,146,146));error.setTag("adjustment_error");content.addView(error);
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Ajustes de detecção").setView(scroll).setNegativeButton("Cancelar",null).setNeutralButton(mode==Mode.PHOTO?"Ver sugestão":"Como funciona",null).setPositiveButton("Aplicar manual",null).create();
         dialog.setOnShowListener(d->{

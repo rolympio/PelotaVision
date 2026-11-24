@@ -7,8 +7,8 @@ android {
         applicationId 'br.com.pelotavision'
         minSdk 29
         targetSdk 35
-        versionCode 26
-        versionName '0.16.0'
+        versionCode 27
+        versionName '0.17.0'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
@@ -29,7 +29,9 @@ android {
         }
     }
     // .tflite sem compressao no APK (o LiteRT pode mapear direto; tambem acelera a copia para o cache).
-    androidResources { noCompress 'tflite' }
+    androidResources { noCompress 'tflite', 'onnx' }
+    // OpenCV e ONNX Runtime podem trazer a mesma libc++_shared.so; usa uma so (mesma ABI do NDK).
+    packaging { jniLibs { pickFirsts += ['**/libc++_shared.so'] } }
     splits { abi { enable true; reset(); include 'arm64-v8a', 'x86_64'; universalApk false } }
     buildTypes { release { minifyEnabled false } }
     testOptions { unitTests { includeAndroidResources = true } }
@@ -55,6 +57,8 @@ dependencies {
     implementation 'com.google.ai.edge.litert:litert:1.4.2'
     implementation 'com.google.ai.edge.litert:litert-gpu:1.4.2'
     implementation 'com.google.ai.edge.litert:litert-gpu-api:1.4.2'
+    // 0.17.0: SAM 2 no mesmo motor do Windows (ONNX Runtime 1.31.1, CPU), para paridade entre as plataformas. MIT.
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.31.1'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.13'
 }

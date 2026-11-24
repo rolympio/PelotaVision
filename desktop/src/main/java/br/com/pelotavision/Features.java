@@ -125,7 +125,7 @@ final class Features {
         if (Double.isFinite(entry.modelScore)) content.add(new JLabel(String.format(Locale.ROOT, "Escore RF: %.3f · nao e probabilidade", entry.modelScore)));
         content.add(new JLabel("Estado: " + label(entry.status) + (entry.manuallyReviewed ? " (revisado; automatico: " + label(entry.automatic) + ")" : "")));
         content.add(new JLabel(String.format(Locale.ROOT, "Diametro equivalente: %.1f px%s · b/a %s", 2 * d.radius,
-                s.distribution() != null && !s.distribution().settings.pixelsOnly() ? String.format(Locale.ROOT, " = %.2f mm", s.distribution().diameterMm(2 * d.radius)) : "",
+                s.distribution() != null && !s.distribution().settings.pixelsOnly() ? String.format(Locale.ROOT, " = %.2f mm", s.distribution().diameterMm(d)) : "",
                 d.ellipseFitted ? String.format(Locale.ROOT, "%.3f", d.aspectRatio()) : "—")));
         content.add(new JLabel("<html>A revisao muda a contagem; nao desenha uma linha que o detector nao localizou.</html>"));
         String[] options = {"Trinca visivel", "Sem trinca visivel", "Inconclusiva", "Restaurar automatico", "Calibrar por esta pelota", "Fechar"};
@@ -159,6 +159,12 @@ final class Features {
 
     // ---------------- Item 2: calibracao por objeto ----------------
 
+    static final String PERSPECTIVE_K_PREF = "perspectiveK";
+    /** k medido em 11/11/2026 (esferas de 11 mm, celular a ~12 cm): 0,06 (silhueta) a 0,09 (StarDist). */
+    static final double DEFAULT_PERSPECTIVE_K = 0.07;
+
+    static String perspectiveText(ObjectCalibration.Reference ref) { return ref == null ? "" : ref.perspectiveSummary(); }
+
     static void objectCalibration(MainFrame f, PelletDetector.Detection selected, int fullId, int displayId) {
         PhotoSession s = f.session;
         if (s == null || !s.analyzed()) return;
@@ -183,6 +189,13 @@ final class Features {
         JCheckBox exclude = new JCheckBox("Excluir referencia das estatisticas");
         JLabel note = new JLabel();
         JTextField bin = new JTextField(HistogramView.fmt(s.scale() == null ? 1 : s.scale().binWidthMm), 6);
+        // 0.17.0: varias esferas padrao e correcao de perspectiva (1 + k*rho^2), iguais ao Android.
+        java.util.prefs.Preferences pp = java.util.prefs.Preferences.userNodeForPackage(MainFrame.class);
+        JTextField kField = new JTextField(String.format(Locale.ROOT, "%.3f", editing ? previous.perspectiveK : pp.getDouble(PERSPECTIVE_K_PREF, DEFAULT_PERSPECTIVE_K)), 6);
+        boolean canAdd = previous != null && !editing && previous.measure == ObjectCalibration.Measure.STANDARD_SPHERE && !previous.covers(selected);
+        JCheckBox addSphere = new JCheckBox(canAdd ? "Somar as " + previous.spheres().size() + " esfera(s) ja marcada(s) (media + ajuste de perspectiva)" : "Somar as esferas ja marcadas");
+        addSphere.setSelected(canAdd);
+        addSphere.setVisible(canAdd);
         JLabel result = new JLabel(" ");
         result.setForeground(new Color(0, 120, 100));
         c.add(MainFrame.row(dimension, real));
@@ -190,13 +203,27 @@ final class Features {
         c.add(new JLabel("<html><small>A esfera padrao fica fora da contagem, das trincas, da forma media e do histograma por padrao. "
                 + "A pelota medida pode continuar na amostra. A marca REF continua visivel.</small></html>"));
         c.add(note);
+        c.add(addSphere);
+        c.add(MainFrame.row(new JLabel("Correcao de perspectiva k (0 = desligada)"), kField));
+        c.add(new JLabel("<html><small>O tamanho aparente cresce (1 + k&middot;&rho;&sup2;) do centro (&rho;=0) ao canto (&rho;=1) da foto. "
+                + "Com 3+ esferas espalhadas (ou 2, uma no centro e outra na borda) o k e ajustado pelas proprias esferas. "
+                + "Teste de 11/11/2026 com celular a ~12 cm: k entre 0,06 e 0,09.</small></html>"));
         c.add(MainFrame.row(new JLabel("Largura de cada classe (mm)"), bin));
         c.add(result);
         Runnable[] update = new Runnable[1];
         java.util.function.Supplier<ObjectCalibration.Measure> chosen = () -> { for (int i = 0; i < radios.length; i++) if (radios[i].isSelected()) return measures[i]; return ObjectCalibration.Measure.MAJOR_AXIS; };
         java.util.function.Supplier<Granulometry.Settings> input = () -> {
-            ObjectCalibration.Reference ref = ObjectCalibration.select(selected, fullId, displayId, chosen.get(), positive(real.getText()), exclude.isSelected(),
-                    s.originalWidth, s.originalHeight, snapshot.width, snapshot.height);
+            double k = Double.parseDouble(kField.getText().trim().replace(',', '.'));
+            ObjectCalibration.Reference ref;
+            if (addSphere.isSelected() && addSphere.isVisible() && chosen.get() == ObjectCalibration.Measure.STANDARD_SPHERE) {
+                java.util.List<PelletDetector.Detection> extras = new java.util.ArrayList<>(previous.extraSpheres);
+                extras.add(selected);
+                ref = ObjectCalibration.select(previous.geometry, previous.fullImageId, previous.displayIdAtSelection, previous.measure, positive(real.getText()), exclude.isSelected(),
+                        s.originalWidth, s.originalHeight, snapshot.width, snapshot.height, extras, k);
+            } else {
+                ref = ObjectCalibration.select(selected, fullId, displayId, chosen.get(), positive(real.getText()), exclude.isSelected(),
+                        s.originalWidth, s.originalHeight, snapshot.width, snapshot.height, editing ? previous.extraSpheres : null, k);
+            }
             return Granulometry.Settings.selectedObject(ref, positive(bin.getText()), s.scale() == null || s.scale().excludePartial, s.scale() != null && s.scale().excludeReview);
         };
         update[0] = () -> {
@@ -208,7 +235,8 @@ final class Features {
                 Granulometry.Distribution measured = s.preview(cfg);
                 result.setText(String.format(Locale.ROOT, "<html>Escala calculada: %s px/mm na foto original.<br>Referencia: maior %s mm · menor %s mm · equivalente %s mm.<br>%s</html>",
                         HistogramView.fmt4(cfg.originalPixelsPerMm), HistogramView.fmt(ref.majorMm()), HistogramView.fmt(ref.minorMm()), HistogramView.fmt(ref.equivalentMm()),
-                        measured.included == 0 ? "Nenhuma pelota incluida na distribuicao." : "Histograma: media " + HistogramView.fmt(measured.meanMm) + " mm · n=" + measured.included + " · " + measured.binCount() + " classes."));
+                        (measured.included == 0 ? "Nenhuma pelota incluida na distribuicao." : "Histograma: media " + HistogramView.fmt(measured.meanMm) + " mm · n=" + measured.included + " · " + measured.binCount() + " classes.")
+                        + "<br>" + perspectiveText(ref)));
             } catch (IllegalArgumentException e) {
                 result.setText("Informe a medida real e a classe para conferir a escala.");
             }
@@ -227,13 +255,20 @@ final class Features {
         DocumentListener dl = docListener(update[0]);
         real.getDocument().addDocumentListener(dl);
         bin.getDocument().addDocumentListener(dl);
+        kField.getDocument().addDocumentListener(dl);
+        addSphere.addActionListener(e -> update[0].run());
         exclude.addActionListener(e -> update[0].run());
         radios[editing ? previous.measure.ordinal() : 0].doClick();
         JButton cancel = new JButton("Cancelar"), apply = new JButton("Aplicar escala");
         cancel.addActionListener(e -> dialog.dispose());
         apply.addActionListener(e -> {
             if (f.session != s || s.output().result != snapshot) { dialog.dispose(); f.info("A foto mudou. Selecione a referencia novamente."); return; }
-            try { f.setScale(input.get()); dialog.dispose(); f.setStatus("Escala aplicada a foto pela referencia escolhida."); }
+            try {
+                Granulometry.Settings applied = input.get();
+                pp.putDouble(PERSPECTIVE_K_PREF, Double.parseDouble(kField.getText().trim().replace(',', '.')));
+                f.setScale(applied); dialog.dispose(); f.setStatus("Escala aplicada: " + perspectiveText(applied.selectedObject).replaceAll("<[^>]+>", ""));
+            }
+            catch (NumberFormatException ex) { result.setText("k invalido."); }
             catch (IllegalArgumentException ex) { result.setText(ex.getMessage()); }
         });
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT));
